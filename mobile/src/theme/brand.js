@@ -1,0 +1,15 @@
+export const brand = {
+  blue: '#0057D9',
+  blueDark: '#003DA5',
+  orange: '#FF7A00',
+  orangeDark: '#E56A00',
+  white: '#FFFFFF',
+  gray: '#9CA3AF',
+  grayLight: '#F3F4F6',
+  grayBorder: '#E5E7EB',
+  success: '#10B981',
+  error: '#EF4444',
+  warning: '#F59E0B',
+  info: '#0057D9',
+  tagline: 'Fast. Secure. Reliable.',
+};

@@ -1,0 +1,92 @@
+.pingload-logo-loader {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pingload-logo-loader__ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 3px solid #ff7a00;
+  border-top-color: transparent;
+  border-right-color: #0057d9;
+  animation: pingload-spin 2.2s linear infinite, pingload-pulse-ring 1.8s ease-in-out infinite;
+}
+
+.pingload-logo-loader__logo {
+  object-fit: contain;
+  animation: pingload-pulse-logo 1.8s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes pingload-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pingload-pulse-logo {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes pingload-pulse-ring {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.35; }
+}
+
+.pingload-fullscreen-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.pingload-fullscreen-loader__message {
+  margin-top: 24px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0057d9;
+  text-align: center;
+}
+
+.pingload-fullscreen-loader__slow {
+  margin-top: 10px;
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.pingload-button-loader {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+}
+
+.pingload-button-loader .pingload-logo-loader__logo {
+  width: 26px !important;
+  height: 26px !important;
+}
+
+.pingload-button-loader .pingload-logo-loader__ring {
+  display: none;
+}
+
+.pingload-page-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 96px 24px;
+}
+
+.pingload-page-loader__message {
+  margin-top: 20px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0057d9;
+}

@@ -1,0 +1,36 @@
+# Pingload
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+!.env.*.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+*service-account*.json
+*firebase-adminsdk*.json
+
+# Dependencies & build output
+node_modules/
+dist/
+.expo/
+
+# Logs & OS
+*.log
+.DS_Store
+
+See [README.md](README.md) for full setup instructions.
+
+## Quick Start
+
+```bash
+# Backend
+cd backend && npm install && cp .env.example .env
+npm run dev
+
+# Mobile (new terminal)
+cd mobile && npm install
+npx expo start
+```

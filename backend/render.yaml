@@ -1,0 +1,97 @@
+# Render Blueprint — Pingload Backend API
+# https://render.com/docs/blueprint-spec
+#
+# Secrets (sync: false) must be set in the Render Dashboard before deploy.
+# Do not commit secret values to this file.
+
+services:
+  - type: web
+    name: pingload-api
+    runtime: node
+    region: frankfurt
+    plan: starter
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # ── Core ──────────────────────────────────────────────────────────────
+      - key: NODE_ENV
+        value: production
+      - key: SERVICE_MODE
+        value: production
+      - key: PORT
+        value: 5003
+      - key: DEVELOPMENT_MODE
+        value: false
+      - key: ENABLE_SERVICE_LOGS
+        value: true
+
+      # ── Secrets (set in Render Dashboard) ─────────────────────────────────
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: VTPASS_API_KEY
+        sync: false
+      - key: VTPASS_PUBLIC_KEY
+        sync: false
+      - key: VTPASS_SECRET_KEY
+        sync: false
+      - key: TERMII_API_KEY
+        sync: false
+      - key: TERMII_EMAIL_CONFIGURATION_ID
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+
+      # ── Paystack / VTpass ─────────────────────────────────────────────────
+      - key: PAYSTACK_ENV
+        value: live
+      - key: VTPASS_ENV
+        value: live
+
+      # ── Termii ────────────────────────────────────────────────────────────
+      - key: TERMII_SENDER_ID
+        value: Pingload
+      - key: TERMII_BASE_URL
+        value: https://api.ng.termii.com/api
+      - key: TERMII_OTP_CHANNEL
+        value: auto
+
+      # ── URLs & CORS (production only — no localhost) ──────────────────────
+      - key: API_PUBLIC_URL
+        value: https://pingload.top
+      - key: FRONTEND_URL
+        value: pingload://wallet/verify
+      - key: CORS_ORIGIN
+        value: https://admin.pingload.top
+
+      # ── App settings ──────────────────────────────────────────────────────
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: REFERRAL_BONUS
+        value: 100
+      - key: ADMIN_EMAIL
+        value: admin@pingload.top
+      - key: APP_DOMAIN
+        value: pingload.top
+      - key: PRIVACY_POLICY_URL
+        value: https://pingload.top/privacy
+      - key: TERMS_URL
+        value: https://pingload.top/terms
+      - key: SUPPORT_EMAIL
+        value: support@pingload.top
+      - key: SUPPORT_WHATSAPP
+        sync: false

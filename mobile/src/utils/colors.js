@@ -1,0 +1,71 @@
+export const colors = {
+  primary: '#0057D9',
+  primaryDark: '#003DA5',
+  secondary: '#FF7A00',
+  secondaryDark: '#E56A00',
+  gray: '#6B7280',
+  white: '#FFFFFF',
+  black: '#111827',
+  background: '#F5F7FA',
+  card: '#FFFFFF',
+  border: '#E5E7EB',
+  inputBg: '#FAFBFC',
+  success: '#10B981',
+  successLight: '#D1FAE5',
+  error: '#EF4444',
+  errorLight: '#FEE2E2',
+  warning: '#F59E0B',
+  pending: '#F59E0B',
+  text: '#111827',
+  textSecondary: '#6B7280',
+  textLight: '#9CA3AF',
+};
+
+export const darkColors = {
+  primary: '#3B82F6',
+  primaryDark: '#2563EB',
+  secondary: '#FF8A33',
+  secondaryDark: '#E55D00',
+  gray: '#9CA3AF',
+  white: '#FFFFFF',
+  black: '#F9FAFB',
+  background: '#0F172A',
+  card: '#1E293B',
+  border: '#334155',
+  inputBg: '#1E293B',
+  success: '#34D399',
+  successLight: '#064E3B',
+  error: '#F87171',
+  errorLight: '#450A0A',
+  warning: '#FBBF24',
+  pending: '#FBBF24',
+  text: '#F1F5F9',
+  textSecondary: '#94A3B8',
+  textLight: '#64748B',
+};
+
+export const getThemeColors = (isDark) => (isDark ? darkColors : colors);
+
+export const shadows = {
+  sm: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  md: {
+    shadowColor: '#0052CC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  card: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+};

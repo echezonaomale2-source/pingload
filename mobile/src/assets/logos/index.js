@@ -1,0 +1,16 @@
+export const PROVIDER_LOGOS = {
+  mtn: require('./mtn.png'),
+  airtel: require('./airtel.png'),
+  glo: require('./glo.png'),
+  '9mobile': require('./9mobile.png'),
+  dstv: require('./dstv.png'),
+  gotv: require('./gotv.png'),
+  startimes: require('./startimes.png'),
+  waec: require('./waec.png'),
+  neco: require('./neco.png'),
+  jamb: require('./jamb.png'),
+  bet9ja: require('./bet9ja.png'),
+  sportybet: require('./sportybet.png'),
+  betking: require('./betking.png'),
+  '1xbet': require('./1xbet.png'),
+};
