@@ -10,7 +10,7 @@
 ## Phase 1 — Backend (Render)
 
 - [ ] Create MongoDB Atlas cluster and copy connection string
-- [ ] Create Render Web Service from `backend/render.yaml` (Blueprint)
+- [ ] Create Render Web Service from root `render.yaml` (Blueprint)
 - [ ] Set all `sync: false` secrets in Render Dashboard (see table below)
 - [ ] Point custom domain `pingload.top` to Render service
 - [ ] Confirm SSL certificate is active (HTTPS)
