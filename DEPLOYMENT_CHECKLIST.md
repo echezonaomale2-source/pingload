@@ -1,8 +1,10 @@
 # Pingload — Final Deployment Checklist
 
-**Domain:** `pingload.top`  
+**Render API (live):** `https://pingload-api.onrender.com`  
+**Domain (after DNS):** `pingload.top`  
 **Admin:** `https://admin.pingload.top`  
 **API:** `https://pingload.top/api`  
+**Health check path:** `/health` (NOT `/` — the root path intentionally returns a 404 "Route not found")  
 **Paystack webhook:** `https://pingload.top/api/webhooks/paystack`
 
 ---
@@ -12,10 +14,11 @@
 - [ ] Create MongoDB Atlas cluster and copy connection string
 - [ ] Create Render Web Service from root `render.yaml` (Blueprint)
 - [ ] Set all `sync: false` secrets in Render Dashboard (see table below)
+- [ ] Verify `GET https://pingload-api.onrender.com/health` returns 200 (use `/health`, not `/`)
+- [ ] Verify `GET https://pingload-api.onrender.com/api/services/app-config` returns config with `serviceMode: production` (confirms env vars + MongoDB are live)
 - [ ] Point custom domain `pingload.top` to Render service
 - [ ] Confirm SSL certificate is active (HTTPS)
-- [ ] Verify `GET https://pingload.top/health` returns 200
-- [ ] Verify `GET https://pingload.top/api/services/app-config` returns config
+- [ ] Re-verify `GET https://pingload.top/health` returns 200 once domain is live
 - [ ] Register Paystack webhook: `https://pingload.top/api/webhooks/paystack`
 - [ ] Run `npm run verify:paystack-webhook:live` against production URL
 - [ ] Test live wallet funding (small amount)
@@ -99,5 +102,16 @@ cd backend && npm run verify:paystack-webhook:live
 cd backend && npm run verify:fcm
 cd mobile && npm run verify:firebase
 cd mobile && npm run verify:tawk
+
+# Health check — expect HTTP 200 and {"success":true,...}
+curl https://pingload-api.onrender.com/health
+
+# App config — confirms env vars + MongoDB loaded (expect "serviceMode":"production")
+curl https://pingload-api.onrender.com/api/services/app-config
+
+# After custom domain DNS is live:
 curl https://pingload.top/health
+
+# NOTE: the root path returns 404 by design — this is expected, not an error:
+#   curl https://pingload-api.onrender.com/  ->  {"success":false,"message":"Route not found"}
 ```
