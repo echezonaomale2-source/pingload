@@ -2,7 +2,8 @@ const Transaction = require('../models/Transaction');
 const generateReference = require('../utils/generateReference');
 const { createRefundWithAtomicWallet } = require('./walletTransactionService');
 const { deliverUserNotification } = require('./notificationDeliveryService');
-const { logWallet } = require('../utils/logger');
+const { logWallet, logApiFailure } = require('../utils/logger');
+const { extractVtpassFailureReason } = require('./vtpassService');
 
 const SERVICE_LABELS = {
   airtime: 'Airtime',
@@ -45,21 +46,29 @@ const processRefund = async ({
     return { refundTransaction, alreadyProcessed: true };
   }
 
-  await deliverUserNotification({
-    userId: originalTransaction.userId,
-    title: 'Refund Processed',
-    message: `Your wallet has been refunded ₦${refundAmount.toLocaleString('en-NG')} for transaction ${originalTransaction.reference}.`,
-    type: 'transaction',
-    screen: 'TransactionDetails',
-    metadata: {
-      refundTransactionId: refundTransaction._id,
-      originalTransactionId: originalTransaction._id,
+  try {
+    await deliverUserNotification({
+      userId: originalTransaction.userId,
+      title: 'Refund Processed',
+      message: `Your wallet has been refunded ₦${refundAmount.toLocaleString('en-NG')} for transaction ${originalTransaction.reference}.`,
+      type: 'transaction',
+      screen: 'TransactionDetails',
+      metadata: {
+        refundTransactionId: refundTransaction._id,
+        originalTransactionId: originalTransaction._id,
+        refundReference,
+        originalTransactionReference: originalTransaction.reference,
+        transactionId: refundTransaction._id,
+        reference: refundReference,
+      },
+    });
+  } catch (notifyError) {
+    // Refund already credited — push/in-app notification must never undo or block it.
+    logApiFailure('refund:notify', notifyError, {
+      originalReference: originalTransaction.reference,
       refundReference,
-      originalTransactionReference: originalTransaction.reference,
-      transactionId: refundTransaction._id,
-      reference: refundReference,
-    },
-  });
+    });
+  }
 
   logWallet('info', 'Refund processed', {
     userId: String(originalTransaction.userId),
@@ -75,6 +84,8 @@ const processRefund = async ({
 
 const buildRefundReason = (metadata = {}) => {
   if (metadata.error) return metadata.error;
+  const vtpassReason = extractVtpassFailureReason(metadata.vtpassResponse);
+  if (vtpassReason) return vtpassReason;
   if (metadata.vtpassResponse?.response_description) return metadata.vtpassResponse.response_description;
   if (metadata.failureReason) return metadata.failureReason;
   return 'Purchase failed at service provider';

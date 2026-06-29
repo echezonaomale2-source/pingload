@@ -7,7 +7,7 @@ const { processRefund, buildRefundReason } = require('./refundService');
 const { createDebitWithAtomicWallet } = require('./walletTransactionService');
 const generateReference = require('../utils/generateReference');
 const applyServicePricing = require('../utils/applyServicePricing');
-const { logWallet } = require('../utils/logger');
+const { logWallet, logVtpass, logApiFailure } = require('../utils/logger');
 
 const formatTransactionPayload = (transaction, extra = {}) => ({
   reference: transaction.reference,
@@ -21,6 +21,31 @@ const formatTransactionPayload = (transaction, extra = {}) => ({
   refundReason: transaction.metadata?.refundReason || null,
   ...extra,
 });
+
+const buildPurchaseFailureMessage = (description, metadata = {}) => {
+  const label = description.split(':')[0];
+  const reason = vtpass.extractVtpassFailureReason(metadata.vtpassResponse)
+    || metadata.error
+    || buildRefundReason(metadata);
+  if (reason && reason !== 'Purchase failed at service provider') {
+    return `${label} failed: ${reason}. Amount refunded.`;
+  }
+  return `${label} failed. Amount refunded.`;
+};
+
+const safeFinalizeTransaction = async (transaction, success, metadata = {}) => {
+  try {
+    return await finalizeTransaction(transaction, success, metadata);
+  } catch (error) {
+    logApiFailure('vtu:finalize', error, {
+      reference: transaction.reference,
+      service: transaction.service,
+      success,
+      vtpassCode: metadata.vtpassResponse?.code,
+    });
+    return { transaction, refundResult: null, finalizeError: error.message };
+  }
+};
 
 const validateWalletBalance = async (userId, amount) => {
   const wallet = await Wallet.findOne({ userId });
@@ -71,11 +96,18 @@ const finalizeTransaction = async (transaction, success, metadata = {}) => {
   let refundResult = null;
 
   if (!success && wasPending) {
-    refundResult = await processRefund({
-      originalTransaction: transaction,
-      reason: buildRefundReason(metadata),
-      source: 'automatic',
-    });
+    try {
+      refundResult = await processRefund({
+        originalTransaction: transaction,
+        reason: buildRefundReason(metadata),
+        source: 'automatic',
+      });
+    } catch (refundError) {
+      logApiFailure('vtu:refund', refundError, {
+        reference: transaction.reference,
+        service: transaction.service,
+      });
+    }
   }
 
   if (success) {
@@ -98,6 +130,15 @@ const finalizeTransaction = async (transaction, success, metadata = {}) => {
       reference: transaction.reference,
       service: transaction.service,
       refundReference: refundResult?.refundTransaction?.reference,
+      vtpassCode: metadata.vtpassResponse?.code,
+      failureReason: buildRefundReason(metadata),
+    });
+    logVtpass('error', 'VTU provider rejected purchase', {
+      reference: transaction.reference,
+      service: transaction.service,
+      vtpassCode: metadata.vtpassResponse?.code,
+      response: metadata.vtpassResponse,
+      error: metadata.error,
     });
   }
 
@@ -133,11 +174,22 @@ const executeVtuPurchase = async ({
     const result = await vtpassCall(vtpassRequestId);
     const success = vtpass.isVtpassSuccess(result);
     const purchaseDetails = vtpass.extractPurchaseDetails(result, service);
+    const finalizeMetadata = { vtpassResponse: result, purchaseDetails };
 
-    const { transaction: updatedTx, refundResult } = await finalizeTransaction(transaction, success, {
-      vtpassResponse: result,
-      purchaseDetails,
-    });
+    if (!success) {
+      logVtpass('error', 'VTpass purchase returned failure', {
+        service,
+        vtpassCode: result?.code,
+        response: result,
+        requestId: vtpassRequestId,
+      });
+    }
+
+    const { transaction: updatedTx, refundResult } = await safeFinalizeTransaction(
+      transaction,
+      success,
+      finalizeMetadata,
+    );
 
     return {
       success,
@@ -146,15 +198,28 @@ const executeVtuPurchase = async ({
       refundTransaction: refundResult?.refundTransaction || null,
       message: success
         ? `${description.split(':')[0]} completed successfully`
-        : `${description.split(':')[0]} failed. Amount refunded.`,
+        : buildPurchaseFailureMessage(description, finalizeMetadata),
       refunded: !success,
     };
   } catch (vtpassError) {
-    const { transaction: updatedTx, refundResult } = await finalizeTransaction(transaction, false, {
-      error: vtpassError.message,
+    logVtpass('error', 'VTpass purchase threw', {
+      service,
+      message: vtpassError.message,
+      vtpassCode: vtpassError.vtpassCode,
+      response: vtpassError.vtpassResponse,
     });
+
+    const finalizeMetadata = {
+      error: vtpassError.message,
+      vtpassResponse: vtpassError.vtpassResponse,
+    };
+    const { transaction: updatedTx, refundResult } = await safeFinalizeTransaction(
+      transaction,
+      false,
+      finalizeMetadata,
+    );
     const error = new Error(
-      vtpassError.message || `${description.split(':')[0]} failed. Amount refunded.`
+      buildPurchaseFailureMessage(description, finalizeMetadata)
     );
     error.statusCode = vtpassError.statusCode === 502 ? 502 : 400;
     error.data = formatTransactionPayload(updatedTx, {

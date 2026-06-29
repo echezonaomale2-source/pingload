@@ -25,6 +25,7 @@ const devTestRoutes = require('./src/routes/devTestRoutes');
 const seedAdmin = require('./src/utils/seedAdmin');
 const serviceConfig = require('./src/config/serviceConfig');
 const { initializeFcm } = require('./src/services/fcmService');
+const { verifyVtpassConnectivity } = require('./src/services/vtpassService');
 
 const app = express();
 
@@ -96,6 +97,21 @@ const startServer = async () => {
     console.log(`[FCM] Push notifications ON — Firebase initialized for project "${fcmStatus.projectId}".`);
   } else {
     console.error(`[FCM] Push notifications DISABLED — invalid Firebase credentials: ${fcmStatus.reason || 'initialization failed'}. The API will keep running; fix FIREBASE_PRIVATE_KEY to re-enable push.`);
+  }
+
+  const vtpassStatus = await verifyVtpassConnectivity();
+  if (!vtpassStatus.configured) {
+    console.warn('[VTpass] VTU purchases OFF — API keys not configured.');
+  } else if (vtpassStatus.ok) {
+    console.log(`[VTpass] Connected — ${vtpassStatus.mode} API at ${vtpassStatus.baseUrl}. Purchases enabled.`);
+  } else {
+    console.error(`[VTpass] PURCHASES BLOCKED — ${vtpassStatus.reason}`);
+    if (vtpassStatus.serverIp) {
+      console.error(`[VTpass] Whitelist this outbound IP on your VTpass dashboard: ${vtpassStatus.serverIp}`);
+    }
+    if (vtpassStatus.ipWhitelistRequired) {
+      console.error('[VTpass] VTpass error 027 = IP NOT WHITELISTED. Email support@vtpass.com with the IP above.');
+    }
   }
 
   const server = app.listen(port, '0.0.0.0', () => {

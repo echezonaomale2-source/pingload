@@ -2,6 +2,21 @@ const axios = require('axios');
 const crypto = require('crypto');
 const serviceConfig = require('../config/serviceConfig');
 const { attachVtpassLogger } = require('../utils/httpLogger');
+const { logVtpass, logApiFailure } = require('../utils/logger');
+
+/** VTpass response codes — https://vtpass.com/documentation/response-codes/ */
+const VTPASS_ERROR_MESSAGES = {
+  '019': 'VTpass wallet balance is insufficient',
+  '021': 'VTpass account is suspended',
+  '027': 'Server IP is not whitelisted on VTpass. Contact VTpass support with your server outbound IP.',
+  '028': 'Product is not whitelisted on your VTpass account',
+  '030': 'Duplicate request ID — transaction may already exist',
+  '031': 'Invalid request ID format',
+  '032': 'Invalid phone number',
+  '034': 'Service ID does not exist',
+  '035': 'Invalid amount',
+  '040': 'Transaction could not be processed',
+};
 
 const vtpassHeaders = {
   'Content-Type': 'application/json',
@@ -33,14 +48,45 @@ const generateRequestId = () => {
   return `${dateStr}${random}`;
 };
 
+/**
+ * Extract a human-readable failure reason from a VTpass response body.
+ * VTpass often returns HTTP 200 with a non-000 code (e.g. 027 IP whitelist).
+ */
+const extractVtpassFailureReason = (result) => {
+  if (!result) return null;
+
+  if (result.content?.errors) {
+    return String(result.content.errors);
+  }
+
+  const code = String(result.code || '');
+  if (code && code !== '000') {
+    return VTPASS_ERROR_MESSAGES[code]
+      || (result.response_description && result.response_description !== '000'
+        ? result.response_description
+        : `VTpass error (code ${code})`);
+  }
+
+  const desc = result.response_description;
+  if (desc && desc !== '000' && String(desc).toUpperCase() !== 'TRANSACTION SUCCESSFUL') {
+    return desc;
+  }
+
+  return null;
+};
+
 const handleVtpassError = (error) => {
-  const message = error.response?.data?.response_description
-    || error.response?.data?.message
+  const data = error.response?.data;
+  const message = extractVtpassFailureReason(data)
+    || data?.response_description
+    || data?.message
     || error.message
     || 'VTpass request failed';
   const err = new Error(message);
   err.statusCode = error.response?.status || 502;
   err.isVtpassError = true;
+  err.vtpassCode = data?.code;
+  err.vtpassResponse = data;
   throw err;
 };
 
@@ -307,6 +353,109 @@ const assertVtpassConfigured = () => {
     error.statusCode = 503;
     throw error;
   }
+  if (serviceConfig.isProduction && serviceConfig.vtpass.isSandbox) {
+    const error = new Error('VTpass sandbox mode is not allowed in production.');
+    error.statusCode = 503;
+    throw error;
+  }
+};
+
+/**
+ * Startup connectivity check. Probes the live VTpass POST endpoint to detect
+ * IP-whitelist issues before the first customer purchase fails.
+ * Never throws — returns a structured status for logging.
+ */
+const verifyVtpassConnectivity = async () => {
+  if (!serviceConfig.vtpass.configured) {
+    return { ok: false, configured: false, reason: 'VTpass API keys not set' };
+  }
+
+  if (serviceConfig.isProduction && serviceConfig.vtpass.isSandbox) {
+    return {
+      ok: false,
+      configured: true,
+      mode: serviceConfig.vtpass.mode,
+      reason: 'VTPASS_ENV=sandbox is not allowed when NODE_ENV=production',
+    };
+  }
+
+  if (serviceConfig.isProduction && serviceConfig.vtpass.baseUrl.includes('sandbox')) {
+    return {
+      ok: false,
+      configured: true,
+      mode: serviceConfig.vtpass.mode,
+      reason: 'VTPASS_BASE_URL points to sandbox in production',
+    };
+  }
+
+  let serverIp = null;
+  try {
+    const ipRes = await axios.get('https://api.ipify.org?format=json', { timeout: 8000 });
+    serverIp = ipRes.data?.ip || null;
+  } catch {
+    // Optional — IP lookup failure should not block startup.
+  }
+
+  try {
+    const response = await vtpassPostClient.post('/merchant-verify', {
+      serviceID: 'dstv',
+      billersCode: '0000000000',
+    });
+    const data = response.data;
+
+    if (isVtpassSuccess(data)) {
+      return {
+        ok: true,
+        configured: true,
+        mode: serviceConfig.vtpass.mode,
+        baseUrl: serviceConfig.vtpass.baseUrl,
+        serverIp,
+        purchasesEnabled: true,
+      };
+    }
+
+    const reason = extractVtpassFailureReason(data) || 'VTpass POST probe failed';
+    logVtpass('error', 'VTpass startup probe failed', {
+      code: data?.code,
+      reason,
+      serverIp,
+      baseUrl: serviceConfig.vtpass.baseUrl,
+      response: data,
+    });
+
+    return {
+      ok: false,
+      configured: true,
+      mode: serviceConfig.vtpass.mode,
+      baseUrl: serviceConfig.vtpass.baseUrl,
+      reason,
+      vtpassCode: data?.code,
+      serverIp,
+      purchasesEnabled: false,
+      ipWhitelistRequired: data?.code === '027',
+    };
+  } catch (error) {
+    const data = error.response?.data;
+    const reason = extractVtpassFailureReason(data) || error.message || 'VTpass unreachable';
+    logApiFailure('vtpass:startup', error, {
+      serverIp,
+      baseUrl: serviceConfig.vtpass.baseUrl,
+      vtpassCode: data?.code,
+      upstream: data,
+    });
+
+    return {
+      ok: false,
+      configured: true,
+      mode: serviceConfig.vtpass.mode,
+      baseUrl: serviceConfig.vtpass.baseUrl,
+      reason,
+      vtpassCode: data?.code,
+      serverIp,
+      purchasesEnabled: false,
+      ipWhitelistRequired: data?.code === '027',
+    };
+  }
 };
 
 module.exports = {
@@ -325,5 +474,7 @@ module.exports = {
   generateRequestId,
   isVtpassSuccess,
   extractPurchaseDetails,
+  extractVtpassFailureReason,
   assertVtpassConfigured,
+  verifyVtpassConnectivity,
 };
