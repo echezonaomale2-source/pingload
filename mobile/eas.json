@@ -1,0 +1,62 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_USE_LIVE_API": "true",
+        "EXPO_PUBLIC_API_URL": "https://pingload.top/api"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production-apk": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_USE_LIVE_API": "true",
+        "EXPO_PUBLIC_API_URL": "https://pingload.top/api",
+        "EXPO_PUBLIC_TAWK_PROPERTY_ID": "6a38286a0f2eba1d56794e32",
+        "EXPO_PUBLIC_TAWK_WIDGET_ID": "1jrllrok0",
+        "EXPO_PUBLIC_SUPPORT_WHATSAPP": "2349042547227",
+        "EXPO_PUBLIC_SUPPORT_EMAIL": "support@pingload.top",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://pingload.top/privacy",
+        "EXPO_PUBLIC_TERMS_URL": "https://pingload.top/terms",
+        "EXPO_PUBLIC_APP_DOMAIN": "pingload.top"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_USE_LIVE_API": "true",
+        "EXPO_PUBLIC_API_URL": "https://pingload.top/api",
+        "EXPO_PUBLIC_TAWK_PROPERTY_ID": "6a38286a0f2eba1d56794e32",
+        "EXPO_PUBLIC_TAWK_WIDGET_ID": "1jrllrok0",
+        "EXPO_PUBLIC_SUPPORT_WHATSAPP": "2349042547227",
+        "EXPO_PUBLIC_SUPPORT_EMAIL": "support@pingload.top",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://pingload.top/privacy",
+        "EXPO_PUBLIC_TERMS_URL": "https://pingload.top/terms",
+        "EXPO_PUBLIC_APP_DOMAIN": "pingload.top"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

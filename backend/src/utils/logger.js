@@ -45,8 +45,13 @@ const logApiFailure = (context, error, meta = {}) => {
     level: 'error',
     context,
     message: error?.message || 'Unknown error',
+    name: error?.name,
     statusCode: error?.statusCode || error?.response?.status,
-    stack: serviceConfig.isDevelopment ? error?.stack : undefined,
+    // Surface the upstream provider's response body (e.g. Termii/Paystack/VTpass)
+    // so the true cause is never hidden behind a generic message.
+    upstream: error?.response?.data ? sanitize(error.response.data) : undefined,
+    // Always include the stack trace, including in production, for real diagnosis.
+    stack: error?.stack,
     ...sanitize(meta),
   }));
 };

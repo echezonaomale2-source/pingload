@@ -1,5 +1,16 @@
 const axios = require('axios');
 const { termii, developmentMode } = require('../config/env');
+const { logApiFailure } = require('../utils/logger');
+
+const UPSTREAM_UNAVAILABLE_MESSAGE = 'OTP service is temporarily unavailable. Please try again shortly.';
+
+/** Normalize an upstream provider error into a user-safe message. */
+const upstreamMessage = (error, fallback) => {
+  const raw = error.response?.data?.message || error.message || fallback;
+  // Termii returns the unhelpful "No message available" on its own 5xx errors.
+  if (!raw || /no message available/i.test(raw)) return UPSTREAM_UNAVAILABLE_MESSAGE;
+  return raw;
+};
 
 const OTP_PURPOSES = {
   REGISTRATION: 'registration',
@@ -145,10 +156,13 @@ const sendOTP = async ({ email, phone, purpose = OTP_PURPOSES.REGISTRATION }) =>
   }
 
   const key = storeKey(email, phone, purpose);
-  const useSms = Boolean(phone) && termii.otpChannel !== 'email';
+  // SMS is only attempted when explicitly requested (TERMII_OTP_CHANNEL=sms) AND a phone
+  // is supplied. The default "auto" prefers email, which is the configured, reliable channel
+  // and the one registration verifies against. SMS requires an approved Termii sender ID.
+  const smsRequested = termii.otpChannel === 'sms' && Boolean(phone);
 
-  try {
-    if (useSms) {
+  if (smsRequested) {
+    try {
       const smsResult = await sendSmsOtp(phone, purpose);
       otpStore.set(key, {
         pinId: smsResult.pinId,
@@ -165,8 +179,26 @@ const sendOTP = async ({ email, phone, purpose = OTP_PURPOSES.REGISTRATION }) =>
         channel: smsResult.channel,
         expiresInSeconds: OTP_EXPIRY_MS / 1000,
       };
-    }
+    } catch (smsError) {
+      logApiFailure('termii:sms-otp-send', smsError, {
+        statusCode: smsError.response?.status,
+        upstream: smsError.response?.data,
+        destination: normalizePhone(phone),
+        purpose,
+      });
 
+      // Without an email we cannot fall back, so surface the failure.
+      if (!email) {
+        if (process.env.NODE_ENV === 'development') return sendDevOtp(email, phone, purpose);
+        const err = new Error(upstreamMessage(smsError, 'Failed to send OTP via SMS'));
+        err.statusCode = 502;
+        throw err;
+      }
+      // Otherwise fall through to email so the user is never blocked by SMS issues.
+    }
+  }
+
+  try {
     const emailResult = await sendEmailOtp(email, purpose);
     otpStore.set(key, {
       code: emailResult.code,
@@ -183,13 +215,20 @@ const sendOTP = async ({ email, phone, purpose = OTP_PURPOSES.REGISTRATION }) =>
       channel: emailResult.channel,
       expiresInSeconds: OTP_EXPIRY_MS / 1000,
     };
-  } catch (error) {
-    const message = error.response?.data?.message || error.message || 'Failed to send OTP';
+  } catch (emailError) {
+    logApiFailure('termii:email-otp-send', emailError, {
+      statusCode: emailError.response?.status,
+      upstream: emailError.response?.data,
+      destination: normalizeEmail(email),
+      purpose,
+    });
+
     if (process.env.NODE_ENV === 'development') {
       return sendDevOtp(email, phone, purpose);
     }
-    const err = new Error(message);
-    err.statusCode = error.response?.status || 502;
+
+    const err = new Error(upstreamMessage(emailError, 'Failed to send OTP'));
+    err.statusCode = emailError.statusCode || emailError.response?.status || 502;
     throw err;
   }
 };

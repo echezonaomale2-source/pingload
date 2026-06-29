@@ -16,6 +16,9 @@
 node_modules/
 dist/
 .expo/
+.tools/
+**/android/
+**/ios/
 
 # Logs & OS
 *.log

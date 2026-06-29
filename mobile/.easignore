@@ -1,0 +1,12 @@
+# EAS Build — exclude local artifacts (not needed on Expo build servers)
+node_modules/
+.git/
+**/.gradle/
+**/build/
+*.log
+.tools/
+android/local.properties
+android/keystore.properties
+android/*.keystore
+android/app/*.keystore
+scripts/build-android-release.ps1

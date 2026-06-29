@@ -1,4 +1,3 @@
-const appJson = require('./app.json');
 const firebaseConfig = require('./firebase.config');
 const os = require('os');
 
@@ -35,16 +34,28 @@ if (!firebaseConfig.isConfigured) {
 }
 
 module.exports = {
-  ...appJson.expo,
+  name: 'Pingload',
+  slug: 'pingload',
+  version: '1.0.0',
+  orientation: 'portrait',
   icon: './src/assets/icon.png',
+  userInterfaceStyle: 'automatic',
+  newArchEnabled: true,
+  scheme: 'pingload',
+  assetBundlePatterns: ['**/*'],
   splash: {
-    ...appJson.expo.splash,
     image: './src/assets/splash.png',
-    backgroundColor: '#FFFFFF',
     resizeMode: 'contain',
+    backgroundColor: '#FFFFFF',
+  },
+  updates: {
+    enabled: false,
+    checkAutomatically: 'NEVER',
+    fallbackToCacheTimeout: 0,
   },
   ios: {
-    ...appJson.expo.ios,
+    supportsTablet: true,
+    bundleIdentifier: 'com.pingload.app',
     icon: './src/assets/icon.png',
     googleServicesFile: firebaseConfig.iosConfigPath,
     infoPlist: {
@@ -52,7 +63,8 @@ module.exports = {
     },
   },
   android: {
-    ...appJson.expo.android,
+    package: 'com.pingload.app',
+    versionCode: 1,
     icon: './src/assets/icon.png',
     googleServicesFile: firebaseConfig.androidConfigPath,
     adaptiveIcon: {
@@ -61,15 +73,12 @@ module.exports = {
     },
   },
   web: {
-    ...appJson.expo.web,
     favicon: './src/assets/icon.png',
   },
-  updates: {
-    enabled: false,
-    checkAutomatically: 'NEVER',
-    fallbackToCacheTimeout: 0,
-  },
   extra: {
+    eas: {
+      projectId: 'caa45e57-3982-4367-ae3e-13522e6bb90b',
+    },
     apiUrl: resolveApiUrl(),
     devHost: getDevHost(),
     tawkPropertyId: process.env.EXPO_PUBLIC_TAWK_PROPERTY_ID || '6a38286a0f2eba1d56794e32',
@@ -83,7 +92,26 @@ module.exports = {
     firebaseProjectId: firebaseConfig.androidProjectId || firebaseConfig.iosProjectId || null,
   },
   plugins: [
-    ...(appJson.expo.plugins || []),
+    // Registered first so its manifest mod executes last (config-plugin mods run
+    // in reverse registration order), letting it resolve the Firebase notification
+    // meta-data merge conflict after expo-notifications has injected the nodes.
+    './plugins/withNotificationManifestFix',
+    'expo-asset',
+    'expo-font',
+    'expo-secure-store',
+    [
+      'expo-local-authentication',
+      {
+        faceIDPermission: 'Allow Pingload to use Face ID for secure login.',
+      },
+    ],
+    [
+      'expo-image-picker',
+      {
+        photosPermission: 'Allow Pingload to access your photos to set your profile picture.',
+        cameraPermission: 'Allow Pingload to use your camera to take a profile photo.',
+      },
+    ],
     '@react-native-firebase/app',
     '@react-native-firebase/messaging',
     [
