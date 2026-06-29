@@ -1,5 +1,6 @@
 const Notification = require('../models/Notification');
 const { sendPushToUser, sendPushToUsers } = require('./fcmService');
+const { logApiFailure } = require('../utils/logger');
 
 const stringifyMetadata = (payload) => Object.fromEntries(
   Object.entries(payload).filter(([, value]) => value !== undefined && value !== null)
@@ -32,17 +33,23 @@ const deliverUserNotification = async ({
 
   let pushResult = null;
   if (push) {
-    pushResult = await sendPushToUser({
-      userId,
-      title,
-      body: message,
-      data: buildPushData({
-        type,
-        screen,
-        metadata,
-        notificationId: notification._id,
-      }),
-    });
+    // Best-effort: a push failure must never break the caller (e.g. a refund).
+    try {
+      pushResult = await sendPushToUser({
+        userId,
+        title,
+        body: message,
+        data: buildPushData({
+          type,
+          screen,
+          metadata,
+          notificationId: notification._id,
+        }),
+      });
+    } catch (error) {
+      logApiFailure('notification:push', error, { userId: String(userId), type });
+      pushResult = { success: false, skipped: true, reason: 'push_error' };
+    }
   }
 
   return { notification, pushResult };
@@ -69,12 +76,17 @@ const deliverBulkNotification = async ({
 
   let pushResult = null;
   if (push) {
-    pushResult = await sendPushToUsers({
-      userIds,
-      title,
-      body: message,
-      data: buildPushData({ type, screen, metadata }),
-    });
+    try {
+      pushResult = await sendPushToUsers({
+        userIds,
+        title,
+        body: message,
+        data: buildPushData({ type, screen, metadata }),
+      });
+    } catch (error) {
+      logApiFailure('notification:push-bulk', error, { userCount: userIds.length, type });
+      pushResult = { success: false, skipped: true, reason: 'push_error' };
+    }
   }
 
   return { notifications, pushResult };

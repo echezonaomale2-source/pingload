@@ -24,6 +24,7 @@ const serviceRoutes = require('./src/routes/serviceRoutes');
 const devTestRoutes = require('./src/routes/devTestRoutes');
 const seedAdmin = require('./src/utils/seedAdmin');
 const serviceConfig = require('./src/config/serviceConfig');
+const { initializeFcm } = require('./src/services/fcmService');
 
 const app = express();
 
@@ -84,6 +85,18 @@ app.use(errorHandler);
 const startServer = async () => {
   await connectDB();
   await seedAdmin();
+
+  // Validate Firebase credentials at startup so problems surface immediately in
+  // the logs. Push notifications are non-critical, so a failure here is logged
+  // clearly but does NOT crash the server or block payments/VTU.
+  const fcmStatus = initializeFcm();
+  if (!fcmStatus.configured) {
+    console.warn('[FCM] Push notifications OFF — Firebase credentials not configured.');
+  } else if (fcmStatus.initialized) {
+    console.log(`[FCM] Push notifications ON — Firebase initialized for project "${fcmStatus.projectId}".`);
+  } else {
+    console.error(`[FCM] Push notifications DISABLED — invalid Firebase credentials: ${fcmStatus.reason || 'initialization failed'}. The API will keep running; fix FIREBASE_PRIVATE_KEY to re-enable push.`);
+  }
 
   const server = app.listen(port, '0.0.0.0', () => {
     serviceConfig.printStartupBanner();
