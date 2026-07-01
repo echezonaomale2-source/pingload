@@ -22,6 +22,7 @@ const faqRoutes = require('./src/routes/faqRoutes');
 const pinRoutes = require('./src/routes/pinRoutes');
 const serviceRoutes = require('./src/routes/serviceRoutes');
 const devTestRoutes = require('./src/routes/devTestRoutes');
+const legalRoutes = require('./src/routes/legalRoutes');
 const seedAdmin = require('./src/utils/seedAdmin');
 const serviceConfig = require('./src/config/serviceConfig');
 const { initializeFcm } = require('./src/services/fcmService');
@@ -59,6 +60,12 @@ app.use('/api', maintenanceMode);
 app.get('/health', (_req, res) => {
   res.json({ success: true, message: 'Pingload API is running', timestamp: new Date().toISOString() });
 });
+
+app.get('/api/health', (_req, res) => {
+  res.json({ success: true, message: 'Pingload API is running', timestamp: new Date().toISOString() });
+});
+
+app.use(legalRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);

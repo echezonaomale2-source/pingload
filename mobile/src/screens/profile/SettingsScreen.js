@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, StyleSheet, Switch, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Switch, TouchableOpacity, Linking } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../hooks/useDialog';
 import { enrollBiometric, disableBiometric, getBiometricSupport } from '../../services/biometricService';
+import { PRIVACY_POLICY_URL, TERMS_URL } from '../../utils/constants';
 
 const SettingsScreen = ({ navigation }) => {
   const { colors, isDark, setDarkMode } = useTheme();
@@ -105,6 +106,16 @@ const SettingsScreen = ({ navigation }) => {
     </View>
   );
 
+  const LinkRow = ({ label, url, icon }) => (
+    <TouchableOpacity style={styles.linkRow} onPress={() => Linking.openURL(url)}>
+      <View style={styles.rowLeft}>
+        <Ionicons name={icon} size={22} color={colors.primary} />
+        <Text style={styles.rowLabel}>{label}</Text>
+      </View>
+      <Ionicons name="open-outline" size={18} color={colors.textSecondary} />
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -136,6 +147,12 @@ const SettingsScreen = ({ navigation }) => {
         <SettingRow label="Promotions" value={notifications.promotions} onValueChange={(v) => handleNotificationToggle('promotions', v)} icon="gift-outline" />
         <SettingRow label="Security Alerts" value={notifications.security} onValueChange={(v) => handleNotificationToggle('security', v)} icon="shield-outline" />
       </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Legal</Text>
+        <LinkRow label="Terms & Conditions" url={TERMS_URL} icon="document-text-outline" />
+        <LinkRow label="Privacy Policy" url={PRIVACY_POLICY_URL} icon="lock-closed-outline" />
+      </View>
     </SafeAreaView>
   );
 };
@@ -150,6 +167,7 @@ const createStyles = (colors) => StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, textTransform: 'uppercase',
   },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+  linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rowLabel: { fontSize: 15, fontWeight: '600', color: colors.text },
 });

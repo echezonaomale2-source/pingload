@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Linking } from 'react-native';
 import { Text, Checkbox } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 import { useTheme } from '../../context/ThemeContext';
 import FormInput from '../../components/FormInput';
 import CustomButton from '../../components/CustomButton';
@@ -10,54 +11,27 @@ import PingloadLogo from '../../components/PingloadLogo';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../hooks/useDialog';
 import { getApiErrorMessage } from '../../utils/getApiErrorMessage';
-import { enrollBiometric, getBiometricSupport } from '../../services/biometricService';
-import { authService } from '../../services/authService';
+import { PRIVACY_POLICY_URL, TERMS_URL } from '../../utils/constants';
+
+const REMEMBER_EMAIL_KEY = 'remembered_email';
 
 const LoginScreen = ({ navigation }) => {
-  const { login, updateUser } = useAuth();
+  const { login } = useAuth();
   const dialog = useDialog();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const offerBiometricEnrollment = async () => {
-    const support = await getBiometricSupport();
-    if (!support.available) return;
-
-    const enable = await dialog.confirm({
-      title: 'Enable Biometric Login?',
-      message: `Use ${support.label} for faster and secure access to Pingload on this device.`,
-      confirmText: 'Enable',
-      cancelText: 'Not Now',
+  React.useEffect(() => {
+    SecureStore.getItemAsync(REMEMBER_EMAIL_KEY).then((saved) => {
+      if (saved) setEmail(saved);
     });
-
-    if (!enable) return;
-
-    const enrolled = await enrollBiometric();
-    if (!enrolled.success) {
-      dialog.showWarning({ title: 'Biometric Setup Failed', message: enrolled.error });
-      return;
-    }
-
-    try {
-      const res = await authService.updateSettings({ biometricEnabled: true });
-      updateUser(res.data.data);
-      dialog.showSuccess({
-        title: 'Biometric Login Enabled',
-        message: `${support.label} is now active for Pingload on this device.`,
-      });
-    } catch {
-      dialog.showWarning({
-        title: 'Saved Locally Only',
-        message: 'Biometrics enabled on device, but server preference could not be updated.',
-      });
-    }
-  };
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -67,8 +41,13 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
     setError('');
     try {
-      await login(email.trim().toLowerCase(), password);
-      await offerBiometricEnrollment();
+      const normalizedEmail = email.trim().toLowerCase();
+      await login(normalizedEmail, password);
+      if (rememberMe) {
+        await SecureStore.setItemAsync(REMEMBER_EMAIL_KEY, normalizedEmail);
+      } else {
+        await SecureStore.deleteItemAsync(REMEMBER_EMAIL_KEY);
+      }
     } catch (err) {
       dialog.alertError('Login Failed', getApiErrorMessage(err, 'Login failed. Please try again.'));
     } finally {
@@ -127,6 +106,14 @@ const LoginScreen = ({ navigation }) => {
               <Text style={styles.link}>Sign Up</Text>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.legalRow}>
+            <Text style={styles.legalText}>
+              <Text style={styles.legalLink} onPress={() => Linking.openURL(TERMS_URL)}>Terms</Text>
+              {' · '}
+              <Text style={styles.legalLink} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>Privacy</Text>
+            </Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -148,6 +135,9 @@ const createStyles = (colors) => StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 28 },
   footerText: { color: colors.textSecondary, fontSize: 14 },
   link: { color: colors.secondary, fontSize: 14, fontWeight: '700' },
+  legalRow: { alignItems: 'center', marginTop: 20 },
+  legalText: { fontSize: 12, color: colors.textSecondary, textAlign: 'center' },
+  legalLink: { color: colors.primary, fontWeight: '600', textDecorationLine: 'underline' },
 });
 
 export default LoginScreen;
