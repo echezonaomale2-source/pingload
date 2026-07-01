@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Ban, CheckCircle, Plus, Minus, Trash2 } from 'lucide-react';
 import { PageHeader, Badge, Modal, PageLoader, ErrorAlert } from '../components';
@@ -18,15 +18,15 @@ const UserDetails = () => {
   const [walletNote, setWalletNote] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  const fetchUser = () => {
+  const fetchUser = useCallback(() => {
     setLoading(true);
     usersApi.get(id)
       .then((res) => setUser(res.data.data))
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
-  };
+  }, [id]);
 
-  useEffect(() => { fetchUser(); }, [id]);
+  useEffect(() => { fetchUser(); }, [fetchUser]);
 
   const handleStatus = async (status) => {
     setActionLoading(true);

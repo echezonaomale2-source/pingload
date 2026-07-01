@@ -1,8 +1,8 @@
 import api from './api';
 
 export const adminAuth = {
-  login: (email, password) => api.post('/admin/auth/login', { email, password }),
-  me: () => api.get('/admin/auth/me'),
+  login: (email, password) => api.post('/admin/auth/login', { email, password }, { skipAuthLogout: true }),
+  me: () => api.get('/admin/auth/me', { skipGlobalLoader: true }),
 };
 
 export const dashboardApi = {

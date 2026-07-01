@@ -6,6 +6,7 @@ import { getErrorMessage } from '../services/adminService';
 import { useDialog } from '../hooks/useDialog';
 import { ButtonLoader } from '../components/loading';
 import { useGlobalLoading } from '../context/LoadingProvider';
+import PingloadLogo from '../components/modals/PingloadLogo';
 
 const Login = () => {
   const { login } = useAuth();
@@ -35,7 +36,7 @@ const Login = () => {
     <div className="flex min-h-screen">
       <div className="hidden flex-1 flex-col justify-between bg-[#0B1F3A] p-12 text-white lg:flex">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Pingload" className="h-12 w-12 object-contain" />
+          <PingloadLogo size={48} />
           <div>
             <p className="text-lg font-extrabold">Pingload Admin</p>
             <p className="text-xs font-semibold text-secondary">Fintech Control Panel</p>
@@ -57,7 +58,7 @@ const Login = () => {
         <div className="w-full max-w-md">
           <div className="mb-8 lg:hidden">
             <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="Pingload" className="h-11 w-11 object-contain" />
+              <PingloadLogo size={44} />
               <p className="text-xl font-extrabold text-slate-900">Pingload Admin</p>
             </div>
           </div>

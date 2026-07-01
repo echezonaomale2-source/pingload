@@ -12,7 +12,7 @@ const LogoLoader = ({ size = 72, showRing = true }) => {
         />
       )}
       <img
-        src="/logo.png"
+        src="/favicon.svg"
         alt="Pingload"
         className="pingload-logo-loader__logo"
         style={{ width: size, height: size }}

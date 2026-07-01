@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../hooks/useDialog';
+import PingloadLogo from '../components/modals/PingloadLogo';
 
 const NAV = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -54,7 +55,7 @@ const Sidebar = ({ open, onClose }) => {
       >
         <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
           <div className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="Pingload" className="h-9 w-9 object-contain" />
+            <PingloadLogo size={36} />
             <div>
               <p className="text-sm font-extrabold text-white">Pingload</p>
               <p className="text-[10px] font-semibold uppercase tracking-widest text-secondary">Admin</p>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { PageHeader, DataTable, Badge, Modal, PageLoader, ErrorAlert } from '../components';
 import { kycApi, getErrorMessage } from '../services/adminService';
 import { formatDate } from '../utils/formatters';
@@ -15,15 +15,15 @@ const KycPage = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [filter, setFilter] = useState('');
 
-  const fetchList = () => {
+  const fetchList = useCallback(() => {
     setLoading(true);
     kycApi.list(filter ? { status: filter } : {})
       .then((res) => setList(res.data.data))
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
-  };
+  }, [filter]);
 
-  useEffect(() => { fetchList(); }, [filter]);
+  useEffect(() => { fetchList(); }, [fetchList]);
 
   const openDetail = async (row) => {
     setSelected(row);

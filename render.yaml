@@ -1,4 +1,4 @@
-# Render Blueprint — Pingload Backend API
+# Render Blueprint — Pingload
 # https://render.com/docs/blueprint-spec
 #
 # Secrets (sync: false) must be set in the Render Dashboard before deploy.
@@ -95,3 +95,21 @@ services:
         value: support@pingload.top
       - key: SUPPORT_WHATSAPP
         sync: false
+
+  # Admin dashboard — static Vite SPA
+  - type: web
+    name: pingload-admin
+    runtime: static
+    rootDir: admin
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://pingload.top/api
+    domains:
+      - admin.pingload.top

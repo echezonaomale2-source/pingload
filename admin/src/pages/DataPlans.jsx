@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { PageHeader, DataTable, Modal, PageLoader, ErrorAlert } from '../components';
 import { dataPlansApi, getErrorMessage } from '../services/adminService';
@@ -17,15 +17,15 @@ const DataPlansPage = () => {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
 
-  const fetchPlans = () => {
+  const fetchPlans = useCallback(() => {
     setLoading(true);
     dataPlansApi.list(network ? { network } : {})
       .then((res) => setPlans(res.data.data))
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
-  };
+  }, [network]);
 
-  useEffect(() => { fetchPlans(); }, [network]);
+  useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
   const openCreate = () => { setForm({ ...emptyForm, network: network || 'mtn' }); setModal('create'); };
   const openEdit = (plan) => {

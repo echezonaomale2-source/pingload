@@ -1,71 +1,66 @@
 # Pingload Admin Dashboard
 
-Production-ready admin panel for the Pingload fintech platform.
+Production admin panel for the Pingload fintech platform.
 
 ## Tech Stack
 
-- React 19 + Vite
+- React 19 + Vite 8
 - Tailwind CSS v4
 - React Router v7
-- Axios (pre-configured, not connected yet)
+- Axios → `https://pingload.top/api`
 - Recharts (analytics)
-- Lucide React (icons)
 
-## Getting Started
+## Local Development
 
 ```bash
 cd admin
 npm install
+cp .env.example .env.local   # optional — defaults to localhost:5003
 npm run dev
 ```
 
-Open [http://localhost:5174](http://localhost:5174)
+Open http://localhost:5174
 
-## Demo Login
+## Production Build
 
-| Email | Password |
-|-------|----------|
-| admin@pingload.com | admin123 |
+```bash
+cd admin
+npm install
+npm run build    # uses .env.production → VITE_API_URL=https://pingload.top/api
+```
+
+Output: `admin/dist/`
+
+## Render Static Site Deployment
+
+The repo root `render.yaml` defines the `pingload-admin` static service:
+
+| Setting | Value |
+|---------|-------|
+| **Type** | Static Site |
+| **Root Directory** | `admin` |
+| **Build Command** | `npm install && npm run build` |
+| **Publish Directory** | `dist` |
+| **Environment Variable** | `VITE_API_URL=https://pingload.top/api` |
+
+SPA routing is configured via:
+- `render.yaml` → `routes: [{ type: rewrite, source: /*, destination: /index.html }]`
+- `public/_redirects` → `/* /index.html 200` (fallback)
+
+### Custom domain
+
+Add `admin.pingload.top` in Render → Settings → Custom Domains, then create a DNS record:
+
+| Type | Name | Value |
+|------|------|-------|
+| CNAME | `admin` | `<your-render-static-host>.onrender.com` |
+
+Backend CORS is already set to `https://admin.pingload.top` in `render.yaml`.
+
+### Admin login
+
+Use credentials from Render `ADMIN_PASSWORD` (seeded on backend deploy). Default email: `admin@pingload.top`.
 
 ## Pages
 
-1. **Dashboard** — Stats, revenue charts, service breakdown, recent transactions
-2. **Users** — Search, view, suspend/activate, credit/debit wallet
-3. **Transactions** — Search, filter by service/status, view details
-4. **Wallets** — Credit/debit wallets, transaction history
-5. **Services** — Enable/disable platform services
-6. **Notifications** — Send to all or specific users
-7. **Referrals** — Referral list, earnings, top referrers
-8. **Support** — Ticket management, reply, close
-9. **Settings** — Admin password, system configuration
-
-## Project Structure
-
-```
-admin/
-├── src/
-│   ├── components/     # Reusable UI (StatCard, DataTable, Modal, etc.)
-│   ├── context/        # Auth context (mock JWT)
-│   ├── data/           # Mock/dummy data
-│   ├── layouts/        # Sidebar, TopNavbar, AdminLayout
-│   ├── pages/          # All admin pages
-│   ├── routes/         # Protected route guard
-│   └── services/       # Axios instance (ready for API)
-```
-
-## API Integration
-
-The dashboard is connected to the Pingload backend at `http://localhost:5003/api/admin`.
-
-Set `VITE_API_URL` in `.env`:
-
-```
-VITE_API_URL=http://localhost:5003/api
-```
-
-Ensure the backend is running and has seeded the admin account (see backend `.env`):
-
-```
-ADMIN_EMAIL=admin@pingload.com
-ADMIN_PASSWORD=admin123
-```
+Dashboard, Users, Transactions, Refunds, Wallets, Services, Service Prices, Data Plans, KYC, FAQ, Notifications, Referrals, Support, Settings.

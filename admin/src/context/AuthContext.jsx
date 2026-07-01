@@ -25,7 +25,6 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const init = async () => {
       const saved = localStorage.getItem('pingload_admin_token');
-      const savedAdmin = localStorage.getItem('pingload_admin_user');
       if (!saved) {
         setLoading(false);
         return;
@@ -34,12 +33,7 @@ export const AuthProvider = ({ children }) => {
         const res = await adminAuth.me();
         persistSession(saved, res.data.data);
       } catch {
-        if (savedAdmin) {
-          setToken(saved);
-          setAdmin(JSON.parse(savedAdmin));
-        } else {
-          logout();
-        }
+        logout();
       } finally {
         setLoading(false);
       }
