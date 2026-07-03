@@ -20,7 +20,8 @@ const NotificationsScreen = () => {
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => notificationService.getNotifications(),
-    refetchInterval: 10000,
+    staleTime: 30000,
+    refetchInterval: 30000,
   });
 
   const notifications = data?.data?.data || [];

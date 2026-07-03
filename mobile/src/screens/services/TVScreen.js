@@ -16,27 +16,6 @@ import { vtuService } from '../../services/vtuService';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../hooks/useDialog';
 
-const FALLBACK_PACKAGES = {
-  dstv: [
-    { code: 'dstv-padi', name: 'DStv Padi', amount: 2950 },
-    { code: 'dstv-yanga', name: 'DStv Yanga', amount: 4200 },
-    { code: 'dstv-confam', name: 'DStv Confam', amount: 7400 },
-    { code: 'dstv-compact', name: 'DStv Compact', amount: 12400 },
-  ],
-  gotv: [
-    { code: 'gotv-smallie', name: 'GOtv Smallie', amount: 1575 },
-    { code: 'gotv-jinja', name: 'GOtv Jinja', amount: 3300 },
-    { code: 'gotv-jolli', name: 'GOtv Jolli', amount: 4850 },
-    { code: 'gotv-max', name: 'GOtv Max', amount: 7200 },
-  ],
-  startimes: [
-    { code: 'nova', name: 'Nova', amount: 1200 },
-    { code: 'basic', name: 'Basic', amount: 2500 },
-    { code: 'smart', name: 'Smart', amount: 3500 },
-    { code: 'classic', name: 'Classic', amount: 4500 },
-  ],
-};
-
 const TVScreen = ({ navigation }) => {
   const { user, refreshBalance } = useAuth();
   const dialog = useDialog();
@@ -57,12 +36,14 @@ const TVScreen = ({ navigation }) => {
     setProvider(id);
     setSelectedPackage(null);
     setCustomerName('');
+    setPackages([]);
     setLoadingPackages(true);
     try {
       const res = await vtuService.getTVPackages(id);
-      setPackages(res.data.data?.length ? res.data.data : FALLBACK_PACKAGES[id] || []);
+      setPackages(res.data.data || []);
     } catch {
-      setPackages(FALLBACK_PACKAGES[id] || []);
+      setPackages([]);
+      dialog.alertError('Error', 'Could not load TV packages. Please try again.');
     } finally {
       setLoadingPackages(false);
     }
@@ -168,6 +149,10 @@ const TVScreen = ({ navigation }) => {
           </View>
         )}
 
+        {!loadingPackages && provider && packages.length === 0 && (
+          <Text style={styles.emptyText}>No packages available for this provider.</Text>
+        )}
+
         {packages.length > 0 && (
           <>
             <Text style={styles.label}>Select Package</Text>
@@ -205,6 +190,7 @@ const createStyles = (colors) => StyleSheet.create({
   verifyBtn: { marginBottom: 16 },
   loadingWrap: { alignItems: 'center', marginBottom: 16, paddingVertical: 12 },
   loadingText: { color: colors.textSecondary, marginTop: 10, fontSize: 14 },
+  emptyText: { color: colors.textSecondary, marginBottom: 16, fontSize: 14 },
   pkgItem: {
     flexDirection: 'row', justifyContent: 'space-between', padding: 16,
     borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, marginBottom: 8,

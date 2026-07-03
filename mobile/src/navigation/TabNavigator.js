@@ -1,17 +1,16 @@
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator, BottomTabBar } from '@react-navigation/bottom-tabs';
-import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+import { useNotificationCount } from '../hooks/useNotificationCount';
 
 import HomeScreen from '../screens/home/HomeScreen';
 import HistoryScreen from '../screens/history/HistoryScreen';
 import WalletScreen from '../screens/wallet/WalletScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
-import { notificationService } from '../services/transactionService';
 
 const Tab = createBottomTabNavigator();
 
@@ -57,15 +56,11 @@ const ThemedTabBar = (props) => {
 const TabNavigator = () => {
   const { colors } = useTheme();
 
-  const { data: notifData } = useQuery({
-    queryKey: ['notificationCount'],
-    queryFn: () => notificationService.getUnreadCount(),
-    refetchInterval: 15000,
-  });
-  const unreadCount = notifData?.data?.data?.unreadCount || 0;
+  const { unreadCount } = useNotificationCount();
 
   return (
     <Tab.Navigator
+      initialRouteName="Home"
       tabBar={(props) => <ThemedTabBar {...props} />}
       screenOptions={({ route }) => ({
         headerShown: false,

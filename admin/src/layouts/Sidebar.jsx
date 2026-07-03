@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, ArrowLeftRight, Wallet, Settings2,
   Bell, Gift, Headphones, Settings, LogOut, X, ShieldCheck, HelpCircle, Tag, Database, RotateCcw,
+  Zap, Tv,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../hooks/useDialog';
@@ -16,6 +17,8 @@ const NAV = [
   { to: '/services', icon: Settings2, label: 'Services' },
   { to: '/service-prices', icon: Tag, label: 'Pricing' },
   { to: '/data-plans', icon: Database, label: 'Data Plans' },
+  { to: '/electricity-plans', icon: Zap, label: 'Electricity' },
+  { to: '/tv-plans', icon: Tv, label: 'TV Plans' },
   { to: '/kyc', icon: ShieldCheck, label: 'KYC' },
   { to: '/faq', icon: HelpCircle, label: 'FAQ' },
   { to: '/notifications', icon: Bell, label: 'Notifications' },

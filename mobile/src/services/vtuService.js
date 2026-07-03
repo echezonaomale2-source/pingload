@@ -9,11 +9,12 @@ const post = (url, data) => api.post(url, data, {
 
 export const vtuService = {
   buyAirtime: (data) => post('/vtu/airtime', data),
-  getDataPlans: (network) => api.get(`/vtu/data-plans/${network}`),
+  getDataPlans: (network) => api.get(`/vtu/data-plans/${network}`, { skipGlobalLoader: true }),
   buyData: (data) => post('/vtu/data', data),
+  getElectricityPlans: () => api.get('/services/electricity-plans', { skipGlobalLoader: true }),
   payElectricity: (data) => post('/vtu/electricity', data),
   verifyElectricityMeter: (data) => api.post('/vtu/electricity/verify', data),
-  getTVPackages: (provider) => api.get(`/vtu/tv-packages/${provider}`),
+  getTVPackages: (provider) => api.get(`/vtu/tv-packages/${provider}`, { skipGlobalLoader: true }),
   verifyTVSmartcard: (data) => api.post('/vtu/tv/verify', data),
   payTV: (data) => post('/vtu/tv', data),
   buyEducationPin: (data) => post('/vtu/education', data),

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,9 +10,10 @@ import { useAuth } from '../../context/AuthContext';
 import { authenticateWithBiometric, getBiometricSupport } from '../../services/biometricService';
 
 const BiometricUnlockScreen = () => {
-  const { completeBiometricUnlock, cancelBiometricUnlock, user } = useAuth();
+  const { completeUnlock, switchToPinUnlock, user } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const promptedRef = useRef(false);
 
   const [support, setSupport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -22,13 +23,6 @@ const BiometricUnlockScreen = () => {
     getBiometricSupport().then(setSupport);
   }, []);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      handleUnlock();
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
-
   const handleUnlock = async () => {
     setLoading(true);
     setError('');
@@ -36,14 +30,19 @@ const BiometricUnlockScreen = () => {
     setLoading(false);
 
     if (result.success) {
-      completeBiometricUnlock();
+      completeUnlock();
       return;
     }
 
-    if (result.error !== 'Authentication cancelled') {
-      setError(result.error || 'Could not verify biometrics');
-    }
+    switchToPinUnlock();
   };
+
+  useEffect(() => {
+    if (promptedRef.current) return;
+    promptedRef.current = true;
+    const timer = setTimeout(handleUnlock, 400);
+    return () => clearTimeout(timer);
+  }, []);
 
   const iconName = support?.hasFace ? 'scan-outline' : 'finger-print-outline';
 
@@ -69,8 +68,8 @@ const BiometricUnlockScreen = () => {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <TouchableOpacity style={styles.fallbackBtn} onPress={cancelBiometricUnlock}>
-          <Text style={styles.fallbackText}>Use Password Instead</Text>
+        <TouchableOpacity style={styles.fallbackBtn} onPress={switchToPinUnlock}>
+          <Text style={styles.fallbackText}>Use Login PIN</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -22,11 +22,12 @@ import TransactionPinScreen from '../screens/profile/TransactionPinScreen';
 import KycScreen from '../screens/profile/KycScreen';
 import FaqScreen from '../screens/support/FaqScreen';
 import TransferScreen from '../screens/wallet/TransferScreen';
+import ChangeLoginPinScreen from '../screens/profile/ChangeLoginPinScreen';
 
 const Stack = createNativeStackNavigator();
 
 const AppNavigator = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
+  <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="MainTabs">
     <Stack.Screen name="MainTabs" component={TabNavigator} />
     <Stack.Screen name="FundWallet" component={FundWalletScreen} />
     <Stack.Screen name="Airtime" component={AirtimeScreen} />
@@ -48,6 +49,7 @@ const AppNavigator = () => (
     <Stack.Screen name="KYC" component={KycScreen} />
     <Stack.Screen name="FAQ" component={FaqScreen} />
     <Stack.Screen name="Transfer" component={TransferScreen} />
+    <Stack.Screen name="ChangeLoginPin" component={ChangeLoginPinScreen} />
   </Stack.Navigator>
 );
 

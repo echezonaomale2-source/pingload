@@ -75,4 +75,4 @@ const styles = StyleSheet.create({
   status: { fontSize: 10, fontWeight: '700', textTransform: 'capitalize' },
 });
 
-export default TransactionItem;
+export default React.memo(TransactionItem);

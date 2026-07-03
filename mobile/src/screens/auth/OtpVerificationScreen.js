@@ -51,10 +51,6 @@ const OtpVerificationScreen = ({ navigation, route }) => {
         purpose: OTP_PURPOSE.REGISTRATION,
       });
       await register({ fullName, email, phoneNumber, password, referralCode: referralCode || undefined });
-      dialog.showSuccess({
-        title: 'Account Created',
-        message: 'Welcome to Pingload! Your account is ready.',
-      });
     } catch (err) {
       dialog.alertError('Verification Failed', getApiErrorMessage(err, 'Verification failed'));
     } finally {

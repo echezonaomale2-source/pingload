@@ -11,9 +11,9 @@ const SecurityScreen = ({ navigation }) => {
 
   const items = [
     { icon: 'key-outline', title: 'Change Password', desc: 'Update your account password', screen: 'ChangePassword' },
+    { icon: 'lock-closed-outline', title: 'Login PIN', desc: 'Change your quick unlock PIN', screen: 'ChangeLoginPin' },
     { icon: 'finger-print-outline', title: 'Transaction PIN', desc: 'Set a 4-digit PIN for transactions', screen: 'TransactionPin' },
     { icon: 'phone-portrait-outline', title: 'Biometric Login', desc: 'Use fingerprint or face ID', screen: 'Settings' },
-    { icon: 'shield-checkmark-outline', title: 'Two-Factor Auth', desc: 'Add an extra layer of security', screen: null },
   ];
 
   return (

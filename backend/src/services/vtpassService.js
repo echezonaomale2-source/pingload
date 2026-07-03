@@ -221,16 +221,26 @@ const purchaseData = async ({ network, phone, variationCode, requestId }) => {
   }
 };
 
-const payElectricity = async ({ provider, meterNumber, meterType, amount, phone, requestId }) => {
-  const serviceIds = {
-    ikeja: 'ikeja-electric', eko: 'eko-electric', abuja: 'abuja-electric',
-    kaduna: 'kaduna-electric', kano: 'kano-electric', portharcourt: 'portharcourt-electric',
-    jos: 'jos-electric', ibadan: 'ibadan-electric',
-  };
+const DEFAULT_ELECTRICITY_SERVICE_IDS = {
+  ikeja: 'ikeja-electric', eko: 'eko-electric', abuja: 'abuja-electric',
+  kaduna: 'kaduna-electric', kano: 'kano-electric', portharcourt: 'portharcourt-electric',
+  jos: 'jos-electric', ibadan: 'ibadan-electric',
+};
+
+const resolveElectricityServiceId = (provider, serviceId) =>
+  serviceId || DEFAULT_ELECTRICITY_SERVICE_IDS[String(provider || '').toLowerCase()];
+
+const payElectricity = async ({ provider, serviceId, meterNumber, meterType, amount, phone, requestId }) => {
+  const resolvedServiceId = resolveElectricityServiceId(provider, serviceId);
+  if (!resolvedServiceId) {
+    const error = new Error('Unknown electricity provider');
+    error.statusCode = 400;
+    throw error;
+  }
   try {
     const response = await vtpassPostClient.post('/pay', {
       request_id: requestId || generateRequestId(),
-      serviceID: serviceIds[provider.toLowerCase()],
+      serviceID: resolvedServiceId,
       billersCode: meterNumber,
       variation_code: meterType,
       amount,
@@ -242,15 +252,16 @@ const payElectricity = async ({ provider, meterNumber, meterType, amount, phone,
   }
 };
 
-const verifyElectricityMeter = async ({ provider, meterNumber, meterType }) => {
-  const serviceIds = {
-    ikeja: 'ikeja-electric', eko: 'eko-electric', abuja: 'abuja-electric',
-    kaduna: 'kaduna-electric', kano: 'kano-electric', portharcourt: 'portharcourt-electric',
-    jos: 'jos-electric', ibadan: 'ibadan-electric',
-  };
+const verifyElectricityMeter = async ({ provider, serviceId, meterNumber, meterType }) => {
+  const resolvedServiceId = resolveElectricityServiceId(provider, serviceId);
+  if (!resolvedServiceId) {
+    const error = new Error('Unknown electricity provider');
+    error.statusCode = 400;
+    throw error;
+  }
   try {
     const response = await vtpassPostClient.post('/merchant-verify', {
-      serviceID: serviceIds[provider.toLowerCase()],
+      serviceID: resolvedServiceId,
       billersCode: meterNumber,
       type: meterType,
     });

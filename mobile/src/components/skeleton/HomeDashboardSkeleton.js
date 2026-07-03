@@ -5,7 +5,18 @@ import SkeletonBox from './SkeletonBox';
 import TransactionRowSkeleton from './TransactionRowSkeleton';
 import { brand } from '../../theme/brand';
 
-const HomeDashboardSkeleton = () => (
+const HomeDashboardSkeleton = ({ compact = false }) => {
+  if (compact) {
+    return (
+      <View style={styles.section}>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <TransactionRowSkeleton key={i} />
+        ))}
+      </View>
+    );
+  }
+
+  return (
   <SafeAreaView style={styles.container} edges={['top']}>
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
       <View style={styles.header}>
@@ -54,7 +65,8 @@ const HomeDashboardSkeleton = () => (
       </View>
     </ScrollView>
   </SafeAreaView>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: brand.white },

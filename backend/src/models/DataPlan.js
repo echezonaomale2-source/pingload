@@ -8,10 +8,13 @@ const dataPlanSchema = new mongoose.Schema(
     validity: { type: String, required: true, trim: true },
     variationCode: { type: String, required: true, trim: true },
     amount: { type: Number, required: true, min: 0 },
+    commissionPercent: { type: Number, default: 0, min: 0, max: 100 },
     enabled: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
+
+dataPlanSchema.index({ network: 1, variationCode: 1 }, { unique: true });
 
 module.exports = mongoose.model('DataPlan', dataPlanSchema);

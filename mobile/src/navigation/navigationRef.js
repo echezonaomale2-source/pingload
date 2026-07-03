@@ -7,7 +7,7 @@ const TAB_SCREENS = new Set(['Home', 'History', 'Wallet', 'Notifications', 'Prof
 export const navigateFromNotification = (data = {}) => {
   if (!navigationRef.isReady()) return false;
 
-  const screen = data.screen || 'Notifications';
+  const screen = data.screen || 'Home';
   const transactionId = data.transactionId;
 
   if (screen === 'TransactionDetails' && transactionId) {
@@ -33,7 +33,7 @@ export const navigateFromNotification = (data = {}) => {
   navigationRef.dispatch(
     CommonActions.navigate({
       name: 'MainTabs',
-      params: { screen: 'Notifications' },
+      params: { screen: 'Home' },
     })
   );
   return true;

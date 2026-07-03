@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { PageHeader, DataTable, Modal, PageLoader, ErrorAlert } from '../components';
-import { dataPlansApi, getErrorMessage } from '../services/adminService';
+import { tvPlansApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency } from '../utils/formatters';
 import { useDialog } from '../hooks/useDialog';
 
-const NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
-const emptyForm = { network: 'mtn', name: '', dataSize: '', validity: '', variationCode: '', amount: '', commissionPercent: 0, enabled: true, order: 0 };
+const PROVIDERS = ['dstv', 'gotv', 'startimes'];
+const emptyForm = { provider: 'dstv', name: '', variationCode: '', amount: '', enabled: true, order: 0 };
 
-const DataPlansPage = () => {
+const TvPlansPage = () => {
   const dialog = useDialog();
   const [plans, setPlans] = useState([]);
-  const [network, setNetwork] = useState('');
+  const [provider, setProvider] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
@@ -19,24 +19,21 @@ const DataPlansPage = () => {
 
   const fetchPlans = useCallback(() => {
     setLoading(true);
-    dataPlansApi.list(network ? { network } : {})
+    tvPlansApi.list(provider ? { provider } : {})
       .then((res) => setPlans(res.data.data))
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
-  }, [network]);
+  }, [provider]);
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
-  const openCreate = () => { setForm({ ...emptyForm, network: network || 'mtn' }); setModal('create'); };
+  const openCreate = () => { setForm({ ...emptyForm, provider: provider || 'dstv' }); setModal('create'); };
   const openEdit = (plan) => {
     setForm({
-      network: plan.network,
+      provider: plan.provider,
       name: plan.name,
-      dataSize: plan.dataSize,
-      validity: plan.validity,
       variationCode: plan.variationCode,
       amount: plan.amount,
-      commissionPercent: plan.commissionPercent ?? 0,
       enabled: plan.enabled,
       order: plan.order,
     });
@@ -44,18 +41,13 @@ const DataPlansPage = () => {
   };
 
   const handleSave = async () => {
-    const payload = {
-      ...form,
-      amount: Number(form.amount),
-      commissionPercent: Number(form.commissionPercent || 0),
-      order: Number(form.order),
-    };
+    const payload = { ...form, amount: Number(form.amount), order: Number(form.order) };
     try {
-      if (modal === 'create') await dataPlansApi.create(payload);
-      else await dataPlansApi.update(modal, payload);
+      if (modal === 'create') await tvPlansApi.create(payload);
+      else await tvPlansApi.update(modal, payload);
       setModal(null);
       fetchPlans();
-      dialog.notifySuccess(modal === 'create' ? 'Data plan created' : 'Data plan updated');
+      dialog.notifySuccess(modal === 'create' ? 'TV plan created' : 'TV plan updated');
     } catch (err) {
       dialog.notifyError(getErrorMessage(err));
     }
@@ -63,16 +55,16 @@ const DataPlansPage = () => {
 
   const handleDelete = async (id) => {
     const ok = await dialog.confirm({
-      title: 'Delete Data Plan',
-      message: 'Delete this data plan?',
+      title: 'Delete TV Plan',
+      message: 'Delete this TV subscription plan?',
       confirmText: 'Delete',
       destructive: true,
     });
     if (!ok) return;
     try {
-      await dataPlansApi.delete(id);
+      await tvPlansApi.delete(id);
       fetchPlans();
-      dialog.notifySuccess('Data plan deleted');
+      dialog.notifySuccess('TV plan deleted');
     } catch (err) {
       dialog.notifyError(getErrorMessage(err));
     }
@@ -80,7 +72,7 @@ const DataPlansPage = () => {
 
   const toggleEnabled = async (plan) => {
     try {
-      await dataPlansApi.update(plan._id, { enabled: !plan.enabled });
+      await tvPlansApi.update(plan._id, { enabled: !plan.enabled });
       fetchPlans();
     } catch (err) {
       dialog.notifyError(getErrorMessage(err));
@@ -88,12 +80,10 @@ const DataPlansPage = () => {
   };
 
   const columns = [
-    { key: 'network', label: 'Network', render: (r) => <span className="uppercase font-bold">{r.network}</span> },
-    { key: 'name', label: 'Plan' },
-    { key: 'dataSize', label: 'Data' },
-    { key: 'validity', label: 'Validity' },
+    { key: 'provider', label: 'Provider', render: (r) => <span className="uppercase font-bold">{r.provider}</span> },
+    { key: 'name', label: 'Bouquet' },
+    { key: 'variationCode', label: 'Code', render: (r) => <span className="font-mono text-xs">{r.variationCode}</span> },
     { key: 'amount', label: 'Price', render: (r) => formatCurrency(r.amount) },
-    { key: 'commissionPercent', label: 'Commission', render: (r) => `${r.commissionPercent || 0}%` },
     { key: 'order', label: 'Order' },
     {
       key: 'enabled',
@@ -121,8 +111,8 @@ const DataPlansPage = () => {
   return (
     <div>
       <PageHeader
-        title="Data Plans"
-        subtitle="Manage data bundles shown in the user app"
+        title="TV Plans"
+        subtitle="Manage DStv, GOtv, and StarTimes bouquets shown in the user app"
         action={
           <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
             <Plus size={18} /> Add Plan
@@ -131,25 +121,22 @@ const DataPlansPage = () => {
       />
 
       <div className="mb-4 flex gap-2">
-        <button type="button" onClick={() => setNetwork('')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${!network ? 'bg-primary text-white' : 'bg-slate-100'}`}>All</button>
-        {NETWORKS.map((n) => (
-          <button key={n} type="button" onClick={() => setNetwork(n)} className={`rounded-lg px-3 py-1.5 text-xs font-bold uppercase ${network === n ? 'bg-primary text-white' : 'bg-slate-100'}`}>{n}</button>
+        <button type="button" onClick={() => setProvider('')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${!provider ? 'bg-primary text-white' : 'bg-slate-100'}`}>All</button>
+        {PROVIDERS.map((p) => (
+          <button key={p} type="button" onClick={() => setProvider(p)} className={`rounded-lg px-3 py-1.5 text-xs font-bold uppercase ${provider === p ? 'bg-primary text-white' : 'bg-slate-100'}`}>{p}</button>
         ))}
       </div>
 
       {loading ? <PageLoader /> : <DataTable columns={columns} data={plans} />}
 
-      <Modal open={!!modal} onClose={() => setModal(null)} title={modal === 'create' ? 'Add Data Plan' : 'Edit Data Plan'}>
+      <Modal open={!!modal} onClose={() => setModal(null)} title={modal === 'create' ? 'Add TV Plan' : 'Edit TV Plan'}>
         <div className="space-y-3">
-          <select value={form.network} onChange={(e) => setForm({ ...form, network: e.target.value })} className="w-full rounded-xl border border-slate-200 p-3 text-sm">
-            {NETWORKS.map((n) => <option key={n} value={n}>{n.toUpperCase()}</option>)}
+          <select value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} className="w-full rounded-xl border border-slate-200 p-3 text-sm">
+            {PROVIDERS.map((p) => <option key={p} value={p}>{p.toUpperCase()}</option>)}
           </select>
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Plan name" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input value={form.dataSize} onChange={(e) => setForm({ ...form, dataSize: e.target.value })} placeholder="Data size (e.g. 1GB)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input value={form.validity} onChange={(e) => setForm({ ...form, validity: e.target.value })} placeholder="Validity (e.g. 30 days)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Bouquet name" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder="VTpass variation code" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Price (₦)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input type="number" value={form.commissionPercent} onChange={(e) => setForm({ ...form, commissionPercent: e.target.value })} placeholder="Commission %" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="Display order" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
@@ -162,4 +149,4 @@ const DataPlansPage = () => {
   );
 };
 
-export default DataPlansPage;
+export default TvPlansPage;

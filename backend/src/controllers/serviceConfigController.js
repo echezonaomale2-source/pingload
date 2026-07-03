@@ -1,9 +1,13 @@
 const { body } = require('express-validator');
 const ServicePrice = require('../models/ServicePrice');
 const DataPlan = require('../models/DataPlan');
+const ElectricityPlan = require('../models/ElectricityPlan');
+const TvPlan = require('../models/TvPlan');
 const EducationProduct = require('../models/EducationProduct');
 const SystemSettings = require('../models/SystemSettings');
 const { buildSafeRegex, parsePagination } = require('../utils/safeQuery');
+
+const isDuplicateKeyError = (error) => error?.code === 11000;
 
 const priceValidation = [
   body('discountPercent').optional().isFloat({ min: 0, max: 100 }),
@@ -19,6 +23,29 @@ const planValidation = [
   body('validity').trim().notEmpty().withMessage('Validity is required'),
   body('variationCode').trim().notEmpty().withMessage('Variation code is required'),
   body('amount').isFloat({ min: 0 }).withMessage('Valid amount is required'),
+  body('commissionPercent').optional().isFloat({ min: 0, max: 100 }).withMessage('Commission must be 0-100'),
+  body('order').optional().isInt({ min: 0 }),
+  body('enabled').optional().isBoolean(),
+];
+
+const electricityPlanValidation = [
+  body('providerId').trim().notEmpty().withMessage('Provider ID is required')
+    .matches(/^[a-z0-9_-]+$/i).withMessage('Provider ID must be alphanumeric'),
+  body('name').trim().notEmpty().withMessage('Provider name is required'),
+  body('vtpassServiceId').trim().notEmpty().withMessage('VTpass service ID is required'),
+  body('minAmount').optional().isFloat({ min: 0 }),
+  body('maxAmount').optional().isFloat({ min: 0 }),
+  body('order').optional().isInt({ min: 0 }),
+  body('enabled').optional().isBoolean(),
+];
+
+const tvPlanValidation = [
+  body('provider').isIn(['dstv', 'gotv', 'startimes']).withMessage('Invalid TV provider'),
+  body('name').trim().notEmpty().withMessage('Plan name is required'),
+  body('variationCode').trim().notEmpty().withMessage('Variation code is required'),
+  body('amount').isFloat({ min: 0 }).withMessage('Valid amount is required'),
+  body('order').optional().isInt({ min: 0 }),
+  body('enabled').optional().isBoolean(),
 ];
 
 const educationProductValidation = [
@@ -97,6 +124,46 @@ const getDataPlans = async (req, res, next) => {
   }
 };
 
+// GET /services/electricity-plans — public enabled providers
+const getElectricityPlans = async (_req, res, next) => {
+  try {
+    await ElectricityPlan.ensureDefaults();
+    const plans = await ElectricityPlan.find({ enabled: true }).sort({ order: 1, name: 1 });
+    res.json({
+      success: true,
+      data: plans.map((p) => ({
+        id: p.providerId,
+        name: p.name,
+        minAmount: p.minAmount,
+        maxAmount: p.maxAmount,
+        order: p.order,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /services/tv-plans/:provider — public enabled packages
+const getTvPlans = async (req, res, next) => {
+  try {
+    await TvPlan.ensureDefaults();
+    const { provider } = req.params;
+    const plans = await TvPlan.find({ provider, enabled: true }).sort({ order: 1, amount: 1 });
+    res.json({
+      success: true,
+      data: plans.map((p) => ({
+        code: p.variationCode,
+        name: p.name,
+        amount: p.amount,
+        order: p.order,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // GET /services/data-plans/admin
 const adminListDataPlans = async (req, res, next) => {
   try {
@@ -115,6 +182,9 @@ const adminCreateDataPlan = async (req, res, next) => {
     const plan = await DataPlan.create(req.body);
     res.status(201).json({ success: true, data: plan });
   } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      return res.status(409).json({ success: false, message: 'A data plan with this network and variation code already exists' });
+    }
     next(error);
   }
 };
@@ -126,6 +196,9 @@ const adminUpdateDataPlan = async (req, res, next) => {
     if (!plan) return res.status(404).json({ success: false, message: 'Data plan not found' });
     res.json({ success: true, data: plan });
   } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      return res.status(409).json({ success: false, message: 'A data plan with this network and variation code already exists' });
+    }
     next(error);
   }
 };
@@ -136,6 +209,109 @@ const adminDeleteDataPlan = async (req, res, next) => {
     const plan = await DataPlan.findByIdAndDelete(req.params.id);
     if (!plan) return res.status(404).json({ success: false, message: 'Data plan not found' });
     res.json({ success: true, message: 'Data plan deleted' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const adminListElectricityPlans = async (_req, res, next) => {
+  try {
+    await ElectricityPlan.ensureDefaults();
+    const plans = await ElectricityPlan.find().sort({ order: 1, name: 1 });
+    res.json({ success: true, data: plans });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const adminCreateElectricityPlan = async (req, res, next) => {
+  try {
+    const payload = {
+      ...req.body,
+      providerId: String(req.body.providerId).toLowerCase().trim(),
+    };
+    const plan = await ElectricityPlan.create(payload);
+    res.status(201).json({ success: true, data: plan });
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      return res.status(409).json({ success: false, message: 'An electricity provider with this ID already exists' });
+    }
+    next(error);
+  }
+};
+
+const adminUpdateElectricityPlan = async (req, res, next) => {
+  try {
+    const updates = { ...req.body };
+    if (updates.providerId) {
+      updates.providerId = String(updates.providerId).toLowerCase().trim();
+    }
+    const plan = await ElectricityPlan.findByIdAndUpdate(req.params.id, updates, {
+      new: true,
+      runValidators: true,
+    });
+    if (!plan) return res.status(404).json({ success: false, message: 'Electricity plan not found' });
+    res.json({ success: true, data: plan });
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      return res.status(409).json({ success: false, message: 'An electricity provider with this ID already exists' });
+    }
+    next(error);
+  }
+};
+
+const adminDeleteElectricityPlan = async (req, res, next) => {
+  try {
+    const plan = await ElectricityPlan.findByIdAndDelete(req.params.id);
+    if (!plan) return res.status(404).json({ success: false, message: 'Electricity plan not found' });
+    res.json({ success: true, message: 'Electricity plan deleted' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const adminListTvPlans = async (req, res, next) => {
+  try {
+    await TvPlan.ensureDefaults();
+    const { provider } = req.query;
+    const filter = provider ? { provider } : {};
+    const plans = await TvPlan.find(filter).sort({ provider: 1, order: 1, amount: 1 });
+    res.json({ success: true, data: plans });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const adminCreateTvPlan = async (req, res, next) => {
+  try {
+    const plan = await TvPlan.create(req.body);
+    res.status(201).json({ success: true, data: plan });
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      return res.status(409).json({ success: false, message: 'A TV plan with this provider and variation code already exists' });
+    }
+    next(error);
+  }
+};
+
+const adminUpdateTvPlan = async (req, res, next) => {
+  try {
+    const plan = await TvPlan.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    if (!plan) return res.status(404).json({ success: false, message: 'TV plan not found' });
+    res.json({ success: true, data: plan });
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      return res.status(409).json({ success: false, message: 'A TV plan with this provider and variation code already exists' });
+    }
+    next(error);
+  }
+};
+
+const adminDeleteTvPlan = async (req, res, next) => {
+  try {
+    const plan = await TvPlan.findByIdAndDelete(req.params.id);
+    if (!plan) return res.status(404).json({ success: false, message: 'TV plan not found' });
+    res.json({ success: true, message: 'TV plan deleted' });
   } catch (error) {
     next(error);
   }
@@ -240,6 +416,8 @@ const adminEducationPurchases = async (req, res, next) => {
 module.exports = {
   priceValidation,
   planValidation,
+  electricityPlanValidation,
+  tvPlanValidation,
   educationProductValidation,
   getServicePrices,
   getPublicServiceStatus,
@@ -247,10 +425,20 @@ module.exports = {
   adminGetPrices,
   adminUpdatePrice,
   getDataPlans,
+  getElectricityPlans,
+  getTvPlans,
   adminListDataPlans,
   adminCreateDataPlan,
   adminUpdateDataPlan,
   adminDeleteDataPlan,
+  adminListElectricityPlans,
+  adminCreateElectricityPlan,
+  adminUpdateElectricityPlan,
+  adminDeleteElectricityPlan,
+  adminListTvPlans,
+  adminCreateTvPlan,
+  adminUpdateTvPlan,
+  adminDeleteTvPlan,
   adminListEducationProducts,
   adminCreateEducationProduct,
   adminUpdateEducationProduct,

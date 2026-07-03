@@ -10,7 +10,7 @@ const ActionSheetModal = ({ visible, title, options = [], onClose }) => (
       <TouchableOpacity
         key={opt.label}
         style={[styles.option, i < options.length - 1 && styles.optionBorder]}
-        onPress={() => { onClose(); opt.onPress?.(); }}
+        onPress={() => { opt.onPress?.(); }}
         activeOpacity={0.7}
       >
         <Text style={[styles.optionText, opt.destructive && styles.destructive]}>{opt.label}</Text>

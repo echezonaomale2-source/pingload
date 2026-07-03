@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,7 +12,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 import UserAvatar from '../../components/UserAvatar';
 import { ProfileSkeleton } from '../../components/skeleton';
 import { authService } from '../../services/authService';
-import { showAvatarPicker } from '../../utils/pickAvatar';
+import { showAvatarPicker, withAvatarCacheBust } from '../../utils/pickAvatar';
 
 const MENU_ITEMS = [
   { id: 'edit', title: 'Edit Profile', icon: 'person-outline', screen: 'EditProfile' },
@@ -30,13 +30,19 @@ const ProfileScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const dialog = useDialog();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   const { isLoading } = useQuery({
     queryKey: ['profile'],
     queryFn: async () => {
       const res = await authService.getProfile();
-      updateUser(res.data.data);
-      return res.data.data;
+      const profile = res.data.data;
+      updateUser({
+        ...profile,
+        avatar: withAvatarCacheBust(profile.avatar),
+      });
+      return profile;
     },
     staleTime: 30000,
   });
@@ -45,37 +51,59 @@ const ProfileScreen = ({ navigation }) => {
 
   if (authLoading || (isLoading && !user)) return <ProfileSkeleton />;
 
+  const uploadAvatar = async () => {
+    const avatar = await showAvatarPicker();
+    if (!avatar) return;
+    const previousAvatar = user?.avatar;
+    updateUser({ avatar });
+    setAvatarLoading(true);
+    setUploadProgress(0);
+    try {
+      const res = await authService.updateAvatarWithRetry(avatar, {
+        onProgress: setUploadProgress,
+      });
+      const uploaded = res.data.data;
+      updateUser({
+        ...uploaded,
+        avatar: withAvatarCacheBust(uploaded.avatar),
+      });
+      dialog.notifySuccess('Profile photo updated');
+    } catch (err) {
+      updateUser({ avatar: previousAvatar });
+      dialog.alertError('Upload Failed', err.response?.data?.message || err.message || 'Failed to upload avatar');
+    } finally {
+      setAvatarLoading(false);
+      setUploadProgress(null);
+    }
+  };
+
+  const removeAvatar = async () => {
+    setAvatarLoading(true);
+    try {
+      const res = await authService.removeAvatar();
+      updateUser(res.data.data);
+      dialog.notifySuccess('Profile photo removed');
+    } catch {
+      dialog.alertError('Error', 'Failed to remove avatar');
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
   const handleAvatarPress = () => {
+    if (avatarLoading) return;
     dialog.showActionSheet({
       title: 'Profile Photo',
       options: [
         {
           label: 'Change Photo',
-          onPress: async () => {
-            const avatar = await showAvatarPicker();
-            if (!avatar) return;
-            try {
-              const res = await authService.updateAvatar(avatar);
-              updateUser(res.data.data);
-              dialog.notifySuccess('Profile photo updated');
-            } catch (err) {
-              dialog.alertError('Error', err.response?.data?.message || 'Failed to upload avatar');
-            }
-          },
+          onPress: uploadAvatar,
         },
         ...(user?.avatar
           ? [{
               label: 'Remove Photo',
               destructive: true,
-              onPress: async () => {
-                try {
-                  const res = await authService.removeAvatar();
-                  updateUser(res.data.data);
-                  dialog.notifySuccess('Profile photo removed');
-                } catch {
-                  dialog.alertError('Error', 'Failed to remove avatar');
-                }
-              },
+              onPress: removeAvatar,
             }]
           : []),
       ],
@@ -98,7 +126,14 @@ const ProfileScreen = ({ navigation }) => {
         <ScreenHeader title="Profile" />
 
         <View style={styles.profileCard}>
-          <UserAvatar user={user} size={88} onPress={handleAvatarPress} showEditBadge />
+          <UserAvatar
+            user={user}
+            size={88}
+            onPress={handleAvatarPress}
+            showEditBadge
+            loading={avatarLoading}
+            uploadProgress={uploadProgress}
+          />
           <Text style={styles.name}>{user?.fullName}</Text>
           <Text style={styles.email}>{user?.email}</Text>
           {isVerified && (

@@ -356,23 +356,34 @@ const updateSettings = async (req, res, next) => {
   }
 };
 
+const MAX_AVATAR_LENGTH = 500000;
+const AVATAR_MIME_RE = /^data:image\/(jpeg|jpg|png|webp);base64,/i;
+
 const updateAvatar = async (req, res, next) => {
   try {
     const { avatar } = req.body;
 
-    if (!avatar) {
+    if (!avatar || typeof avatar !== 'string') {
       return res.status(400).json({ success: false, message: 'Avatar image is required' });
     }
 
-    if (!avatar.startsWith('data:image/')) {
-      return res.status(400).json({ success: false, message: 'Invalid image format' });
+    if (!AVATAR_MIME_RE.test(avatar)) {
+      return res.status(400).json({ success: false, message: 'Invalid image format. Use JPEG, PNG, or WebP.' });
     }
 
-    if (avatar.length > 500000) {
-      return res.status(400).json({ success: false, message: 'Image is too large. Max size is ~350KB' });
+    if (avatar.length > MAX_AVATAR_LENGTH) {
+      return res.status(400).json({ success: false, message: 'Image is too large. Please choose a smaller photo.' });
     }
 
-    const user = await User.findByIdAndUpdate(req.user._id, { avatar }, { new: true }).select('-passwordHash');
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { avatar },
+      { new: true, runValidators: true }
+    ).select('-passwordHash');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
     res.json({ success: true, message: 'Avatar updated', data: user });
   } catch (error) {

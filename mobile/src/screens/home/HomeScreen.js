@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +8,8 @@ import { shadows } from '../../utils/colors';
 import { SERVICES } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { transactionService, notificationService } from '../../services/transactionService';
+import { transactionService } from '../../services/transactionService';
+import { useNotificationCount } from '../../hooks/useNotificationCount';
 import BalanceCard from '../../components/BalanceCard';
 import ServiceGrid from '../../components/ServiceGrid';
 import TransactionItem from '../../components/TransactionItem';
@@ -29,22 +30,24 @@ const HomeScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const dialog = useDialog();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { unreadCount } = useNotificationCount();
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['recentTransactions'],
     queryFn: () => transactionService.getTransactions({ limit: 5 }),
+    staleTime: 60000,
   });
-
-  const { data: notifData } = useQuery({
-    queryKey: ['notificationCount'],
-    queryFn: () => notificationService.getUnreadCount(),
-    refetchInterval: 15000,
-  });
-  const unreadCount = notifData?.data?.data?.unreadCount || 0;
 
   const transactions = data?.data?.data || [];
 
-  if (isLoading) return <HomeDashboardSkeleton />;
+  const handleRefresh = useCallback(() => {
+    refetch();
+    refreshBalance();
+  }, [refetch, refreshBalance]);
+
+  const openNotifications = () => {
+    navigation.navigate('Notifications');
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -53,7 +56,7 @@ const HomeScreen = ({ navigation }) => {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={() => { refetch(); refreshBalance(); }}
+            onRefresh={handleRefresh}
             colors={[colors.primary]}
             tintColor={colors.primary}
           />
@@ -66,7 +69,7 @@ const HomeScreen = ({ navigation }) => {
             </Text>
             <Text style={styles.subGreeting}>What would you like to do today?</Text>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate('Notifications')} style={styles.notifBtn}>
+          <TouchableOpacity onPress={openNotifications} style={styles.notifBtn}>
             <Ionicons name="notifications-outline" size={22} color={colors.text} />
             {unreadCount > 0 && (
               <View style={styles.badge}>
@@ -93,7 +96,9 @@ const HomeScreen = ({ navigation }) => {
               <Text style={styles.seeAll}>See All</Text>
             </TouchableOpacity>
           </View>
-          {transactions.length === 0 ? (
+          {isLoading ? (
+            <HomeDashboardSkeleton compact />
+          ) : transactions.length === 0 ? (
             <View style={styles.empty}>
               <Ionicons name="receipt-outline" size={40} color={colors.textLight} />
               <Text style={styles.emptyText}>No transactions yet</Text>

@@ -5,6 +5,8 @@ const User = require('../models/User');
 const Faq = require('../models/Faq');
 const ServicePrice = require('../models/ServicePrice');
 const DataPlan = require('../models/DataPlan');
+const ElectricityPlan = require('../models/ElectricityPlan');
+const TvPlan = require('../models/TvPlan');
 const EducationProduct = require('../models/EducationProduct');
 const { adminEmail, adminPassword } = require('../config/env');
 
@@ -27,6 +29,8 @@ const seedAdmin = async () => {
   await SystemSettings.getSettings();
   await ServicePrice.ensureDefaults();
   await EducationProduct.ensureDefaults();
+  await ElectricityPlan.ensureDefaults();
+  await TvPlan.ensureDefaults();
 
   const faqCount = await Faq.countDocuments();
   if (faqCount === 0) {

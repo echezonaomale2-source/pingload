@@ -49,8 +49,9 @@ app.use(cors({
   credentials: true,
 }));
 app.use(morgan(nodeEnv === 'development' ? 'dev' : 'combined'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Avatar uploads are base64 data URIs (~350KB). Default express.json limit is 100kb.
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/webhooks/')) return next();
   return apiLimiter(req, res, next);

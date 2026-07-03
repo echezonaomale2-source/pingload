@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
@@ -19,10 +20,16 @@ const WalletScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  useFocusEffect(
+    useCallback(() => {
+      refreshBalance();
+    }, [refreshBalance])
+  );
 
   const { data, isLoading } = useQuery({
     queryKey: ['walletHistory'],
     queryFn: () => walletService.getHistory(),
+    staleTime: 60000,
   });
 
   const history = data?.data?.data || [];

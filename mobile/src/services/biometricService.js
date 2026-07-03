@@ -53,9 +53,9 @@ export const authenticateWithBiometric = async (promptMessage = 'Unlock Pingload
 
   const result = await LocalAuthentication.authenticateAsync({
     promptMessage,
-    cancelLabel: 'Use Password',
-    disableDeviceFallback: false,
-    fallbackLabel: 'Use Password',
+    cancelLabel: 'Use PIN',
+    disableDeviceFallback: true,
+    fallbackLabel: 'Use PIN',
   });
 
   if (result.success) {

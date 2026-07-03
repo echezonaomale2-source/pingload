@@ -3,74 +3,136 @@ import * as SecureStore from 'expo-secure-store';
 import { authService } from '../services/authService';
 import { walletService } from '../services/walletService';
 import { isBiometricEnabledLocally } from '../services/biometricService';
+import { hasLoginPin, setLoginPin, clearLoginPin } from '../services/loginPinService';
 import { syncDeviceTokenWithBackend, updateAppBadgeCount } from '../services/pushNotificationService';
+
+const BOOTSTRAP_TIMEOUT_MS = 12000;
+
+const withTimeout = (promise, ms, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    }),
+  ]);
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [awaitingBiometric, setAwaitingBiometric] = useState(false);
+  const [needsLoginPinSetup, setNeedsLoginPinSetup] = useState(false);
+  const [awaitingUnlock, setAwaitingUnlock] = useState(null);
+
+  const activateSession = useCallback(() => {
+    setAwaitingUnlock(null);
+    setNeedsLoginPinSetup(false);
+    setIsAuthenticated(true);
+    syncDeviceTokenWithBackend().catch(() => {});
+  }, []);
+
+  const resolveUnlockGate = useCallback(async (userData) => {
+    const pinExists = await hasLoginPin();
+    if (!pinExists) {
+      setNeedsLoginPinSetup(true);
+      setAwaitingUnlock(null);
+      setIsAuthenticated(false);
+      return;
+    }
+
+    const localBiometric = await isBiometricEnabledLocally();
+    if (userData.biometricEnabled && localBiometric) {
+      setAwaitingUnlock('biometric');
+      setIsAuthenticated(false);
+      return;
+    }
+
+    setAwaitingUnlock('pin');
+    setIsAuthenticated(false);
+  }, []);
 
   const loadUser = useCallback(async () => {
     try {
-      const token = await SecureStore.getItemAsync('token');
-      if (!token) {
-        setIsLoading(false);
+      const token = await withTimeout(
+        SecureStore.getItemAsync('token'),
+        5000,
+        'SecureStore read',
+      );
+      if (!token) return;
+
+      const [profileResult, balanceResult] = await Promise.allSettled([
+        withTimeout(authService.getProfile(), BOOTSTRAP_TIMEOUT_MS, 'Profile'),
+        withTimeout(walletService.getBalance(), BOOTSTRAP_TIMEOUT_MS, 'Wallet balance'),
+      ]);
+
+      if (profileResult.status === 'rejected') {
+        if (__DEV__) console.warn('[Auth] Profile load failed:', profileResult.reason?.message);
+        await SecureStore.deleteItemAsync('token');
+        setUser(null);
+        setIsAuthenticated(false);
+        setAwaitingUnlock(null);
+        setNeedsLoginPinSetup(false);
         return;
       }
 
-      const profileRes = await authService.getProfile();
-      const userData = profileRes.data.data;
+      const userData = profileResult.value?.data?.data;
+      if (!userData) {
+        throw new Error('Invalid profile response');
+      }
 
       if (userData.accountStatus === 'suspended') {
         await SecureStore.deleteItemAsync('token');
         setUser(null);
         setIsAuthenticated(false);
-        setAwaitingBiometric(false);
+        setAwaitingUnlock(null);
+        setNeedsLoginPinSetup(false);
         return;
       }
 
       setUser(userData);
 
-      const [localBiometric, balanceRes] = await Promise.all([
-        isBiometricEnabledLocally(),
-        walletService.getBalance(),
-      ]);
-
-      setBalance(balanceRes.data.data.balance);
-
-      if (userData.biometricEnabled && localBiometric) {
-        setAwaitingBiometric(true);
-        setIsAuthenticated(false);
+      if (balanceResult.status === 'fulfilled') {
+        setBalance(balanceResult.value?.data?.data?.balance ?? userData.walletBalance ?? 0);
       } else {
-        setIsAuthenticated(true);
-        setAwaitingBiometric(false);
-        syncDeviceTokenWithBackend().catch(() => {});
+        if (__DEV__) console.warn('[Auth] Balance load failed:', balanceResult.reason?.message);
+        setBalance(userData.walletBalance ?? 0);
       }
-    } catch {
-      await SecureStore.deleteItemAsync('token');
+
+      await resolveUnlockGate(userData);
+    } catch (error) {
+      if (__DEV__) console.warn('[Auth] Bootstrap failed:', error?.message);
+      await SecureStore.deleteItemAsync('token').catch(() => {});
       setUser(null);
+      setBalance(0);
       setIsAuthenticated(false);
-      setAwaitingBiometric(false);
+      setAwaitingUnlock(null);
+      setNeedsLoginPinSetup(false);
     } finally {
-      setIsLoading(false);
+      setIsBootstrapping(false);
     }
-  }, []);
+  }, [resolveUnlockGate]);
 
   useEffect(() => {
-    loadUser();
+    const watchdog = setTimeout(() => setIsBootstrapping(false), BOOTSTRAP_TIMEOUT_MS + 3000);
+    loadUser().finally(() => clearTimeout(watchdog));
+    return () => clearTimeout(watchdog);
   }, [loadUser]);
 
-  const completeSession = async (userData, token, initialBalance = null) => {
+  const completeSession = async (userData, token, initialBalance = null, { isNewAccount = false } = {}) => {
     await SecureStore.setItemAsync('token', token);
     setUser(userData);
     setBalance(initialBalance ?? userData.walletBalance ?? 0);
-    setAwaitingBiometric(false);
-    setIsAuthenticated(true);
-    syncDeviceTokenWithBackend().catch(() => {});
+
+    if (isNewAccount || !(await hasLoginPin())) {
+      setNeedsLoginPinSetup(true);
+      setAwaitingUnlock(null);
+      setIsAuthenticated(false);
+      return;
+    }
+
+    await resolveUnlockGate(userData);
   };
 
   const login = async (email, password) => {
@@ -90,8 +152,14 @@ export const AuthProvider = ({ children }) => {
   const register = async (data) => {
     const res = await authService.register(data);
     const { token, user: userData } = res.data.data;
-    await completeSession(userData, token, 0);
+    await completeSession(userData, token, 0, { isNewAccount: true });
     return res.data;
+  };
+
+  const finishLoginPinSetup = async (pin) => {
+    await setLoginPin(pin);
+    setNeedsLoginPinSetup(false);
+    activateSession();
   };
 
   const logout = async () => {
@@ -100,17 +168,21 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setBalance(0);
     setIsAuthenticated(false);
-    setAwaitingBiometric(false);
+    setAwaitingUnlock(null);
+    setNeedsLoginPinSetup(false);
   };
 
-  const completeBiometricUnlock = () => {
-    setAwaitingBiometric(false);
-    setIsAuthenticated(true);
-    syncDeviceTokenWithBackend().catch(() => {});
-  };
-
-  const cancelBiometricUnlock = async () => {
+  const logoutAndClearPin = async () => {
+    await clearLoginPin();
     await logout();
+  };
+
+  const completeUnlock = () => {
+    activateSession();
+  };
+
+  const switchToPinUnlock = () => {
+    setAwaitingUnlock('pin');
   };
 
   const refreshBalance = async () => {
@@ -131,17 +203,24 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         balance,
-        isLoading,
+        isLoading: isBootstrapping,
+        isBootstrapping,
         isAuthenticated,
-        awaitingBiometric,
+        needsLoginPinSetup,
+        awaitingUnlock,
+        awaitingBiometric: awaitingUnlock === 'biometric',
         login,
         register,
         logout,
+        logoutAndClearPin,
         refreshBalance,
         updateUser,
         loadUser,
-        completeBiometricUnlock,
-        cancelBiometricUnlock,
+        completeUnlock,
+        switchToPinUnlock,
+        finishLoginPinSetup,
+        completeBiometricUnlock: completeUnlock,
+        cancelBiometricUnlock: switchToPinUnlock,
       }}
     >
       {children}

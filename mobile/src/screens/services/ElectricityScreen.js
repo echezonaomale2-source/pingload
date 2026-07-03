@@ -1,14 +1,14 @@
-import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
-import { ELECTRICITY_PROVIDERS } from '../../utils/constants';
 import { handleVtuPurchaseError, handleVtuPurchaseResult } from '../../utils/vtuHelpers';
 import FormInput from '../../components/FormInput';
 import CustomButton from '../../components/CustomButton';
 import { TransactionPinModal } from '../../components/modals';
+import { LogoLoader } from '../../components/loading';
 import { vtuService } from '../../services/vtuService';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../hooks/useDialog';
@@ -24,7 +24,9 @@ const ElectricityScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [provider, setProvider] = useState('');
+  const [providers, setProviders] = useState([]);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+  const [provider, setProvider] = useState(null);
   const [meterNumber, setMeterNumber] = useState('');
   const [meterType, setMeterType] = useState('prepaid');
   const [amount, setAmount] = useState('');
@@ -32,6 +34,26 @@ const ElectricityScreen = ({ navigation }) => {
   const [verifying, setVerifying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPin, setShowPin] = useState(false);
+
+  const loadProviders = useCallback(async (showError = false) => {
+    setLoadingProviders(true);
+    try {
+      const res = await vtuService.getElectricityPlans();
+      setProviders(res.data.data || []);
+    } catch {
+      setProviders([]);
+      if (showError) {
+        dialog.alertError('Error', 'Could not load electricity providers. Pull to refresh.');
+      }
+    } finally {
+      setLoadingProviders(false);
+    }
+  }, [dialog]);
+
+  useEffect(() => {
+    loadProviders(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleVerifyMeter = async () => {
     if (!provider || !meterNumber) {
@@ -41,7 +63,11 @@ const ElectricityScreen = ({ navigation }) => {
 
     setVerifying(true);
     try {
-      const res = await vtuService.verifyElectricityMeter({ provider, meterNumber, meterType });
+      const res = await vtuService.verifyElectricityMeter({
+        provider: provider.id,
+        meterNumber,
+        meterType,
+      });
       const name = res.data.data?.customerName;
       setCustomerName(name || '');
       dialog.showSuccess({
@@ -63,6 +89,18 @@ const ElectricityScreen = ({ navigation }) => {
       dialog.alertError('Missing Details', 'Please fill in all fields');
       return;
     }
+    const value = parseFloat(amount);
+    if (Number.isNaN(value) || value <= 0) {
+      dialog.alertError('Invalid Amount', 'Enter a valid amount');
+      return;
+    }
+    if (value < provider.minAmount || value > provider.maxAmount) {
+      dialog.alertError(
+        'Amount Out of Range',
+        `Amount must be between ₦${provider.minAmount} and ₦${provider.maxAmount}`
+      );
+      return;
+    }
     setShowPin(true);
   };
 
@@ -71,7 +109,7 @@ const ElectricityScreen = ({ navigation }) => {
     setLoading(true);
     try {
       const response = await vtuService.payElectricity({
-        provider,
+        provider: provider.id,
         meterNumber,
         meterType,
         amount: parseFloat(amount),
@@ -98,22 +136,36 @@ const ElectricityScreen = ({ navigation }) => {
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
         <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={loadingProviders} onRefresh={() => loadProviders(true)} />}
+      >
         <Text style={styles.title}>Pay Electricity</Text>
         <Text style={styles.subtitle}>Pay your electricity bills instantly</Text>
 
         <Text style={styles.label}>Select Provider</Text>
-        <View style={styles.providerGrid}>
-          {ELECTRICITY_PROVIDERS.map((p) => (
-            <TouchableOpacity
-              key={p.id}
-              style={[styles.providerBtn, provider === p.id && styles.providerActive]}
-              onPress={() => { setProvider(p.id); setCustomerName(''); }}
-            >
-              <Text style={[styles.providerText, provider === p.id && styles.providerTextActive]}>{p.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {loadingProviders && providers.length === 0 ? (
+          <View style={styles.loadingWrap}>
+            <LogoLoader size={48} />
+            <Text style={styles.loadingText}>Loading providers...</Text>
+          </View>
+        ) : (
+          <View style={styles.providerGrid}>
+            {providers.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.providerBtn, provider?.id === p.id && styles.providerActive]}
+                onPress={() => { setProvider(p); setCustomerName(''); }}
+              >
+                <Text style={[styles.providerText, provider?.id === p.id && styles.providerTextActive]}>{p.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {!loadingProviders && providers.length === 0 && (
+          <Text style={styles.emptyText}>No electricity providers available right now.</Text>
+        )}
 
         <Text style={styles.label}>Meter Type</Text>
         <View style={styles.typeRow}>
@@ -137,9 +189,14 @@ const ElectricityScreen = ({ navigation }) => {
         ) : null}
 
         <CustomButton title="Verify Meter" variant="outline" onPress={handleVerifyMeter} loading={verifying} style={styles.verifyBtn} />
-        <FormInput label="Amount (₦)" value={amount} onChangeText={setAmount} keyboardType="numeric" />
+        <FormInput
+          label={provider ? `Amount (₦${provider.minAmount} – ₦${provider.maxAmount})` : 'Amount (₦)'}
+          value={amount}
+          onChangeText={setAmount}
+          keyboardType="numeric"
+        />
 
-        <CustomButton title="Pay Bill" onPress={handlePay} loading={loading} />
+        <CustomButton title="Pay Bill" onPress={handlePay} loading={loading} disabled={!provider} />
         <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPay} loading={loading} />
       </ScrollView>
     </SafeAreaView>
@@ -168,6 +225,9 @@ const createStyles = (colors) => StyleSheet.create({
   },
   verifiedText: { fontSize: 14, fontWeight: '600', color: colors.text, flex: 1 },
   verifyBtn: { marginBottom: 16 },
+  loadingWrap: { alignItems: 'center', marginBottom: 16, paddingVertical: 12 },
+  loadingText: { color: colors.textSecondary, marginTop: 10, fontSize: 14 },
+  emptyText: { color: colors.textSecondary, marginBottom: 16, fontSize: 14 },
 });
 
 export default ElectricityScreen;

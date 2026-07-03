@@ -49,6 +49,20 @@ export const dataPlansApi = {
   delete: (id) => api.delete(`/admin/data-plans/${id}`),
 };
 
+export const electricityPlansApi = {
+  list: () => api.get('/admin/electricity-plans'),
+  create: (data) => api.post('/admin/electricity-plans', data),
+  update: (id, data) => api.patch(`/admin/electricity-plans/${id}`, data),
+  delete: (id) => api.delete(`/admin/electricity-plans/${id}`),
+};
+
+export const tvPlansApi = {
+  list: (params) => api.get('/admin/tv-plans', { params }),
+  create: (data) => api.post('/admin/tv-plans', data),
+  update: (id, data) => api.patch(`/admin/tv-plans/${id}`, data),
+  delete: (id) => api.delete(`/admin/tv-plans/${id}`),
+};
+
 export const kycApi = {
   list: (params) => api.get('/admin/kyc', { params }),
   get: (id) => api.get(`/admin/kyc/${id}`),

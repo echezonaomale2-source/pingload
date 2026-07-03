@@ -39,15 +39,27 @@ export const ModalProvider = ({ children }) => {
   }), [close]);
 
   const showActionSheet = useCallback((opts) => new Promise((resolve) => {
+    let settled = false;
+    const settle = (value) => {
+      if (settled) return;
+      settled = true;
+      close();
+      resolve(value);
+    };
+
     setState({
       type: 'action',
       props: {
         ...opts,
         options: opts.options.map((opt) => ({
           ...opt,
-          onPress: () => { resolve(opt); opt.onPress?.(); },
+          onPress: () => {
+            const originalOnPress = opt.onPress;
+            settle(opt);
+            originalOnPress?.();
+          },
         })),
-        onClose: () => { close(); resolve(null); },
+        onClose: () => settle(null),
       },
     });
   }), [close]);

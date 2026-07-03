@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,8 +22,11 @@ const TransferScreen = ({ navigation }) => {
   const [note, setNote] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   const handleTransfer = async (pin) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setShowPin(false);
     setLoading(true);
     try {
@@ -43,6 +46,7 @@ const TransferScreen = ({ navigation }) => {
       dialog.alertError('Error', err.response?.data?.message || 'Transfer failed');
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 

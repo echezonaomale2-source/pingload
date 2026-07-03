@@ -116,7 +116,14 @@ const DataScreen = ({ navigation }) => {
                 style={[styles.planItem, selectedPlan?.variation_code === plan.variation_code && styles.planActive]}
                 onPress={() => setSelectedPlan(plan)}
               >
-                <Text style={styles.planName}>{plan.name}</Text>
+                <View style={styles.planInfo}>
+                  <Text style={styles.planName}>{plan.name}</Text>
+                  {(plan.dataSize || plan.validity) ? (
+                    <Text style={styles.planMeta}>
+                      {[plan.dataSize, plan.validity].filter(Boolean).join(' · ')}
+                    </Text>
+                  ) : null}
+                </View>
                 <Text style={styles.planPrice}>{formatCurrency(parseFloat(plan.variation_amount))}</Text>
               </TouchableOpacity>
             ))}
@@ -149,7 +156,9 @@ const createStyles = (colors) => StyleSheet.create({
     padding: 16, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, marginBottom: 8,
   },
   planActive: { borderColor: colors.primary, backgroundColor: `${colors.primary}08` },
-  planName: { fontSize: 14, fontWeight: '600', color: colors.text, flex: 1 },
+  planInfo: { flex: 1, paddingRight: 12 },
+  planName: { fontSize: 14, fontWeight: '600', color: colors.text },
+  planMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   planPrice: { fontSize: 14, fontWeight: '700', color: colors.primary },
 });
 

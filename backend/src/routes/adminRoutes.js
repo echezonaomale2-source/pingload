@@ -46,6 +46,14 @@ const {
   adminCreateDataPlan,
   adminUpdateDataPlan,
   adminDeleteDataPlan,
+  adminListElectricityPlans,
+  adminCreateElectricityPlan,
+  adminUpdateElectricityPlan,
+  adminDeleteElectricityPlan,
+  adminListTvPlans,
+  adminCreateTvPlan,
+  adminUpdateTvPlan,
+  adminDeleteTvPlan,
   adminListEducationProducts,
   adminCreateEducationProduct,
   adminUpdateEducationProduct,
@@ -53,6 +61,8 @@ const {
   adminEducationPurchases,
   priceValidation,
   planValidation,
+  electricityPlanValidation,
+  tvPlanValidation,
   educationProductValidation,
 } = require('../controllers/serviceConfigController');
 const { getRefunds, getRefundById } = require('../controllers/refundController');
@@ -108,6 +118,16 @@ router.get('/data-plans', protectAdmin, adminListDataPlans);
 router.post('/data-plans', protectAdmin, planValidation, validate, adminCreateDataPlan);
 router.patch('/data-plans/:id', protectAdmin, adminUpdateDataPlan);
 router.delete('/data-plans/:id', protectAdmin, adminDeleteDataPlan);
+
+router.get('/electricity-plans', protectAdmin, adminListElectricityPlans);
+router.post('/electricity-plans', protectAdmin, electricityPlanValidation, validate, adminCreateElectricityPlan);
+router.patch('/electricity-plans/:id', protectAdmin, adminUpdateElectricityPlan);
+router.delete('/electricity-plans/:id', protectAdmin, adminDeleteElectricityPlan);
+
+router.get('/tv-plans', protectAdmin, adminListTvPlans);
+router.post('/tv-plans', protectAdmin, tvPlanValidation, validate, adminCreateTvPlan);
+router.patch('/tv-plans/:id', protectAdmin, adminUpdateTvPlan);
+router.delete('/tv-plans/:id', protectAdmin, adminDeleteTvPlan);
 
 router.get('/education-products', protectAdmin, adminListEducationProducts);
 router.post('/education-products', protectAdmin, educationProductValidation, validate, adminCreateEducationProduct);

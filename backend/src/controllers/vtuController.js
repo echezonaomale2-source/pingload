@@ -1,5 +1,7 @@
 const { body } = require('express-validator');
 const DataPlan = require('../models/DataPlan');
+const ElectricityPlan = require('../models/ElectricityPlan');
+const TvPlan = require('../models/TvPlan');
 const EducationProduct = require('../models/EducationProduct');
 const serviceConfig = require('../config/serviceConfig');
 const vtpass = require('../services/vtpassService');
@@ -65,19 +67,7 @@ const fetchDataPlans = async (req, res, next) => {
   try {
     const { network } = req.params;
 
-    // In VTpass sandbox, use live VTpass variation codes so purchases succeed
-    if (serviceConfig.vtpass.isSandbox && serviceConfig.vtpass.configured) {
-      try {
-        const result = await vtpass.getDataPlans(network);
-        const variations = dedupeByCode(result.content?.variations || [], 'variation_code');
-        if (variations.length > 0) {
-          return res.json({ success: true, data: variations, source: 'vtpass' });
-        }
-      } catch (vtpassError) {
-        // Fall through to local admin plans
-      }
-    }
-
+    // Always prefer admin-managed plans so price/commission changes apply immediately.
     const localPlans = await DataPlan.find({ network, enabled: true }).sort({ order: 1, amount: 1 });
 
     if (localPlans.length > 0) {
@@ -89,14 +79,26 @@ const fetchDataPlans = async (req, res, next) => {
           variation_amount: String(p.amount),
           dataSize: p.dataSize,
           validity: p.validity,
+          commissionPercent: p.commissionPercent || 0,
         })),
         source: 'local',
       });
     }
 
-    const result = await vtpass.getDataPlans(network);
-    const variations = dedupeByCode(result.content?.variations || [], 'variation_code');
-    res.json({ success: true, data: variations, source: 'vtpass' });
+    // Fallback to VTpass catalogue when no local plans are configured.
+    if (serviceConfig.vtpass.configured) {
+      try {
+        const result = await vtpass.getDataPlans(network);
+        const variations = dedupeByCode(result.content?.variations || [], 'variation_code');
+        if (variations.length > 0) {
+          return res.json({ success: true, data: variations, source: 'vtpass' });
+        }
+      } catch {
+        // fall through
+      }
+    }
+
+    res.json({ success: true, data: [], source: 'local' });
   } catch (error) {
     next(error);
   }
@@ -130,20 +132,55 @@ const buyData = async (req, res, next) => {
   }
 };
 
+const resolveElectricityProvider = async (providerId) => {
+  await ElectricityPlan.ensureDefaults();
+  const plan = await ElectricityPlan.findOne({
+    providerId: String(providerId).toLowerCase(),
+    enabled: true,
+  });
+  if (!plan) {
+    const error = new Error('Electricity provider is unavailable');
+    error.statusCode = 400;
+    throw error;
+  }
+  return plan;
+};
+
 const payElectricity = async (req, res, next) => {
   try {
     await assertServiceEnabled('electricity');
     const { provider, meterNumber, meterType, amount, phone, pin } = req.body;
     await verifyTransactionPin(req.user._id, pin);
 
+    const plan = await resolveElectricityProvider(provider);
+    if (amount < plan.minAmount || amount > plan.maxAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Amount must be between ₦${plan.minAmount} and ₦${plan.maxAmount}`,
+      });
+    }
+
     const result = await executeVtuPurchase({
       userId: req.user._id,
       service: 'electricity',
       amount,
       description: `Electricity bill: ₦${amount} for meter ${meterNumber}`,
-      metadata: { provider, meterNumber, meterType, phone },
+      metadata: {
+        provider: plan.providerId,
+        providerName: plan.name,
+        meterNumber,
+        meterType,
+        phone,
+        vtpassServiceId: plan.vtpassServiceId,
+      },
       vtpassCall: (requestId) => vtpass.payElectricity({
-        provider, meterNumber, meterType, amount, phone, requestId,
+        provider: plan.providerId,
+        serviceId: plan.vtpassServiceId,
+        meterNumber,
+        meterType,
+        amount,
+        phone,
+        requestId,
       }),
     });
 
@@ -156,6 +193,9 @@ const payElectricity = async (req, res, next) => {
         data: error.data,
       });
     }
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
     next(error);
   }
 };
@@ -164,7 +204,13 @@ const verifyElectricityMeter = async (req, res, next) => {
   try {
     vtpass.assertVtpassConfigured();
     const { provider, meterNumber, meterType } = req.body;
-    const result = await vtpass.verifyElectricityMeter({ provider, meterNumber, meterType });
+    const plan = await resolveElectricityProvider(provider);
+    const result = await vtpass.verifyElectricityMeter({
+      provider: plan.providerId,
+      serviceId: plan.vtpassServiceId,
+      meterNumber,
+      meterType,
+    });
 
     res.json({
       success: true,
@@ -172,11 +218,16 @@ const verifyElectricityMeter = async (req, res, next) => {
         customerName: result.content?.Customer_Name || result.content?.customerName,
         customerAddress: result.content?.Address || result.content?.customerAddress,
         meterNumber: result.content?.Meter_Number || meterNumber,
-        minimumAmount: result.content?.Min_Purchase_Amount || result.content?.minimium_amount,
+        minimumAmount: result.content?.Min_Purchase_Amount || result.content?.minimium_amount || plan.minAmount,
+        maxAmount: plan.maxAmount,
+        providerName: plan.name,
         raw: result.content,
       },
     });
   } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
     next(error);
   }
 };
@@ -184,17 +235,41 @@ const verifyElectricityMeter = async (req, res, next) => {
 const fetchTVPackages = async (req, res, next) => {
   try {
     const { provider } = req.params;
-    const result = await vtpass.getTVPackages(provider);
-    const packages = dedupeByCode(
-      (result.content?.variations || []).map((pkg) => ({
-        code: pkg.variation_code,
-        name: pkg.name,
-        amount: parseFloat(pkg.variation_amount),
-      })),
-      'code'
-    );
+    await TvPlan.ensureDefaults();
 
-    res.json({ success: true, data: packages });
+    const localPlans = await TvPlan.find({ provider, enabled: true }).sort({ order: 1, amount: 1 });
+    if (localPlans.length > 0) {
+      return res.json({
+        success: true,
+        data: localPlans.map((p) => ({
+          code: p.variationCode,
+          name: p.name,
+          amount: p.amount,
+        })),
+        source: 'local',
+      });
+    }
+
+    if (serviceConfig.vtpass.configured) {
+      try {
+        const result = await vtpass.getTVPackages(provider);
+        const packages = dedupeByCode(
+          (result.content?.variations || []).map((pkg) => ({
+            code: pkg.variation_code,
+            name: pkg.name,
+            amount: parseFloat(pkg.variation_amount),
+          })),
+          'code'
+        );
+        if (packages.length > 0) {
+          return res.json({ success: true, data: packages, source: 'vtpass' });
+        }
+      } catch {
+        // fall through
+      }
+    }
+
+    res.json({ success: true, data: [], source: 'local' });
   } catch (error) {
     next(error);
   }

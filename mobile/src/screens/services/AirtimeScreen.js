@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,8 +28,10 @@ const AirtimeScreen = ({ navigation }) => {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPin, setShowPin] = useState(false);
+  const purchasingRef = useRef(false);
 
   const handlePurchase = () => {
+    if (loading || purchasingRef.current) return;
     if (!network || !phone || !amount) {
       dialog.alertError('Missing Details', 'Please fill in all fields');
       return;
@@ -38,6 +40,8 @@ const AirtimeScreen = ({ navigation }) => {
   };
 
   const confirmPurchase = async (pin) => {
+    if (purchasingRef.current) return;
+    purchasingRef.current = true;
     setShowPin(false);
     setLoading(true);
     try {
@@ -54,6 +58,7 @@ const AirtimeScreen = ({ navigation }) => {
       handleVtuPurchaseError(err, dialog, 'Airtime purchase failed');
     } finally {
       setLoading(false);
+      purchasingRef.current = false;
     }
   };
 
