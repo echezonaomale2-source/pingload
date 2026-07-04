@@ -18,26 +18,36 @@ const SCREEN_ALIASES = {
 export const navigateFromNotification = (data = {}) => {
   if (!navigationRef.isReady()) return false;
 
-  const screen = SCREEN_ALIASES[data.screen] || data.screen || 'Notifications';
+  const screen = SCREEN_ALIASES[data.screen] || data.screen;
   const transactionId = data.transactionId;
   const notificationId = data.notificationId;
+
+  if (!screen && !transactionId && !notificationId) return false;
 
   if (screen === 'TransactionDetails' && transactionId) {
     navigationRef.navigate('TransactionDetails', { id: transactionId });
     return true;
   }
 
-  if (screen === 'Notifications' && notificationId) {
+  if (transactionId) {
+    navigationRef.navigate('TransactionDetails', { id: transactionId });
+    return true;
+  }
+
+  if (screen === 'Notifications' || notificationId) {
     navigationRef.dispatch(
       CommonActions.navigate({
         name: 'MainTabs',
-        params: { screen: 'Notifications', params: { highlightId: notificationId } },
+        params: {
+          screen: 'Notifications',
+          params: notificationId ? { highlightId: notificationId } : undefined,
+        },
       })
     );
     return true;
   }
 
-  if (TAB_SCREENS.has(screen)) {
+  if (screen && TAB_SCREENS.has(screen)) {
     navigationRef.dispatch(
       CommonActions.navigate({
         name: 'MainTabs',
@@ -47,16 +57,10 @@ export const navigateFromNotification = (data = {}) => {
     return true;
   }
 
-  if (navigationRef.getRootState()?.routeNames?.includes(screen)) {
+  if (screen && navigationRef.getRootState()?.routeNames?.includes(screen)) {
     navigationRef.navigate(screen);
     return true;
   }
 
-  navigationRef.dispatch(
-    CommonActions.navigate({
-      name: 'MainTabs',
-      params: { screen: 'Notifications' },
-    })
-  );
-  return true;
+  return false;
 };

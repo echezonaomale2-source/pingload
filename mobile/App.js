@@ -19,7 +19,7 @@ import LoadingProvider from './src/context/LoadingProvider';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import AppNavigator from './src/navigation/AppNavigator';
 import { navigationRef } from './src/navigation/navigationRef';
-import { usePushNotifications, flushPendingNotificationNavigation, unregisterPushOnLogout } from './src/hooks/usePushNotifications';
+import { usePushNotifications, flushPendingNotificationNavigation } from './src/hooks/usePushNotifications';
 import { ProviderLogosProvider } from './src/context/ProviderLogosContext';
 import SplashScreen from './src/screens/SplashScreen';
 import BiometricUnlockScreen from './src/screens/auth/BiometricUnlockScreen';
@@ -42,16 +42,8 @@ const queryClient = new QueryClient({
 });
 
 const PushNotificationBridge = () => {
-  const { isAuthenticated, awaitingUnlock, isBootstrapping } = useAuth();
-  const sessionActive = !isBootstrapping && (isAuthenticated || Boolean(awaitingUnlock));
-  usePushNotifications(sessionActive);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      flushPendingNotificationNavigation();
-    }
-  }, [isAuthenticated]);
-
+  const { isAuthenticated } = useAuth();
+  usePushNotifications(isAuthenticated);
   return null;
 };
 
@@ -125,7 +117,13 @@ const RootNavigator = () => {
 
   return (
     <PaperProvider theme={paperTheme}>
-      <NavigationContainer ref={navigationRef} theme={navigationTheme}>
+      <NavigationContainer
+        ref={navigationRef}
+        theme={navigationTheme}
+        onReady={() => {
+          flushPendingNotificationNavigation();
+        }}
+      >
         <PushNotificationBridge />
         <DataPrefetchBridge />
         {isAuthenticated ? <AppNavigator /> : <AuthNavigator />}

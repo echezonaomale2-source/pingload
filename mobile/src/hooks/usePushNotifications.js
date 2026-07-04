@@ -14,7 +14,11 @@ import {
 import {
   savePendingNotificationNav,
   consumePendingNotificationNav,
+  markNotificationResponseHandled,
+  wasNotificationResponseHandled,
 } from '../utils/pendingNotificationNav';
+
+const COLD_START_MAX_AGE_MS = 10 * 60 * 1000;
 
 const refreshBadgeCount = async () => {
   try {
@@ -27,12 +31,43 @@ const refreshBadgeCount = async () => {
   }
 };
 
-const handleNotificationNavigation = async (response) => {
-  const data = response?.notification?.request?.content?.data || {};
+const getResponseId = (response) =>
+  response?.notification?.request?.identifier
+  || response?.notification?.request?.content?.data?.notificationId
+  || null;
+
+const getResponseData = (response) =>
+  response?.notification?.request?.content?.data || {};
+
+const isFreshNotificationOpen = (response) => {
+  if (!response) return false;
+  const actionId = response.actionIdentifier;
+  if (actionId && actionId !== Notifications.DEFAULT_ACTION_IDENTIFIER) return false;
+  const dateSec = response.notification?.date;
+  if (!dateSec) return true;
+  const ageMs = Date.now() - dateSec * 1000;
+  return ageMs >= 0 && ageMs <= COLD_START_MAX_AGE_MS;
+};
+
+const handleNotificationNavigation = async (response, { userInitiated = false } = {}) => {
+  const responseId = getResponseId(response);
+  const data = getResponseData(response);
+
+  if (!userInitiated) {
+    if (!isFreshNotificationOpen(response)) return false;
+    if (responseId && await wasNotificationResponseHandled(responseId)) return false;
+  }
+
   const navigated = navigateFromNotification(data);
-  if (!navigated) {
+  if (navigated) {
+    if (responseId) await markNotificationResponseHandled(responseId);
+    return true;
+  }
+
+  if (data?.screen || data?.transactionId || data?.notificationId) {
     await savePendingNotificationNav(data);
   }
+  return false;
 };
 
 export const flushPendingNotificationNavigation = async () => {
@@ -42,12 +77,12 @@ export const flushPendingNotificationNavigation = async () => {
   }
 };
 
-/** Notification listeners — active once user session exists (including unlock gate). */
+/** Notification listeners — active only after the user is fully authenticated. */
 export const useNotificationListeners = (enabled) => {
   const queryClient = useQueryClient();
   const responseListener = useRef(null);
   const receivedListener = useRef(null);
-  const coldStartHandled = useRef(false);
+  const coldStartChecked = useRef(false);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -59,16 +94,18 @@ export const useNotificationListeners = (enabled) => {
     });
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(async (response) => {
-      await handleNotificationNavigation(response);
+      await handleNotificationNavigation(response, { userInitiated: true });
       await refreshBadgeCount();
       queryClient.invalidateQueries({ queryKey: ['notificationCount'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
 
-    if (!coldStartHandled.current) {
-      coldStartHandled.current = true;
+    if (!coldStartChecked.current) {
+      coldStartChecked.current = true;
       Notifications.getLastNotificationResponseAsync().then((response) => {
-        if (response) handleNotificationNavigation(response);
+        if (response) {
+          handleNotificationNavigation(response, { userInitiated: false });
+        }
       });
     }
 

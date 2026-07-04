@@ -147,27 +147,37 @@ const DataPlansPage = () => {
 
       {loading ? <PageLoader /> : <DataTable columns={columns} data={plans} />}
 
-      <Modal open={!!modal} onClose={() => setModal(null)} title={modal === 'create' ? 'Add Data Plan' : 'Edit Data Plan'}>
-        <div className="space-y-3">
-          <select value={form.network} onChange={(e) => setForm({ ...form, network: e.target.value })} className="w-full rounded-xl border border-slate-200 p-3 text-sm">
+      <Modal
+        open={!!modal}
+        onClose={() => setModal(null)}
+        title={modal === 'create' ? 'Add Data Plan' : 'Edit Data Plan'}
+        scrollBody
+        compact
+        footer={
+          <button type="button" onClick={handleSave} className="w-full rounded-xl bg-primary py-2 text-sm font-bold text-white">
+            {modal === 'create' ? 'Save Plan' : 'Update Plan'}
+          </button>
+        }
+      >
+        <div className="space-y-2">
+          <select value={form.network} onChange={(e) => setForm({ ...form, network: e.target.value })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
             {NETWORKS.map((n) => <option key={n} value={n}>{n.toUpperCase()}</option>)}
           </select>
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Plan name" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input value={form.dataSize} onChange={(e) => setForm({ ...form, dataSize: e.target.value })} placeholder="Data size (e.g. 1GB)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input value={form.validity} onChange={(e) => setForm({ ...form, validity: e.target.value })} placeholder="Validity (e.g. 30 days)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <select value={form.validityCategory} onChange={(e) => setForm({ ...form, validityCategory: e.target.value })} className="w-full rounded-xl border border-slate-200 p-3 text-sm">
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Plan name" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input value={form.dataSize} onChange={(e) => setForm({ ...form, dataSize: e.target.value })} placeholder="Data size (e.g. 1GB)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input value={form.validity} onChange={(e) => setForm({ ...form, validity: e.target.value })} placeholder="Validity (e.g. 30 days)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <select value={form.validityCategory} onChange={(e) => setForm({ ...form, validityCategory: e.target.value })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
             {VALIDITY_CATEGORIES.map((v) => <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>)}
           </select>
-          <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category (optional)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder="VTpass variation code" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Price (₦)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input type="number" value={form.commissionPercent} onChange={(e) => setForm({ ...form, commissionPercent: e.target.value })} placeholder="Commission %" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="Display order" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
+          <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category (optional)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder="VTpass variation code" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Price (₦)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input type="number" value={form.commissionPercent} onChange={(e) => setForm({ ...form, commissionPercent: e.target.value })} placeholder="Commission %" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="Display order" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
             Enabled
           </label>
-          <button type="button" onClick={handleSave} className="w-full rounded-xl bg-primary py-2.5 text-sm font-bold text-white">Save</button>
         </div>
       </Modal>
     </div>
