@@ -8,6 +8,7 @@ import { BETTING_PLATFORMS } from '../../utils/constants';
 import FormInput from '../../components/FormInput';
 import CustomButton from '../../components/CustomButton';
 import ProviderSelector from '../../components/ProviderSelector';
+import { TransactionPinModal } from '../../components/modals';
 import { vtuService } from '../../services/vtuService';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../hooks/useDialog';
@@ -22,16 +23,26 @@ const BettingScreen = ({ navigation, route }) => {
   const [customerId, setCustomerId] = useState('');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPin, setShowPin] = useState(false);
 
-  const handleFund = async () => {
+  const handleFund = () => {
     if (!platform || !customerId || !amount) {
       dialog.alertError('Error', 'Please fill in all fields');
       return;
     }
+    setShowPin(true);
+  };
+
+  const confirmFund = async (pin) => {
+    setShowPin(false);
     setLoading(true);
     try {
       await vtuService.fundBetting({
-        platform, customerId, amount: parseFloat(amount), phone: user?.phoneNumber,
+        platform,
+        customerId,
+        amount: parseFloat(amount),
+        phone: user?.phoneNumber,
+        pin,
       });
       await refreshBalance();
       dialog.showSuccess({
@@ -66,6 +77,13 @@ const BettingScreen = ({ navigation, route }) => {
         <FormInput label="Customer ID / Username" value={customerId} onChangeText={setCustomerId} />
         <FormInput label="Amount (₦)" value={amount} onChangeText={setAmount} keyboardType="numeric" />
         <CustomButton title="Fund Wallet" onPress={handleFund} loading={loading} />
+        <TransactionPinModal
+          visible={showPin}
+          onClose={() => setShowPin(false)}
+          onConfirm={confirmFund}
+          loading={loading}
+          title="Authorize Betting Payment"
+        />
       </ScrollView>
     </SafeAreaView>
   );

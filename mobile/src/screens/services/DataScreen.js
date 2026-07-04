@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { NETWORKS } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatters';
 import { handleVtuPurchaseError, handleVtuPurchaseResult } from '../../utils/vtuHelpers';
+import { detectNetworkFromPhone, NETWORK_LABELS } from '../../utils/networkDetection';
 import NetworkSelector from '../../components/NetworkSelector';
 import FormInput from '../../components/FormInput';
 import CustomButton from '../../components/CustomButton';
@@ -33,11 +34,13 @@ const DataScreen = ({ navigation }) => {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [network, setNetwork] = useState('');
   const [phone, setPhone] = useState('');
-  const [plans, setPlans] = useState([]);
+  const [planGroups, setPlanGroups] = useState([]);
+  const [expandedGroups, setExpandedGroups] = useState({});
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [showPin, setShowPin] = useState(false);
+  const [networkHint, setNetworkHint] = useState('');
 
   const fetchPlans = async (net) => {
     setNetwork(net);
@@ -45,13 +48,36 @@ const DataScreen = ({ navigation }) => {
     setLoadingPlans(true);
     try {
       const res = await vtuService.getDataPlans(net);
-      setPlans(dedupeDataPlans(res.data.data));
-    } catch (err) {
-      setPlans([]);
+      const groups = res.data.groups?.length
+        ? res.data.groups
+        : [{ category: 'other', label: 'All Plans', plans: dedupeDataPlans(res.data.data) }];
+      setPlanGroups(groups);
+      setExpandedGroups(Object.fromEntries(groups.map((g, i) => [g.category, i === 0])));
+    } catch {
+      setPlanGroups([]);
       dialog.alertError('Error', 'Could not load data plans. Please try again.');
     } finally {
       setLoadingPlans(false);
     }
+  };
+
+  const handlePhoneChange = useCallback((value) => {
+    setPhone(value);
+    const detected = detectNetworkFromPhone(value);
+    if (detected) {
+      setNetworkHint(`Detected: ${NETWORK_LABELS[detected] || detected}`);
+      if (!network || network !== detected) {
+        fetchPlans(detected);
+      }
+    } else if (value.replace(/\D/g, '').length >= 4) {
+      setNetworkHint('Could not detect network — please select manually.');
+    } else {
+      setNetworkHint('');
+    }
+  }, [network]);
+
+  const toggleGroup = (category) => {
+    setExpandedGroups((prev) => ({ ...prev, [category]: !prev[category] }));
   };
 
   const handlePurchase = () => {
@@ -98,7 +124,14 @@ const DataScreen = ({ navigation }) => {
         <Text style={styles.subtitle}>Affordable data plans for all networks</Text>
 
         <NetworkSelector networks={NETWORKS} selected={network} onSelect={fetchPlans} />
-        <FormInput label="Phone Number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="08012345678" />
+        <FormInput
+          label="Phone Number"
+          value={phone}
+          onChangeText={handlePhoneChange}
+          keyboardType="phone-pad"
+          placeholder="08012345678"
+        />
+        {networkHint ? <Text style={styles.networkHint}>{networkHint}</Text> : null}
 
         {loadingPlans && (
           <View style={styles.plansLoading}>
@@ -107,10 +140,17 @@ const DataScreen = ({ navigation }) => {
           </View>
         )}
 
-        {plans.length > 0 && (
-          <View style={styles.plansSection}>
-            <Text style={styles.plansTitle}>Select Plan</Text>
-            {plans.map((plan, index) => (
+        {planGroups.map((group) => (
+          <View key={group.category} style={styles.groupSection}>
+            <TouchableOpacity style={styles.groupHeader} onPress={() => toggleGroup(group.category)}>
+              <Text style={styles.groupTitle}>{group.label}</Text>
+              <Ionicons
+                name={expandedGroups[group.category] ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+            {expandedGroups[group.category] && group.plans.map((plan, index) => (
               <TouchableOpacity
                 key={`${plan.variation_code}-${index}`}
                 style={[styles.planItem, selectedPlan?.variation_code === plan.variation_code && styles.planActive]}
@@ -128,7 +168,7 @@ const DataScreen = ({ navigation }) => {
               </TouchableOpacity>
             ))}
           </View>
-        )}
+        ))}
 
         <CustomButton
           title={selectedPlan ? `Buy ${selectedPlan.name}` : 'Buy Data'}
@@ -147,19 +187,33 @@ const createStyles = (colors) => StyleSheet.create({
   backBtn: { marginBottom: 16 },
   title: { fontSize: 28, fontWeight: '800', color: colors.text },
   subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 8, marginBottom: 24 },
+  networkHint: { fontSize: 12, color: colors.primary, marginTop: -12, marginBottom: 12, fontWeight: '600' },
   loadingText: { color: colors.textSecondary, marginTop: 10, fontSize: 14, textAlign: 'center' },
-  plansLoading: { alignItems: 'center', marginBottom: 16, paddingVertical: 12 },
-  plansSection: { marginBottom: 24 },
-  plansTitle: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 12 },
-  planItem: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 16, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, marginBottom: 8,
+  plansLoading: { alignItems: 'center', paddingVertical: 24 },
+  groupSection: { marginBottom: 8 },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  planActive: { borderColor: colors.primary, backgroundColor: `${colors.primary}08` },
-  planInfo: { flex: 1, paddingRight: 12 },
-  planName: { fontSize: 14, fontWeight: '600', color: colors.text },
-  planMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  planPrice: { fontSize: 14, fontWeight: '700', color: colors.primary },
+  groupTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  planItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    marginTop: 8,
+  },
+  planActive: { borderWidth: 2, borderColor: colors.primary },
+  planInfo: { flex: 1, marginRight: 12 },
+  planName: { fontSize: 14, fontWeight: '700', color: colors.text },
+  planMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  planPrice: { fontSize: 14, fontWeight: '800', color: colors.primary },
 });
 
 export default DataScreen;

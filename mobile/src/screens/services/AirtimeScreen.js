@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { NETWORKS } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatters';
 import { handleVtuPurchaseError, handleVtuPurchaseResult } from '../../utils/vtuHelpers';
+import { detectNetworkFromPhone, NETWORK_LABELS } from '../../utils/networkDetection';
 import NetworkSelector from '../../components/NetworkSelector';
 import FormInput from '../../components/FormInput';
 import CustomButton from '../../components/CustomButton';
@@ -28,7 +29,21 @@ const AirtimeScreen = ({ navigation }) => {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPin, setShowPin] = useState(false);
+  const [networkHint, setNetworkHint] = useState('');
   const purchasingRef = useRef(false);
+
+  const handlePhoneChange = useCallback((value) => {
+    setPhone(value);
+    const detected = detectNetworkFromPhone(value);
+    if (detected) {
+      setNetwork(detected);
+      setNetworkHint(`Detected: ${NETWORK_LABELS[detected] || detected}`);
+    } else if (value.replace(/\D/g, '').length >= 4) {
+      setNetworkHint('Could not detect network — please select manually.');
+    } else {
+      setNetworkHint('');
+    }
+  }, []);
 
   const handlePurchase = () => {
     if (loading || purchasingRef.current) return;
@@ -72,7 +87,8 @@ const AirtimeScreen = ({ navigation }) => {
         <Text style={styles.subtitle}>Instant airtime top-up for all networks</Text>
 
         <NetworkSelector networks={NETWORKS} selected={network} onSelect={setNetwork} />
-        <FormInput label="Phone Number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="08012345678" />
+        <FormInput label="Phone Number" value={phone} onChangeText={handlePhoneChange} keyboardType="phone-pad" placeholder="08012345678" />
+        {networkHint ? <Text style={styles.networkHint}>{networkHint}</Text> : null}
         <FormInput label="Amount (₦)" value={amount} onChangeText={setAmount} keyboardType="numeric" />
 
         <View style={styles.quickGrid}>
@@ -95,6 +111,7 @@ const createStyles = (colors) => StyleSheet.create({
   backBtn: { marginBottom: 16 },
   title: { fontSize: 28, fontWeight: '800', color: colors.text },
   subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 8, marginBottom: 24 },
+  networkHint: { fontSize: 12, color: colors.primary, marginTop: -12, marginBottom: 12, fontWeight: '600' },
   quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
   quickBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, borderColor: colors.border },
   quickActive: { borderColor: colors.primary, backgroundColor: `${colors.primary}10` },

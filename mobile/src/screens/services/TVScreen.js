@@ -25,6 +25,8 @@ const TVScreen = ({ navigation }) => {
   const [provider, setProvider] = useState('');
   const [smartcard, setSmartcard] = useState('');
   const [packages, setPackages] = useState([]);
+  const [packageGroups, setPackageGroups] = useState([]);
+  const [expandedGroups, setExpandedGroups] = useState({});
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [customerName, setCustomerName] = useState('');
   const [loadingPackages, setLoadingPackages] = useState(false);
@@ -40,9 +42,15 @@ const TVScreen = ({ navigation }) => {
     setLoadingPackages(true);
     try {
       const res = await vtuService.getTVPackages(id);
+      const groups = res.data.groups?.length
+        ? res.data.groups
+        : [{ category: 'standard', label: 'All Packages', plans: res.data.data || [] }];
+      setPackageGroups(groups);
       setPackages(res.data.data || []);
+      setExpandedGroups(Object.fromEntries(groups.map((g, i) => [g.category, i === 0])));
     } catch {
       setPackages([]);
+      setPackageGroups([]);
       dialog.alertError('Error', 'Could not load TV packages. Please try again.');
     } finally {
       setLoadingPackages(false);
@@ -153,10 +161,20 @@ const TVScreen = ({ navigation }) => {
           <Text style={styles.emptyText}>No packages available for this provider.</Text>
         )}
 
-        {packages.length > 0 && (
-          <>
-            <Text style={styles.label}>Select Package</Text>
-            {packages.map((pkg) => (
+        {packageGroups.map((group) => (
+          <View key={group.category} style={styles.groupSection}>
+            <TouchableOpacity
+              style={styles.groupHeader}
+              onPress={() => setExpandedGroups((prev) => ({ ...prev, [group.category]: !prev[group.category] }))}
+            >
+              <Text style={styles.label}>{group.label}</Text>
+              <Ionicons
+                name={expandedGroups[group.category] ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+            {expandedGroups[group.category] && group.plans.map((pkg) => (
               <TouchableOpacity
                 key={pkg.code}
                 style={[styles.pkgItem, selectedPackage?.code === pkg.code && styles.pkgActive]}
@@ -166,8 +184,8 @@ const TVScreen = ({ navigation }) => {
                 <Text style={styles.pkgPrice}>{formatCurrency(pkg.amount)}</Text>
               </TouchableOpacity>
             ))}
-          </>
-        )}
+          </View>
+        ))}
 
         <CustomButton title="Pay Subscription" onPress={handlePay} loading={loading} disabled={!selectedPackage} />
         <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPay} loading={loading} />
@@ -182,6 +200,8 @@ const createStyles = (colors) => StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', color: colors.text },
   subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 8, marginBottom: 24 },
   label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 12 },
+  groupSection: { marginBottom: 8 },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   verifiedBox: {
     flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12,
     padding: 12, borderRadius: 12, backgroundColor: colors.successLight,

@@ -222,6 +222,9 @@ const login = async (req, res, next) => {
           avatar: user.avatar,
           accountStatus: user.accountStatus,
           hasTransactionPin: user.hasTransactionPin,
+          requireLoginPinReset: user.requireLoginPinReset,
+          biometricEnabled: user.biometricEnabled,
+          notificationSettings: user.notificationSettings,
         },
       },
     });

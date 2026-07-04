@@ -34,6 +34,14 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const resolveUnlockGate = useCallback(async (userData) => {
+    if (userData.requireLoginPinReset) {
+      await clearLoginPin();
+      setNeedsLoginPinSetup(true);
+      setAwaitingUnlock(null);
+      setIsAuthenticated(false);
+      return;
+    }
+
     const pinExists = await hasLoginPin();
     if (!pinExists) {
       setNeedsLoginPinSetup(true);
@@ -156,8 +164,20 @@ export const AuthProvider = ({ children }) => {
     return res.data;
   };
 
+  const forceLoginPinSetup = async () => {
+    await clearLoginPin();
+    setNeedsLoginPinSetup(true);
+    setAwaitingUnlock(null);
+    setIsAuthenticated(false);
+  };
+
   const finishLoginPinSetup = async (pin) => {
     await setLoginPin(pin);
+    try {
+      await authService.clearLoginPinReset();
+    } catch {
+      // Best effort — PIN is set locally
+    }
     setNeedsLoginPinSetup(false);
     activateSession();
   };
@@ -218,6 +238,7 @@ export const AuthProvider = ({ children }) => {
         loadUser,
         completeUnlock,
         switchToPinUnlock,
+        forceLoginPinSetup,
         finishLoginPinSetup,
         completeBiometricUnlock: completeUnlock,
         cancelBiometricUnlock: switchToPinUnlock,

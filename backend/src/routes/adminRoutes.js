@@ -65,6 +65,12 @@ const {
   tvPlanValidation,
   educationProductValidation,
 } = require('../controllers/serviceConfigController');
+const { getRevenueDashboard } = require('../controllers/revenueController');
+const { listSecurityEvents } = require('../controllers/securityEventController');
+const {
+  adminListProviderLogos,
+  adminUpdateProviderLogo,
+} = require('../controllers/providerLogoController');
 const { getRefunds, getRefundById } = require('../controllers/refundController');
 const { protectAdmin } = require('../middleware/adminAuth');
 const { adminAuthLimiter } = require('../middleware/rateLimiter');
@@ -92,6 +98,12 @@ router.post('/auth/login', adminAuthLimiter, adminLoginValidation, validate, log
 router.get('/auth/me', protectAdmin, getMe);
 
 router.get('/dashboard/stats', protectAdmin, getDashboardStats);
+router.get('/dashboard/revenue', protectAdmin, getRevenueDashboard);
+
+router.get('/security-events', protectAdmin, listSecurityEvents);
+
+router.get('/provider-logos', protectAdmin, adminListProviderLogos);
+router.patch('/provider-logos/:id', protectAdmin, adminUpdateProviderLogo);
 
 router.get('/users', protectAdmin, getUsers);
 router.get('/users/:id', protectAdmin, getUserById);

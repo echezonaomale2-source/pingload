@@ -6,6 +6,13 @@ const dataPlanSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     dataSize: { type: String, required: true, trim: true },
     validity: { type: String, required: true, trim: true },
+    validityCategory: {
+      type: String,
+      enum: ['daily', 'weekly', 'monthly', 'yearly', 'other'],
+      default: 'other',
+      index: true,
+    },
+    category: { type: String, trim: true, default: '' },
     variationCode: { type: String, required: true, trim: true },
     amount: { type: Number, required: true, min: 0 },
     commissionPercent: { type: Number, default: 0, min: 0, max: 100 },

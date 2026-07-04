@@ -5,7 +5,8 @@ const ElectricityPlan = require('../models/ElectricityPlan');
 const TvPlan = require('../models/TvPlan');
 const EducationProduct = require('../models/EducationProduct');
 const SystemSettings = require('../models/SystemSettings');
-const { buildSafeRegex, parsePagination } = require('../utils/safeQuery');
+const { groupByValidityCategory, inferValidityCategory } = require('../utils/validityCategory');
+const { groupTvPlans } = require('../utils/tvCategory');
 
 const isDuplicateKeyError = (error) => error?.code === 11000;
 
@@ -24,6 +25,8 @@ const planValidation = [
   body('variationCode').trim().notEmpty().withMessage('Variation code is required'),
   body('amount').isFloat({ min: 0 }).withMessage('Valid amount is required'),
   body('commissionPercent').optional().isFloat({ min: 0, max: 100 }).withMessage('Commission must be 0-100'),
+  body('validityCategory').optional().isIn(['daily', 'weekly', 'monthly', 'yearly', 'other']),
+  body('category').optional().trim(),
   body('order').optional().isInt({ min: 0 }),
   body('enabled').optional().isBoolean(),
 ];
@@ -44,6 +47,7 @@ const tvPlanValidation = [
   body('name').trim().notEmpty().withMessage('Plan name is required'),
   body('variationCode').trim().notEmpty().withMessage('Variation code is required'),
   body('amount').isFloat({ min: 0 }).withMessage('Valid amount is required'),
+  body('category').optional().isIn(['entry', 'standard', 'premium', 'other']),
   body('order').optional().isInt({ min: 0 }),
   body('enabled').optional().isBoolean(),
 ];
@@ -113,12 +117,29 @@ const adminUpdatePrice = async (req, res, next) => {
   }
 };
 
+const mapDataPlan = (p) => ({
+  variation_code: p.variationCode,
+  name: p.name,
+  variation_amount: String(p.amount),
+  dataSize: p.dataSize,
+  validity: p.validity,
+  validityCategory: p.validityCategory || inferValidityCategory(p.validity),
+  category: p.category || '',
+  commissionPercent: p.commissionPercent || 0,
+  order: p.order || 0,
+});
+
 // GET /services/data-plans/:network — public enabled plans
 const getDataPlans = async (req, res, next) => {
   try {
     const { network } = req.params;
     const plans = await DataPlan.find({ network, enabled: true }).sort({ order: 1, amount: 1 });
-    res.json({ success: true, data: plans });
+    const mapped = plans.map(mapDataPlan);
+    res.json({
+      success: true,
+      data: mapped,
+      groups: groupByValidityCategory(mapped, (p) => p.validity),
+    });
   } catch (error) {
     next(error);
   }
@@ -150,14 +171,17 @@ const getTvPlans = async (req, res, next) => {
     await TvPlan.ensureDefaults();
     const { provider } = req.params;
     const plans = await TvPlan.find({ provider, enabled: true }).sort({ order: 1, amount: 1 });
+    const mapped = plans.map((p) => ({
+      code: p.variationCode,
+      name: p.name,
+      amount: p.amount,
+      category: p.category || 'standard',
+      order: p.order,
+    }));
     res.json({
       success: true,
-      data: plans.map((p) => ({
-        code: p.variationCode,
-        name: p.name,
-        amount: p.amount,
-        order: p.order,
-      })),
+      data: mapped,
+      groups: groupTvPlans(mapped),
     });
   } catch (error) {
     next(error);
@@ -179,7 +203,11 @@ const adminListDataPlans = async (req, res, next) => {
 // POST /services/data-plans/admin
 const adminCreateDataPlan = async (req, res, next) => {
   try {
-    const plan = await DataPlan.create(req.body);
+    const payload = {
+      ...req.body,
+      validityCategory: req.body.validityCategory || inferValidityCategory(req.body.validity),
+    };
+    const plan = await DataPlan.create(payload);
     res.status(201).json({ success: true, data: plan });
   } catch (error) {
     if (isDuplicateKeyError(error)) {

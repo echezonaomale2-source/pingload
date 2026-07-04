@@ -21,6 +21,11 @@ const SettingsScreen = ({ navigation }) => {
     user?.notificationSettings || { transactions: true, promotions: true, security: true }
   );
 
+  React.useEffect(() => {
+    setBiometric(user?.biometricEnabled || false);
+    setNotifications(user?.notificationSettings || { transactions: true, promotions: true, security: true });
+  }, [user?.biometricEnabled, user?.notificationSettings]);
+
   const handleDarkMode = (value) => setDarkMode(value);
 
   const handleSystemTheme = async (value) => {

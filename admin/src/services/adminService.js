@@ -9,6 +9,19 @@ export const dashboardApi = {
   getStats: () => api.get('/admin/dashboard/stats'),
 };
 
+export const revenueApi = {
+  getDashboard: () => api.get('/admin/dashboard/revenue'),
+};
+
+export const securityEventsApi = {
+  list: (params) => api.get('/admin/security-events', { params }),
+};
+
+export const providerLogosApi = {
+  list: () => api.get('/admin/provider-logos'),
+  update: (id, data) => api.patch(`/admin/provider-logos/${id}`, data),
+};
+
 export const usersApi = {
   list: (params) => api.get('/admin/users', { params }),
   get: (id) => api.get(`/admin/users/${id}`),

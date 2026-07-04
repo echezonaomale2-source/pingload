@@ -9,6 +9,12 @@ const tvPlanSchema = new mongoose.Schema(
       index: true,
     },
     name: { type: String, required: true, trim: true },
+    category: {
+      type: String,
+      enum: ['entry', 'standard', 'premium', 'other'],
+      default: 'standard',
+      index: true,
+    },
     variationCode: { type: String, required: true, trim: true },
     amount: { type: Number, required: true, min: 0 },
     enabled: { type: Boolean, default: true },

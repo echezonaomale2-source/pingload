@@ -25,6 +25,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
+  const [otpExpired, setOtpExpired] = useState(false);
 
   useEffect(() => {
     authService.getConfig()
@@ -64,6 +65,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
       const res = await authService.forgotPassword(email.trim().toLowerCase());
       setDeliveryChannel(res.data.data?.channel || deliveryChannel);
       dialog.notifySuccess(res.data.message || 'A new reset code has been sent.', 'Code Sent');
+      setOtpExpired(false);
     } catch (err) {
       dialog.alertError('Resend Failed', getApiErrorMessage(err, 'Could not resend reset code'));
     } finally {
@@ -72,6 +74,10 @@ const ForgotPasswordScreen = ({ navigation }) => {
   };
 
   const handleReset = async () => {
+    if (otpRequired && otpExpired) {
+      setError('Your reset code has expired. Please request a new code.');
+      return;
+    }
     if (!newPassword) {
       setError('Please enter a new password');
       return;
@@ -136,8 +142,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
           <>
             {otpRequired ? (
               <>
-                <FormInput label="OTP Code" value={otp} onChangeText={setOtp} keyboardType="number-pad" maxLength={6} />
-                <OtpResendTimer onResend={handleResend} resending={resending} />
+                <FormInput label="OTP Code" value={otp} onChangeText={setOtp} keyboardType="number-pad" maxLength={6} editable={!otpExpired} />
+                <OtpResendTimer onResend={handleResend} resending={resending} expirySeconds={90} onExpired={() => setOtpExpired(true)} />
               </>
             ) : null}
             <FormInput label="New Password" value={newPassword} onChangeText={setNewPassword} secureTextEntry />

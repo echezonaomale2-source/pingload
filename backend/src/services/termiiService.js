@@ -17,7 +17,7 @@ const OTP_PURPOSES = {
   PASSWORD_RESET: 'password_reset',
 };
 
-const OTP_EXPIRY_MS = 10 * 60 * 1000;
+const OTP_EXPIRY_MS = 90 * 1000;
 const MAX_ATTEMPTS = 5;
 
 const otpStore = new Map();
@@ -88,10 +88,10 @@ const sendSmsOtp = async (phone, purpose) => {
     from: termii.senderId,
     channel: 'generic',
     pin_attempts: 3,
-    pin_time_to_live: 10,
+    pin_time_to_live: 2,
     pin_length: 6,
     pin_placeholder: '< >',
-    message_text: 'Your Pingload verification code is < >. Valid for 10 minutes.',
+    message_text: 'Your Pingload verification code is < >. Valid for 90 seconds.',
   });
 
   return {
@@ -105,8 +105,8 @@ const sendSmsOtp = async (phone, purpose) => {
 const sendEmailOtp = async (email, purpose) => {
   const otp = generateOtp();
   const messageText = purpose === OTP_PURPOSES.PASSWORD_RESET
-    ? 'Your Pingload password reset code is <CODE>. Valid for 10 minutes.'
-    : 'Your Pingload verification code is <CODE>. Valid for 10 minutes.';
+    ? 'Your Pingload password reset code is <CODE>. Valid for 90 seconds.'
+    : 'Your Pingload verification code is <CODE>. Valid for 90 seconds.';
 
   if (termii.emailConfigurationId) {
     await axios.post(`${termii.baseUrl}/email/otp/send`, {
@@ -310,6 +310,29 @@ const isEmailOtpVerified = (email, purpose = OTP_PURPOSES.REGISTRATION) =>
 const clearEmailVerification = (email, purpose = OTP_PURPOSES.REGISTRATION) =>
   clearVerification(email, null, purpose);
 
+const sendSecurityAlertEmail = async (email, subject, body) => {
+  if (!email) return { sent: false, reason: 'no_email' };
+  const normalized = normalizeEmail(email);
+  if (termii.emailConfigurationId && termii.apiKey && !developmentMode) {
+    try {
+      await axios.post(`${termii.baseUrl}/email/send`, {
+        api_key: termii.apiKey,
+        email: normalized,
+        subject,
+        message: body,
+        email_configuration_id: termii.emailConfigurationId,
+      });
+      return { sent: true };
+    } catch (error) {
+      logApiFailure('termii:security-email', error, { email: normalized });
+    }
+  }
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[SECURITY EMAIL] ${normalized}: ${subject} — ${body}`);
+  }
+  return { sent: false, reason: 'email_not_configured' };
+};
+
 module.exports = {
   OTP_PURPOSES,
   sendOTP,
@@ -317,4 +340,6 @@ module.exports = {
   isEmailOtpVerified,
   clearEmailVerification,
   isVerified,
+  sendSecurityAlertEmail,
+  OTP_EXPIRY_MS,
 };

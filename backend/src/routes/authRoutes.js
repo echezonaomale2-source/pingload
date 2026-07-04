@@ -19,6 +19,12 @@ const {
   loginValidation,
   resetPasswordValidation,
 } = require('../controllers/authController');
+const {
+  getLoginPinStatus,
+  recordLoginPinFailure,
+  recordLoginPinSuccess,
+  clearLoginPinResetRequirement,
+} = require('../controllers/loginPinSecurityController');
 const validate = require('../middleware/validate');
 const { protect } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimiter');
@@ -39,5 +45,10 @@ router.put('/change-password', protect, changePassword);
 router.put('/settings', protect, updateSettings);
 router.put('/avatar', protect, updateAvatar);
 router.delete('/avatar', protect, removeAvatar);
+
+router.get('/login-pin/status', protect, getLoginPinStatus);
+router.post('/login-pin/failed', protect, recordLoginPinFailure);
+router.post('/login-pin/success', protect, recordLoginPinSuccess);
+router.post('/login-pin/reset-complete', protect, clearLoginPinResetRequirement);
 
 module.exports = router;

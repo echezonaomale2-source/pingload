@@ -1,6 +1,14 @@
 const Notification = require('../models/Notification');
+const User = require('../models/User');
 const { sendPushToUser, sendPushToUsers } = require('./fcmService');
 const { logApiFailure } = require('../utils/logger');
+
+const shouldSendPush = (user, type) => {
+  const settings = user?.notificationSettings || {};
+  if (type === 'security') return settings.security !== false;
+  if (type === 'promotion' || type === 'promotions') return settings.promotions !== false;
+  return settings.transactions !== false;
+};
 
 const stringifyMetadata = (payload) => Object.fromEntries(
   Object.entries(payload).filter(([, value]) => value !== undefined && value !== null)
@@ -32,7 +40,9 @@ const deliverUserNotification = async ({
   });
 
   let pushResult = null;
-  if (push) {
+  const user = await User.findById(userId).select('notificationSettings');
+  const allowPush = push && shouldSendPush(user, type);
+  if (allowPush) {
     // Best-effort: a push failure must never break the caller (e.g. a refund).
     try {
       pushResult = await sendPushToUser({
@@ -50,6 +60,8 @@ const deliverUserNotification = async ({
       logApiFailure('notification:push', error, { userId: String(userId), type });
       pushResult = { success: false, skipped: true, reason: 'push_error' };
     }
+  } else if (push) {
+    pushResult = { success: false, skipped: true, reason: 'preferences_disabled' };
   }
 
   return { notification, pushResult };
@@ -76,9 +88,14 @@ const deliverBulkNotification = async ({
 
   let pushResult = null;
   if (push) {
+    const users = await User.find({ _id: { $in: userIds } }).select('notificationSettings');
+    const eligibleIds = users.filter((u) => shouldSendPush(u, type)).map((u) => u._id);
+    if (eligibleIds.length === 0) {
+      return { notifications, pushResult: { success: false, skipped: true, reason: 'preferences_disabled' } };
+    }
     try {
       pushResult = await sendPushToUsers({
-        userIds,
+        userIds: eligibleIds,
         title,
         body: message,
         data: buildPushData({ type, screen, metadata }),

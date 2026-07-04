@@ -35,8 +35,13 @@ const OtpVerificationScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
+  const [otpExpired, setOtpExpired] = useState(false);
 
   const handleVerify = async () => {
+    if (otpExpired) {
+      setError('Your verification code has expired. Please request a new code.');
+      return;
+    }
     if (otp.length !== 6) {
       setError('Please enter the 6-digit OTP');
       return;
@@ -103,10 +108,21 @@ const OtpVerificationScreen = ({ navigation, route }) => {
           onChangeText={setOtp}
           keyboardType="number-pad"
           maxLength={6}
+          editable={!otpExpired}
         />
 
-        <CustomButton title="Verify & Create Account" onPress={handleVerify} loading={loading} />
-        <OtpResendTimer onResend={handleResend} resending={resending} />
+        <CustomButton
+          title="Verify & Create Account"
+          onPress={handleVerify}
+          loading={loading}
+          disabled={otpExpired}
+        />
+        <OtpResendTimer
+          onResend={handleResend}
+          resending={resending}
+          expirySeconds={90}
+          onExpired={() => setOtpExpired(true)}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

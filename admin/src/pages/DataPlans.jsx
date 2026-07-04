@@ -6,7 +6,11 @@ import { formatCurrency } from '../utils/formatters';
 import { useDialog } from '../hooks/useDialog';
 
 const NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
-const emptyForm = { network: 'mtn', name: '', dataSize: '', validity: '', variationCode: '', amount: '', commissionPercent: 0, enabled: true, order: 0 };
+const VALIDITY_CATEGORIES = ['daily', 'weekly', 'monthly', 'yearly', 'other'];
+const emptyForm = {
+  network: 'mtn', name: '', dataSize: '', validity: '', validityCategory: 'other', category: '',
+  variationCode: '', amount: '', commissionPercent: 0, enabled: true, order: 0,
+};
 
 const DataPlansPage = () => {
   const dialog = useDialog();
@@ -34,6 +38,8 @@ const DataPlansPage = () => {
       name: plan.name,
       dataSize: plan.dataSize,
       validity: plan.validity,
+      validityCategory: plan.validityCategory || 'other',
+      category: plan.category || '',
       variationCode: plan.variationCode,
       amount: plan.amount,
       commissionPercent: plan.commissionPercent ?? 0,
@@ -92,6 +98,8 @@ const DataPlansPage = () => {
     { key: 'name', label: 'Plan' },
     { key: 'dataSize', label: 'Data' },
     { key: 'validity', label: 'Validity' },
+    { key: 'validityCategory', label: 'Group', render: (r) => r.validityCategory || 'other' },
+    { key: 'category', label: 'Category' },
     { key: 'amount', label: 'Price', render: (r) => formatCurrency(r.amount) },
     { key: 'commissionPercent', label: 'Commission', render: (r) => `${r.commissionPercent || 0}%` },
     { key: 'order', label: 'Order' },
@@ -147,6 +155,10 @@ const DataPlansPage = () => {
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Plan name" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input value={form.dataSize} onChange={(e) => setForm({ ...form, dataSize: e.target.value })} placeholder="Data size (e.g. 1GB)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input value={form.validity} onChange={(e) => setForm({ ...form, validity: e.target.value })} placeholder="Validity (e.g. 30 days)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
+          <select value={form.validityCategory} onChange={(e) => setForm({ ...form, validityCategory: e.target.value })} className="w-full rounded-xl border border-slate-200 p-3 text-sm">
+            {VALIDITY_CATEGORIES.map((v) => <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>)}
+          </select>
+          <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category (optional)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder="VTpass variation code" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Price (₦)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input type="number" value={form.commissionPercent} onChange={(e) => setForm({ ...form, commissionPercent: e.target.value })} placeholder="Commission %" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />

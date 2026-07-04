@@ -10,7 +10,8 @@ const {
   executeVtuPurchase,
   formatTransactionPayload,
 } = require('../services/vtuPurchaseService');
-const verifyTransactionPin = require('../utils/verifyTransactionPin');
+const { groupByValidityCategory, inferValidityCategory } = require('../utils/validityCategory');
+const { groupTvPlans } = require('../utils/tvCategory');
 
 /** VTpass sometimes returns duplicate variation_code entries — keep first of each. */
 const dedupeByCode = (items, codeKey) => {
@@ -71,16 +72,21 @@ const fetchDataPlans = async (req, res, next) => {
     const localPlans = await DataPlan.find({ network, enabled: true }).sort({ order: 1, amount: 1 });
 
     if (localPlans.length > 0) {
+      const mapped = localPlans.map((p) => ({
+        variation_code: p.variationCode,
+        name: p.name,
+        variation_amount: String(p.amount),
+        dataSize: p.dataSize,
+        validity: p.validity,
+        validityCategory: p.validityCategory || inferValidityCategory(p.validity),
+        category: p.category || '',
+        commissionPercent: p.commissionPercent || 0,
+        order: p.order || 0,
+      }));
       return res.json({
         success: true,
-        data: localPlans.map((p) => ({
-          variation_code: p.variationCode,
-          name: p.name,
-          variation_amount: String(p.amount),
-          dataSize: p.dataSize,
-          validity: p.validity,
-          commissionPercent: p.commissionPercent || 0,
-        })),
+        data: mapped,
+        groups: groupByValidityCategory(mapped, (p) => p.validity),
         source: 'local',
       });
     }
@@ -239,13 +245,17 @@ const fetchTVPackages = async (req, res, next) => {
 
     const localPlans = await TvPlan.find({ provider, enabled: true }).sort({ order: 1, amount: 1 });
     if (localPlans.length > 0) {
+      const mapped = localPlans.map((p) => ({
+        code: p.variationCode,
+        name: p.name,
+        amount: p.amount,
+        category: p.category || 'standard',
+        order: p.order,
+      }));
       return res.json({
         success: true,
-        data: localPlans.map((p) => ({
-          code: p.variationCode,
-          name: p.name,
-          amount: p.amount,
-        })),
+        data: mapped,
+        groups: groupTvPlans(mapped),
         source: 'local',
       });
     }
