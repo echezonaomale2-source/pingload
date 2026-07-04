@@ -64,7 +64,7 @@ module.exports = {
   },
   android: {
     package: 'com.pingload.app',
-    versionCode: 1,
+    versionCode: 2,
     icon: './src/assets/icon.png',
     googleServicesFile: firebaseConfig.androidConfigPath,
     adaptiveIcon: {
