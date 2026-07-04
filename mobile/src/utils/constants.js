@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { PROVIDER_LOGOS } from '../assets/logos';
 import { TAWK_PROPERTY_ID_DEFAULT, TAWK_WIDGET_ID_DEFAULT, buildTawkChatUrl } from './tawk';
 
 const extra = Constants.expoConfig?.extra ?? Constants.expoGoConfig?.extra ?? {};
@@ -65,40 +64,43 @@ export const SUPPORT_CHANNELS = [
 ];
 
 export const NETWORKS = [
-  { id: 'mtn', name: 'MTN', color: '#FFCC00', logo: PROVIDER_LOGOS.mtn },
-  { id: 'airtel', name: 'Airtel', color: '#ED1C24', logo: PROVIDER_LOGOS.airtel },
-  { id: 'glo', name: 'Glo', color: '#00B140', logo: PROVIDER_LOGOS.glo },
-  { id: '9mobile', name: '9mobile', color: '#006633', logo: PROVIDER_LOGOS['9mobile'] },
+  { id: 'mtn', name: 'MTN', color: '#FFCC00' },
+  { id: 'airtel', name: 'Airtel', color: '#ED1C24' },
+  { id: 'glo', name: 'Glo', color: '#00B140' },
+  { id: '9mobile', name: '9mobile', color: '#006633' },
 ];
 
 export const ELECTRICITY_PROVIDERS = [
-  { id: 'ikeja', name: 'Ikeja Electric' },
-  { id: 'eko', name: 'Eko Electric' },
-  { id: 'abuja', name: 'Abuja Electric' },
-  { id: 'kaduna', name: 'Kaduna Electric' },
-  { id: 'kano', name: 'Kano Electric' },
-  { id: 'portharcourt', name: 'Port Harcourt Electric' },
-  { id: 'jos', name: 'Jos Electric' },
-  { id: 'ibadan', name: 'Ibadan Electric' },
+  { id: 'ikeja', name: 'Ikeja Electric', color: '#F59E0B' },
+  { id: 'eko', name: 'Eko Electric', color: '#2563EB' },
+  { id: 'abuja', name: 'Abuja Electric', color: '#DC2626' },
+  { id: 'kaduna', name: 'Kaduna Electric', color: '#7C3AED' },
+  { id: 'kano', name: 'Kano Electric', color: '#059669' },
+  { id: 'portharcourt', name: 'Port Harcourt Electric', color: '#0891B2' },
+  { id: 'jos', name: 'Jos Electric', color: '#EA580C' },
+  { id: 'ibadan', name: 'Ibadan Electric', color: '#4F46E5' },
 ];
 
 export const TV_PROVIDERS = [
-  { id: 'dstv', name: 'DStv', color: '#003882', logo: PROVIDER_LOGOS.dstv },
-  { id: 'gotv', name: 'GOtv', color: '#00A651', logo: PROVIDER_LOGOS.gotv },
-  { id: 'startimes', name: 'StarTimes', color: '#F47920', logo: PROVIDER_LOGOS.startimes },
+  { id: 'dstv', name: 'DStv', color: '#003882' },
+  { id: 'gotv', name: 'GOtv', color: '#00A651' },
+  { id: 'startimes', name: 'StarTimes', color: '#F47920' },
 ];
 
 export const EDUCATION_EXAMS = [
-  { id: 'waec', name: 'WAEC', color: '#047857', logo: PROVIDER_LOGOS.waec },
-  { id: 'neco', name: 'NECO', color: '#1D4ED8', logo: PROVIDER_LOGOS.neco },
-  { id: 'jamb', name: 'JAMB', color: '#0F766E', logo: PROVIDER_LOGOS.jamb },
+  { id: 'waec', name: 'WAEC', color: '#047857' },
+  { id: 'neco', name: 'NECO', color: '#1D4ED8' },
+  { id: 'jamb', name: 'JAMB', color: '#0F766E' },
 ];
 
 export const BETTING_PLATFORMS = [
-  { id: 'bet9ja', name: 'Bet9ja', color: '#15803D', logo: PROVIDER_LOGOS.bet9ja },
-  { id: 'sportybet', name: 'SportyBet', color: '#DC2626', logo: PROVIDER_LOGOS.sportybet },
-  { id: 'betking', name: 'BetKing', color: '#1E40AF', logo: PROVIDER_LOGOS.betking },
-  { id: '1xbet', name: '1xBet', color: '#1E3A8A', logo: PROVIDER_LOGOS['1xbet'] },
+  { id: 'bet9ja', name: 'Bet9ja', color: '#15803D' },
+  { id: 'sportybet', name: 'SportyBet', color: '#DC2626' },
+  { id: 'betking', name: 'BetKing', color: '#1E40AF' },
+  { id: '1xbet', name: '1xBet', color: '#1E3A8A' },
+  { id: 'bangbet', name: 'BangBet', color: '#B45309' },
+  { id: 'merrybet', name: 'MerryBet', color: '#BE123C' },
+  { id: 'premierbet', name: 'PremierBet', color: '#0369A1' },
 ];
 
 export const SERVICES = [

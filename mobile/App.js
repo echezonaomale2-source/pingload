@@ -19,7 +19,8 @@ import LoadingProvider from './src/context/LoadingProvider';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import AppNavigator from './src/navigation/AppNavigator';
 import { navigationRef } from './src/navigation/navigationRef';
-import { usePushNotifications } from './src/hooks/usePushNotifications';
+import { usePushNotifications, flushPendingNotificationNavigation, unregisterPushOnLogout } from './src/hooks/usePushNotifications';
+import { ProviderLogosProvider } from './src/context/ProviderLogosContext';
 import SplashScreen from './src/screens/SplashScreen';
 import BiometricUnlockScreen from './src/screens/auth/BiometricUnlockScreen';
 import LoginPinSetupScreen from './src/screens/auth/LoginPinSetupScreen';
@@ -41,8 +42,16 @@ const queryClient = new QueryClient({
 });
 
 const PushNotificationBridge = () => {
-  const { isAuthenticated } = useAuth();
-  usePushNotifications(isAuthenticated);
+  const { isAuthenticated, awaitingUnlock, isBootstrapping } = useAuth();
+  const sessionActive = !isBootstrapping && (isAuthenticated || Boolean(awaitingUnlock));
+  usePushNotifications(sessionActive);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      flushPendingNotificationNavigation();
+    }
+  }, [isAuthenticated]);
+
   return null;
 };
 
@@ -133,6 +142,7 @@ export default function App() {
         <SafeAreaProvider initialMetrics={initialWindowMetrics}>
           <QueryClientProvider client={queryClient}>
             <AuthProvider>
+              <ProviderLogosProvider>
               <ThemeProvider>
                 <ModalProvider>
                   <ToastProvider>
@@ -143,6 +153,7 @@ export default function App() {
                   </ToastProvider>
                 </ModalProvider>
               </ThemeProvider>
+              </ProviderLogosProvider>
             </AuthProvider>
           </QueryClientProvider>
         </SafeAreaProvider>

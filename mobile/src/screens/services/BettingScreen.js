@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { BETTING_PLATFORMS } from '../../utils/constants';
+import { normalizePhone } from '../../utils/networkDetection';
+import { handleVtuPurchaseError, handleVtuPurchaseResult } from '../../utils/vtuHelpers';
 import FormInput from '../../components/FormInput';
 import CustomButton from '../../components/CustomButton';
 import ProviderSelector from '../../components/ProviderSelector';
@@ -12,6 +14,8 @@ import { TransactionPinModal } from '../../components/modals';
 import { vtuService } from '../../services/vtuService';
 import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../hooks/useDialog';
+
+const MIN_AMOUNT = 100;
 
 const BettingScreen = ({ navigation, route }) => {
   const { user, refreshBalance } = useAuth();
@@ -21,13 +25,19 @@ const BettingScreen = ({ navigation, route }) => {
 
   const [platform, setPlatform] = useState(route.params?.platform || '');
   const [customerId, setCustomerId] = useState('');
+  const [phone, setPhone] = useState(normalizePhone(user?.phoneNumber || ''));
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPin, setShowPin] = useState(false);
 
   const handleFund = () => {
-    if (!platform || !customerId || !amount) {
-      dialog.alertError('Error', 'Please fill in all fields');
+    if (!platform || !customerId || !amount || !phone) {
+      dialog.alertError('Missing Details', 'Please fill in all fields');
+      return;
+    }
+    const parsedAmount = parseFloat(amount);
+    if (Number.isNaN(parsedAmount) || parsedAmount < MIN_AMOUNT) {
+      dialog.alertError('Invalid Amount', `Minimum betting funding is ₦${MIN_AMOUNT}`);
       return;
     }
     setShowPin(true);
@@ -37,21 +47,23 @@ const BettingScreen = ({ navigation, route }) => {
     setShowPin(false);
     setLoading(true);
     try {
-      await vtuService.fundBetting({
+      const response = await vtuService.fundBetting({
         platform,
-        customerId,
+        customerId: customerId.trim(),
         amount: parseFloat(amount),
-        phone: user?.phoneNumber,
+        phone: normalizePhone(phone),
         pin,
       });
       await refreshBalance();
-      dialog.showSuccess({
-        title: 'Success',
-        message: 'Betting wallet funded successfully!',
-        onClose: () => navigation.goBack(),
+      handleVtuPurchaseResult({
+        response,
+        dialog,
+        navigation,
+        successTitle: 'Betting Wallet Funded',
+        successFallback: 'Your betting wallet was funded successfully!',
       });
     } catch (err) {
-      dialog.alertError('Error', err.response?.data?.message || 'Funding failed');
+      handleVtuPurchaseError(err, dialog, 'Betting funding failed');
     } finally {
       setLoading(false);
     }
@@ -74,8 +86,26 @@ const BettingScreen = ({ navigation, route }) => {
           columns={2}
         />
 
-        <FormInput label="Customer ID / Username" value={customerId} onChangeText={setCustomerId} />
-        <FormInput label="Amount (₦)" value={amount} onChangeText={setAmount} keyboardType="numeric" />
+        <FormInput
+          label="Customer ID / Username"
+          value={customerId}
+          onChangeText={setCustomerId}
+          autoCapitalize="none"
+        />
+        <FormInput
+          label="Phone Number"
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+          placeholder="08012345678"
+        />
+        <FormInput
+          label="Amount (₦)"
+          value={amount}
+          onChangeText={setAmount}
+          keyboardType="numeric"
+          placeholder={`Minimum ₦${MIN_AMOUNT}`}
+        />
         <CustomButton title="Fund Wallet" onPress={handleFund} loading={loading} />
         <TransactionPinModal
           visible={showPin}

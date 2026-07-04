@@ -338,11 +338,25 @@ const getEducationVariations = async (vtpassServiceId) => {
 };
 
 const fundBettingWallet = async ({ platform, customerId, amount, phone, requestId }) => {
-  const serviceIds = { bet9ja: 'bet9ja', betking: 'betking', sportybet: 'sportybet', '1xbet': '1xbet' };
+  const serviceIds = {
+    bet9ja: 'bet9ja',
+    betking: 'betking',
+    sportybet: 'sportybet',
+    '1xbet': '1xbet',
+    bangbet: 'bangbet',
+    merrybet: 'merrybet',
+    premierbet: 'premierbet',
+  };
+  const serviceID = serviceIds[platform.toLowerCase()];
+  if (!serviceID) {
+    const error = new Error('Unsupported betting platform');
+    error.statusCode = 400;
+    throw error;
+  }
   try {
     const response = await vtpassPostClient.post('/pay', {
       request_id: requestId || generateRequestId(),
-      serviceID: serviceIds[platform.toLowerCase()],
+      serviceID,
       billersCode: customerId,
       amount,
       phone,

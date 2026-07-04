@@ -20,6 +20,7 @@ export const securityEventsApi = {
 export const providerLogosApi = {
   list: () => api.get('/admin/provider-logos'),
   update: (id, data) => api.patch(`/admin/provider-logos/${id}`, data),
+  delete: (id) => api.delete(`/admin/provider-logos/${id}`),
 };
 
 export const usersApi = {

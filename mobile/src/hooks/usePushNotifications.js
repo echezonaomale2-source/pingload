@@ -6,10 +6,15 @@ import { notificationService } from '../services/transactionService';
 import {
   syncDeviceTokenWithBackend,
   updateAppBadgeCount,
+  getStoredDeviceToken,
+  unregisterDeviceTokenFromBackend,
+  subscribeToTokenRefresh,
+  registerDeviceTokenWithBackend,
 } from '../services/pushNotificationService';
-
-const APP_LAUNCHED_AT = Date.now();
-let initialNotificationHandled = false;
+import {
+  savePendingNotificationNav,
+  consumePendingNotificationNav,
+} from '../utils/pendingNotificationNav';
 
 const refreshBadgeCount = async () => {
   try {
@@ -22,22 +27,27 @@ const refreshBadgeCount = async () => {
   }
 };
 
-const isRecentNotificationTap = (response) => {
-  const tappedAt = (response?.notification?.date || 0) * 1000;
-  if (!tappedAt) return false;
-  return tappedAt >= APP_LAUNCHED_AT - 5000;
-};
-
-const handleNotificationNavigation = (response) => {
+const handleNotificationNavigation = async (response) => {
   const data = response?.notification?.request?.content?.data || {};
-  navigateFromNotification(data);
+  const navigated = navigateFromNotification(data);
+  if (!navigated) {
+    await savePendingNotificationNav(data);
+  }
 };
 
-/** Notification tap + foreground listeners — only active when authenticated. */
+export const flushPendingNotificationNavigation = async () => {
+  const pending = await consumePendingNotificationNav();
+  if (pending) {
+    navigateFromNotification(pending);
+  }
+};
+
+/** Notification listeners — active once user session exists (including unlock gate). */
 export const useNotificationListeners = (enabled) => {
   const queryClient = useQueryClient();
   const responseListener = useRef(null);
   const receivedListener = useRef(null);
+  const coldStartHandled = useRef(false);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -49,17 +59,16 @@ export const useNotificationListeners = (enabled) => {
     });
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener(async (response) => {
-      handleNotificationNavigation(response);
+      await handleNotificationNavigation(response);
       await refreshBadgeCount();
       queryClient.invalidateQueries({ queryKey: ['notificationCount'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
 
-    if (!initialNotificationHandled) {
-      initialNotificationHandled = true;
+    if (!coldStartHandled.current) {
+      coldStartHandled.current = true;
       Notifications.getLastNotificationResponseAsync().then((response) => {
-        if (!response || !isRecentNotificationTap(response)) return;
-        handleNotificationNavigation(response);
+        if (response) handleNotificationNavigation(response);
       });
     }
 
@@ -88,8 +97,18 @@ export const useDeviceTokenRegistration = (enabled) => {
 
     register();
 
+    const unsubscribeRefresh = subscribeToTokenRefresh(async (payload) => {
+      if (!enabled || cancelled) return;
+      try {
+        await registerDeviceTokenWithBackend(payload);
+      } catch {
+        // Best effort.
+      }
+    });
+
     return () => {
       cancelled = true;
+      unsubscribeRefresh();
     };
   }, [enabled]);
 };
@@ -97,4 +116,13 @@ export const useDeviceTokenRegistration = (enabled) => {
 export const usePushNotifications = (enabled) => {
   useNotificationListeners(enabled);
   useDeviceTokenRegistration(enabled);
+};
+
+export const unregisterPushOnLogout = async () => {
+  try {
+    const token = await getStoredDeviceToken();
+    if (token) await unregisterDeviceTokenFromBackend(token);
+  } catch {
+    // Best effort.
+  }
 };

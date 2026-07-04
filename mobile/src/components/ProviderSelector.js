@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
+import { useProviderLogosContext } from '../context/ProviderLogosContext';
 import ProviderCard from './ProviderCard';
 
 const ProviderSelector = ({
@@ -12,11 +13,13 @@ const ProviderSelector = ({
   columns = 2,
 }) => {
   const { colors } = useTheme();
+  const { withLogos } = useProviderLogosContext();
   const styles = useMemo(() => createStyles(colors, columns), [colors, columns]);
+  const enrichedProviders = useMemo(() => withLogos(providers), [providers, withLogos]);
 
   const rows = [];
-  for (let i = 0; i < providers.length; i += columns) {
-    rows.push(providers.slice(i, i + columns));
+  for (let i = 0; i < enrichedProviders.length; i += columns) {
+    rows.push(enrichedProviders.slice(i, i + columns));
   }
 
   return (

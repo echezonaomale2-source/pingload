@@ -3,6 +3,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 const DeviceToken = require('../models/DeviceToken');
 const Notification = require('../models/Notification');
 const { logApiFailure } = require('../utils/logger');
+const { getPushChannelId } = require('../utils/pushChannels');
 
 let firebaseApp = null;
 // Cache the init failure so we don't spam logs / retry a doomed cert on every push.
@@ -145,7 +146,7 @@ const deactivateInvalidTokens = async (tokens = []) => {
   await DeviceToken.updateMany({ token: { $in: tokens } }, { $set: { isActive: false } });
 };
 
-const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount } = {}) => {
+const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount, channelId } = {}) => {
   const uniqueTokens = [...new Set((tokens || []).filter(Boolean))];
   if (!uniqueTokens.length) {
     return { success: true, sent: 0, failed: 0, skipped: true, reason: 'no_tokens' };
@@ -158,6 +159,7 @@ const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount } =
 
   const badge = Number.isFinite(badgeCount) ? badgeCount : undefined;
   const stringData = stringifyData(data);
+  const androidChannel = channelId || getPushChannelId(data.type);
 
   // Push delivery must never throw into the caller (a VTU purchase, refund, or
   // wallet funding must not fail because FCM is misconfigured or unreachable).
@@ -169,9 +171,11 @@ const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount } =
       android: {
         priority: 'high',
         notification: {
-          channelId: 'default',
+          channelId: androidChannel,
           sound: 'default',
           notificationCount: badge,
+          visibility: 'public',
+          defaultVibrateTimings: true,
         },
       },
       apns: {
@@ -227,8 +231,9 @@ const sendPushToUser = async ({ userId, title, body, data = {} }) => {
     tokens: devices.map((device) => device.token),
     title,
     body,
-    data: { ...data, badgeCount: String(badgeCount) },
+    data: { ...data, badgeCount: String(badgeCount), type: data.type || 'system' },
     badgeCount,
+    channelId: getPushChannelId(data.type),
   });
 };
 
@@ -256,8 +261,9 @@ const sendPushToUsers = async ({ userIds, title, body, data = {} }) => {
       tokens,
       title,
       body,
-      data: { ...data, badgeCount: String(badgeCount) },
+      data: { ...data, badgeCount: String(badgeCount), type: data.type || 'system' },
       badgeCount,
+      channelId: getPushChannelId(data.type),
     }))
   );
 

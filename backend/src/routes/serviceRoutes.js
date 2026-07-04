@@ -10,6 +10,7 @@ const {
 
 const {
   listProviderLogos,
+  getProviderLogoImage,
 } = require('../controllers/providerLogoController');
 const { detectNetworkFromPhone } = require('../utils/networkDetection');
 
@@ -19,6 +20,7 @@ router.get('/app-config', getAppConfig);
 router.get('/prices', getServicePrices);
 router.get('/status', getPublicServiceStatus);
 router.get('/provider-logos', listProviderLogos);
+router.get('/provider-logos/:providerId/image', getProviderLogoImage);
 router.get('/detect-network', (req, res) => {
   const network = detectNetworkFromPhone(req.query.phone || '');
   res.json({

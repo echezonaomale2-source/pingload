@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { DEFAULT_LOGO_URLS, DEFAULT_PROVIDERS } = require('../config/providerLogoDefaults');
 
 const providerLogoSchema = new mongoose.Schema(
   {
@@ -18,25 +19,22 @@ const providerLogoSchema = new mongoose.Schema(
 );
 
 providerLogoSchema.statics.ensureDefaults = async function ensureDefaults() {
-  const defaults = [
-    { providerId: 'mtn', name: 'MTN', category: 'network', order: 1 },
-    { providerId: 'airtel', name: 'Airtel', category: 'network', order: 2 },
-    { providerId: 'glo', name: 'Glo', category: 'network', order: 3 },
-    { providerId: '9mobile', name: '9mobile', category: 'network', order: 4 },
-    { providerId: 'dstv', name: 'DStv', category: 'tv', order: 1 },
-    { providerId: 'gotv', name: 'GOtv', category: 'tv', order: 2 },
-    { providerId: 'startimes', name: 'StarTimes', category: 'tv', order: 3 },
-    { providerId: 'waec', name: 'WAEC', category: 'education', order: 1 },
-    { providerId: 'neco', name: 'NECO', category: 'education', order: 2 },
-    { providerId: 'jamb', name: 'JAMB', category: 'education', order: 3 },
-    { providerId: 'bet9ja', name: 'Bet9ja', category: 'betting', order: 1 },
-    { providerId: 'sportybet', name: 'SportyBet', category: 'betting', order: 2 },
-    { providerId: 'betking', name: 'BetKing', category: 'betting', order: 3 },
-    { providerId: '1xbet', name: '1xBet', category: 'betting', order: 4 },
-  ];
-
-  for (const item of defaults) {
-    await this.updateOne({ providerId: item.providerId }, { $setOnInsert: item }, { upsert: true });
+  for (const item of DEFAULT_PROVIDERS) {
+    const logoUrl = DEFAULT_LOGO_URLS[item.providerId] || null;
+    await this.updateOne(
+      { providerId: item.providerId },
+      {
+        $set: { name: item.name, category: item.category, order: item.order },
+        $setOnInsert: { providerId: item.providerId, logoUrl, enabled: true },
+      },
+      { upsert: true }
+    );
+    if (logoUrl) {
+      await this.updateOne(
+        { providerId: item.providerId, logoUrl: null, logoData: null },
+        { $set: { logoUrl } }
+      );
+    }
   }
 };
 

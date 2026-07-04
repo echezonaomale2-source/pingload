@@ -7,9 +7,34 @@ import api from './api';
 
 const PENDING_TOKEN_KEY = 'pingload_pending_push_token';
 
+const ANDROID_CHANNELS = [
+  {
+    id: 'default',
+    name: 'General Alerts',
+    importance: Notifications.AndroidImportance.MAX,
+  },
+  {
+    id: 'transactions',
+    name: 'Transactions',
+    importance: Notifications.AndroidImportance.MAX,
+  },
+  {
+    id: 'security',
+    name: 'Security Alerts',
+    importance: Notifications.AndroidImportance.MAX,
+  },
+  {
+    id: 'promotions',
+    name: 'Promotions',
+    importance: Notifications.AndroidImportance.DEFAULT,
+  },
+];
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -24,10 +49,27 @@ const loadFirebaseMessaging = async () => {
   }
 };
 
+export const setupAndroidNotificationChannels = async () => {
+  if (Platform.OS !== 'android') return;
+  await Promise.all(
+    ANDROID_CHANNELS.map((channel) => Notifications.setNotificationChannelAsync(channel.id, {
+      name: channel.name,
+      importance: channel.importance,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#0052CC',
+      sound: 'default',
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      bypassDnd: channel.id === 'security',
+    }))
+  );
+};
+
 export const requestNotificationPermission = async () => {
   if (!Device.isDevice) {
     return { granted: false, reason: 'simulator' };
   }
+
+  await setupAndroidNotificationChannels();
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -41,17 +83,6 @@ export const requestNotificationPermission = async () => {
       },
     });
     finalStatus = status;
-  }
-
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'Pingload Alerts',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#0052CC',
-      sound: 'default',
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-    });
   }
 
   return { granted: finalStatus === 'granted', status: finalStatus };
@@ -120,6 +151,13 @@ export const clearPendingDeviceToken = async () => {
   await SecureStore.deleteItemAsync(PENDING_TOKEN_KEY);
 };
 
+export const getStoredDeviceToken = async () => {
+  const pending = await getPendingDeviceToken();
+  if (pending?.token) return pending.token;
+  const tokenData = await getFcmDeviceToken();
+  return tokenData?.token || null;
+};
+
 /** Request permission during onboarding and cache token until login. */
 export const requestPushPermissionDuringOnboarding = async () => {
   const tokenPayload = await buildTokenPayload();
@@ -162,3 +200,22 @@ export const updateAppBadgeCount = async (count) => {
 };
 
 export const clearAppBadge = async () => updateAppBadgeCount(0);
+
+export const subscribeToTokenRefresh = (onRefresh) => {
+  let unsubscribe = () => {};
+  loadFirebaseMessaging().then((messaging) => {
+    if (!messaging?.onTokenRefresh) return;
+    unsubscribe = messaging.onTokenRefresh(async (token) => {
+      const payload = {
+        token,
+        provider: 'fcm',
+        platform: Platform.OS,
+        deviceName: Device.modelName || Platform.OS,
+        appVersion: Constants.expoConfig?.version || '',
+      };
+      await savePendingDeviceToken(payload);
+      onRefresh?.(payload);
+    });
+  });
+  return () => unsubscribe();
+};

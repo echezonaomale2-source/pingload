@@ -1,13 +1,24 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
+const resolveLogoSource = (provider) => {
+  if (provider.logoUri) return { uri: provider.logoUri };
+  if (typeof provider.logo === 'number') return provider.logo;
+  if (provider.logo?.uri) return provider.logo;
+  return null;
+};
+
 const ProviderCard = ({ provider, selected, onPress }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const accent = provider.color || colors.primary;
+  const [imageFailed, setImageFailed] = useState(false);
+  const logoSource = resolveLogoSource(provider);
+  const showFallback = !logoSource || imageFailed;
+  const initial = (provider.name || provider.id || '?').charAt(0).toUpperCase();
 
   return (
     <TouchableOpacity
@@ -29,7 +40,18 @@ const ProviderCard = ({ provider, selected, onPress }) => {
       )}
 
       <View style={[styles.logoWrap, { backgroundColor: colors.background }]}>
-        <Image source={provider.logo} style={styles.logo} resizeMode="contain" />
+        {showFallback ? (
+          <View style={[styles.fallback, { backgroundColor: `${accent}18` }]}>
+            <Text style={[styles.fallbackText, { color: accent }]}>{initial}</Text>
+          </View>
+        ) : (
+          <Image
+            source={logoSource}
+            style={styles.logo}
+            resizeMode="contain"
+            onError={() => setImageFailed(true)}
+          />
+        )}
       </View>
 
       <Text
@@ -83,6 +105,17 @@ const createStyles = (colors) => StyleSheet.create({
   logo: {
     width: 56,
     height: 56,
+  },
+  fallback: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fallbackText: {
+    fontSize: 22,
+    fontWeight: '800',
   },
   name: {
     fontSize: 13,

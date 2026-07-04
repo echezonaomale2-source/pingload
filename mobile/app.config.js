@@ -36,7 +36,7 @@ if (!firebaseConfig.isConfigured) {
 module.exports = {
   name: 'Pingload',
   slug: 'pingload',
-  version: '1.0.0',
+  version: '1.0.1',
   orientation: 'portrait',
   icon: './src/assets/icon.png',
   userInterfaceStyle: 'automatic',

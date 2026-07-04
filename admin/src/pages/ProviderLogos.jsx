@@ -51,6 +51,23 @@ const ProviderLogosPage = () => {
     }
   };
 
+  const handleDelete = async (logo) => {
+    const ok = await dialog.confirm({
+      title: 'Remove Logo',
+      message: `Remove the logo for ${logo.name}? The app will show a default placeholder until a new logo is uploaded.`,
+      confirmText: 'Remove',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await providerLogosApi.delete(logo._id || logo.providerId);
+      fetchLogos();
+      dialog.notifySuccess('Provider logo removed');
+    } catch (err) {
+      dialog.notifyError(getErrorMessage(err));
+    }
+  };
+
   const columns = [
     { key: 'name', label: 'Provider' },
     { key: 'category', label: 'Category', render: (r) => r.category },
@@ -69,9 +86,14 @@ const ProviderLogosPage = () => {
       key: 'actions',
       label: 'Actions',
       render: (r) => (
-        <button type="button" onClick={() => openEdit(r)} className="text-sm font-bold text-primary">
-          Change
-        </button>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => openEdit(r)} className="text-sm font-bold text-primary">
+            Change
+          </button>
+          <button type="button" onClick={() => handleDelete(r)} className="text-sm font-bold text-red-500">
+            Remove
+          </button>
+        </div>
       ),
     },
   ];

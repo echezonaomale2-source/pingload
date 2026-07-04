@@ -5,6 +5,7 @@ import { walletService } from '../services/walletService';
 import { isBiometricEnabledLocally } from '../services/biometricService';
 import { hasLoginPin, setLoginPin, clearLoginPin } from '../services/loginPinService';
 import { syncDeviceTokenWithBackend, updateAppBadgeCount } from '../services/pushNotificationService';
+import { unregisterPushOnLogout, flushPendingNotificationNavigation } from '../hooks/usePushNotifications';
 
 const BOOTSTRAP_TIMEOUT_MS = 12000;
 
@@ -31,6 +32,7 @@ export const AuthProvider = ({ children }) => {
     setNeedsLoginPinSetup(false);
     setIsAuthenticated(true);
     syncDeviceTokenWithBackend().catch(() => {});
+    flushPendingNotificationNavigation();
   }, []);
 
   const resolveUnlockGate = useCallback(async (userData) => {
@@ -183,6 +185,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    await unregisterPushOnLogout();
     await SecureStore.deleteItemAsync('token');
     await updateAppBadgeCount(0);
     setUser(null);

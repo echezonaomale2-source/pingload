@@ -70,6 +70,7 @@ const { listSecurityEvents } = require('../controllers/securityEventController')
 const {
   adminListProviderLogos,
   adminUpdateProviderLogo,
+  adminDeleteProviderLogo,
 } = require('../controllers/providerLogoController');
 const { getRefunds, getRefundById } = require('../controllers/refundController');
 const { protectAdmin } = require('../middleware/adminAuth');
@@ -104,6 +105,7 @@ router.get('/security-events', protectAdmin, listSecurityEvents);
 
 router.get('/provider-logos', protectAdmin, adminListProviderLogos);
 router.patch('/provider-logos/:id', protectAdmin, adminUpdateProviderLogo);
+router.delete('/provider-logos/:id', protectAdmin, adminDeleteProviderLogo);
 
 router.get('/users', protectAdmin, getUsers);
 router.get('/users/:id', protectAdmin, getUserById);

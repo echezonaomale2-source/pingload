@@ -12,6 +12,7 @@ const {
 } = require('../services/vtuPurchaseService');
 const { groupByValidityCategory, inferValidityCategory } = require('../utils/validityCategory');
 const { groupTvPlans } = require('../utils/tvCategory');
+const { normalizeNigerianPhone, isValidNigerianPhone } = require('../utils/phoneUtils');
 
 /** VTpass sometimes returns duplicate variation_code entries — keep first of each. */
 const dedupeByCode = (items, codeKey) => {
@@ -479,7 +480,14 @@ const fetchEducationProducts = async (req, res, next) => {
 const fundBetting = async (req, res, next) => {
   try {
     await assertServiceEnabled('betting');
-    const { platform, customerId, amount, phone, pin } = req.body;
+    const { platform, customerId, amount, pin } = req.body;
+    const phone = normalizeNigerianPhone(req.body.phone || req.user?.phoneNumber);
+    if (!isValidNigerianPhone(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'A valid Nigerian phone number is required (e.g. 08012345678)',
+      });
+    }
     await verifyTransactionPin(req.user._id, pin);
 
     const result = await executeVtuPurchase({
@@ -567,11 +575,19 @@ const tvVerifyValidation = [
   body('smartcardNumber').trim().notEmpty().withMessage('Smartcard number is required'),
 ];
 
+const BETTING_PLATFORMS = ['bet9ja', 'betking', 'sportybet', '1xbet', 'bangbet', 'merrybet', 'premierbet'];
+
 const bettingValidation = [
-  body('platform').isIn(['bet9ja', 'betking', 'sportybet', '1xbet']).withMessage('Invalid betting platform'),
+  body('platform').isIn(BETTING_PLATFORMS).withMessage('Invalid betting platform'),
   body('customerId').trim().notEmpty().withMessage('Customer ID is required'),
   body('amount').isFloat({ min: 100 }).withMessage('Minimum betting funding is ₦100'),
-  body('phone').matches(/^0[789][01]\d{8}$/).withMessage('Invalid Nigerian phone number'),
+  body('phone').optional().custom((value, { req }) => {
+    const phone = normalizeNigerianPhone(value || req.user?.phoneNumber);
+    if (!isValidNigerianPhone(phone)) {
+      throw new Error('A valid Nigerian phone number is required');
+    }
+    return true;
+  }),
   pinValidation,
 ];
 

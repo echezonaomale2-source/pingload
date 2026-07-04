@@ -1,7 +1,8 @@
 const User = require('../models/User');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
-const Notification = require('../models/Notification');
+const { deliverUserNotification } = require('./notificationDeliveryService');
+const { getPurchasePushMeta } = require('../utils/purchaseNotification');
 const vtpass = require('./vtpassService');
 const { processRefund, buildRefundReason } = require('./refundService');
 const { createDebitWithAtomicWallet } = require('./walletTransactionService');
@@ -111,12 +112,22 @@ const finalizeTransaction = async (transaction, success, metadata = {}) => {
   }
 
   if (success) {
-    await Notification.create({
+    const pushMeta = getPurchasePushMeta(transaction.service, transaction.description);
+    await deliverUserNotification({
       userId: transaction.userId,
-      title: 'Transaction Successful',
-      message: transaction.description,
-      type: 'transaction',
+      title: pushMeta.title,
+      message: pushMeta.message,
+      type: pushMeta.type,
+      screen: pushMeta.screen,
+      metadata: {
+        transactionId: transaction._id,
+        service: transaction.service,
+        reference: transaction.reference,
+      },
+    }).catch((err) => {
+      logApiFailure('vtu:purchase-push', err, { reference: transaction.reference });
     });
+
     logWallet('info', 'VTU purchase successful', {
       userId: String(transaction.userId),
       amount: transaction.amount,

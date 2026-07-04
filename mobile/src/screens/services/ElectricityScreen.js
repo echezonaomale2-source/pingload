@@ -4,9 +4,11 @@ import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
+import { ELECTRICITY_PROVIDERS } from '../../utils/constants';
 import { handleVtuPurchaseError, handleVtuPurchaseResult } from '../../utils/vtuHelpers';
 import FormInput from '../../components/FormInput';
 import CustomButton from '../../components/CustomButton';
+import ProviderSelector from '../../components/ProviderSelector';
 import { TransactionPinModal } from '../../components/modals';
 import { LogoLoader } from '../../components/loading';
 import { vtuService } from '../../services/vtuService';
@@ -39,7 +41,12 @@ const ElectricityScreen = ({ navigation }) => {
     setLoadingProviders(true);
     try {
       const res = await vtuService.getElectricityPlans();
-      setProviders(res.data.data || []);
+      const apiProviders = res.data.data || [];
+      const merged = apiProviders.map((p) => {
+        const meta = ELECTRICITY_PROVIDERS.find((item) => item.id === p.id) || {};
+        return { ...meta, ...p, id: p.id, name: p.name };
+      });
+      setProviders(merged);
     } catch {
       setProviders([]);
       if (showError) {
@@ -143,25 +150,23 @@ const ElectricityScreen = ({ navigation }) => {
         <Text style={styles.title}>Pay Electricity</Text>
         <Text style={styles.subtitle}>Pay your electricity bills instantly</Text>
 
-        <Text style={styles.label}>Select Provider</Text>
         {loadingProviders && providers.length === 0 ? (
           <View style={styles.loadingWrap}>
             <LogoLoader size={48} />
             <Text style={styles.loadingText}>Loading providers...</Text>
           </View>
-        ) : (
-          <View style={styles.providerGrid}>
-            {providers.map((p) => (
-              <TouchableOpacity
-                key={p.id}
-                style={[styles.providerBtn, provider?.id === p.id && styles.providerActive]}
-                onPress={() => { setProvider(p); setCustomerName(''); }}
-              >
-                <Text style={[styles.providerText, provider?.id === p.id && styles.providerTextActive]}>{p.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+        ) : providers.length > 0 ? (
+          <ProviderSelector
+            label="Select Provider"
+            providers={providers}
+            selected={provider?.id || ''}
+            onSelect={(id) => {
+              setProvider(providers.find((item) => item.id === id) || null);
+              setCustomerName('');
+            }}
+            columns={2}
+          />
+        ) : null}
 
         {!loadingProviders && providers.length === 0 && (
           <Text style={styles.emptyText}>No electricity providers available right now.</Text>

@@ -5,10 +5,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../context/ThemeContext';
+import { EDUCATION_EXAMS } from '../../utils/constants';
+import { normalizePhone } from '../../utils/networkDetection';
 import { formatCurrency } from '../../utils/formatters';
 import { handleVtuPurchaseError, handleVtuPurchaseResult } from '../../utils/vtuHelpers';
 import FormInput from '../../components/FormInput';
 import CustomButton from '../../components/CustomButton';
+import ProviderSelector from '../../components/ProviderSelector';
 import { TransactionPinModal } from '../../components/modals';
 import { LogoLoader } from '../../components/loading';
 import { vtuService } from '../../services/vtuService';
@@ -66,6 +69,13 @@ const EducationScreen = ({ navigation, route }) => {
     return selectedProduct.amount * qty;
   }, [selectedProduct, quantity]);
 
+  const examProviders = useMemo(() => {
+    const source = exams.length
+      ? exams.map((exam) => exam.id)
+      : EDUCATION_EXAMS.map((exam) => exam.id);
+    return EDUCATION_EXAMS.filter((exam) => source.includes(exam.id));
+  }, [exams]);
+
   const handleExamChange = (examId) => {
     setSelectedExam(examId);
     setSelectedProduct(null);
@@ -76,7 +86,7 @@ const EducationScreen = ({ navigation, route }) => {
       dialog.alertError('Missing Product', 'Please select an education product');
       return;
     }
-    if (!phone.match(/^0[789][01]\d{8}$/)) {
+    if (!normalizePhone(phone).match(/^0[789][01]\d{8}$/)) {
       dialog.alertError('Invalid Phone', 'Enter a valid Nigerian phone number');
       return;
     }
@@ -140,19 +150,13 @@ const EducationScreen = ({ navigation, route }) => {
           </View>
         ) : (
           <>
-            <View style={styles.examTabs}>
-              {(exams.length ? exams : [{ id: 'waec' }, { id: 'neco' }, { id: 'jamb' }]).map((exam) => (
-                <TouchableOpacity
-                  key={exam.id}
-                  style={[styles.examTab, selectedExam === exam.id && styles.examTabActive]}
-                  onPress={() => handleExamChange(exam.id)}
-                >
-                  <Text style={[styles.examTabText, selectedExam === exam.id && styles.examTabTextActive]}>
-                    {exam.name || exam.id.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <ProviderSelector
+              label="Select Exam Body"
+              providers={examProviders}
+              selected={selectedExam}
+              onSelect={handleExamChange}
+              columns={3}
+            />
 
             {selectedExamInfo && !selectedExamInfo.available ? (
               <View style={styles.unavailableCard}>
