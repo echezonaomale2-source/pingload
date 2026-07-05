@@ -27,7 +27,7 @@ const DataTable = ({ columns, data, onRowClick, page = 1, pageSize = 8, onPageCh
             ) : (
               paginated.map((row, i) => (
                 <tr
-                  key={row.id || i}
+                  key={row._id || row.id || i}
                   onClick={() => onRowClick?.(row)}
                   className={`border-b border-slate-50 transition dark:border-slate-700/50 ${onRowClick ? 'cursor-pointer hover:bg-primary/5 dark:hover:bg-primary/10' : ''}`}
                 >

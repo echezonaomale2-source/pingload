@@ -16,6 +16,7 @@ const DataPlansPage = () => {
   const dialog = useDialog();
   const [plans, setPlans] = useState([]);
   const [network, setNetwork] = useState('');
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
@@ -30,6 +31,8 @@ const DataPlansPage = () => {
   }, [network]);
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
+
+  useEffect(() => { setPage(1); }, [network]);
 
   const openCreate = () => { setForm({ ...emptyForm, network: network || 'mtn' }); setModal('create'); };
   const openEdit = (plan) => {
@@ -130,7 +133,7 @@ const DataPlansPage = () => {
     <div>
       <PageHeader
         title="Data Plans"
-        subtitle="Manage data bundles shown in the user app"
+        subtitle={`${plans.length} plan${plans.length === 1 ? '' : 's'}${network ? ` · ${network.toUpperCase()}` : ''}`}
         action={
           <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
             <Plus size={18} /> Add Plan
@@ -145,7 +148,15 @@ const DataPlansPage = () => {
         ))}
       </div>
 
-      {loading ? <PageLoader /> : <DataTable columns={columns} data={plans} />}
+      {loading ? <PageLoader /> : (
+        <DataTable
+          columns={columns}
+          data={plans}
+          page={page}
+          pageSize={25}
+          onPageChange={setPage}
+        />
+      )}
 
       <Modal
         open={!!modal}

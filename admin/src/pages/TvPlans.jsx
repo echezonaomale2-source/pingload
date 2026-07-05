@@ -12,6 +12,7 @@ const TvPlansPage = () => {
   const dialog = useDialog();
   const [plans, setPlans] = useState([]);
   const [provider, setProvider] = useState('');
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
@@ -26,6 +27,8 @@ const TvPlansPage = () => {
   }, [provider]);
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
+
+  useEffect(() => { setPage(1); }, [provider]);
 
   const openCreate = () => { setForm({ ...emptyForm, provider: provider || 'dstv' }); setModal('create'); };
   const openEdit = (plan) => {
@@ -127,7 +130,15 @@ const TvPlansPage = () => {
         ))}
       </div>
 
-      {loading ? <PageLoader /> : <DataTable columns={columns} data={plans} />}
+      {loading ? <PageLoader /> : (
+        <DataTable
+          columns={columns}
+          data={plans}
+          page={page}
+          pageSize={25}
+          onPageChange={setPage}
+        />
+      )}
 
       <Modal open={!!modal} onClose={() => setModal(null)} title={modal === 'create' ? 'Add TV Plan' : 'Edit TV Plan'}>
         <div className="space-y-3">

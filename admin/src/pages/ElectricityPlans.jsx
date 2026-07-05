@@ -18,6 +18,7 @@ const emptyForm = {
 const ElectricityPlansPage = () => {
   const dialog = useDialog();
   const [plans, setPlans] = useState([]);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
@@ -137,7 +138,15 @@ const ElectricityPlansPage = () => {
         }
       />
 
-      {loading ? <PageLoader /> : <DataTable columns={columns} data={plans} />}
+      {loading ? <PageLoader /> : (
+        <DataTable
+          columns={columns}
+          data={plans}
+          page={page}
+          pageSize={25}
+          onPageChange={setPage}
+        />
+      )}
 
       <Modal open={!!modal} onClose={() => setModal(null)} title={modal === 'create' ? 'Add Electricity Provider' : 'Edit Electricity Provider'}>
         <div className="space-y-3">
