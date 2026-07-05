@@ -3,12 +3,12 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const { deliverUserNotification } = require('./notificationDeliveryService');
 const { getPurchasePushMeta } = require('../utils/purchaseNotification');
-const clubkonnect = require('./clubkonnectService');
+const vtuProvider = require('./vtuProviderService');
 const { processRefund, buildRefundReason } = require('./refundService');
 const { createDebitWithAtomicWallet } = require('./walletTransactionService');
 const generateReference = require('../utils/generateReference');
 const applyServicePricing = require('../utils/applyServicePricing');
-const { logWallet, logClubkonnect, logApiFailure } = require('../utils/logger');
+const { logWallet, logClubkonnect, logVtpass, logApiFailure } = require('../utils/logger');
 
 const formatTransactionPayload = (transaction, extra = {}) => ({
   reference: transaction.reference,
@@ -23,9 +23,14 @@ const formatTransactionPayload = (transaction, extra = {}) => ({
   ...extra,
 });
 
-const buildPurchaseFailureMessage = (description, metadata = {}) => {
+const logProviderError = (providerName, level, message, meta = {}) => {
+  if (providerName === 'vtpass') logVtpass(level, message, meta);
+  else logClubkonnect(level, message, meta);
+};
+
+const buildPurchaseFailureMessage = async (description, metadata = {}) => {
   const label = description.split(':')[0];
-  const reason = clubkonnect.extractProviderFailureReason(metadata.providerResponse)
+  const reason = await vtuProvider.extractProviderFailureReason(metadata.providerResponse || metadata.vtpassResponse)
     || metadata.error
     || buildRefundReason(metadata);
   if (reason && reason !== 'Purchase failed at service provider') {
@@ -42,7 +47,7 @@ const safeFinalizeTransaction = async (transaction, success, metadata = {}) => {
       reference: transaction.reference,
       service: transaction.service,
       success,
-      providerStatus: metadata.providerResponse?.status,
+      providerStatus: metadata.providerResponse?.status || metadata.vtpassResponse?.code,
     });
     return { transaction, refundResult: null, finalizeError: error.message };
   }
@@ -66,7 +71,7 @@ const processWalletDebit = async (userId, amount, service, description, metadata
   await validateWalletBalance(userId, amount);
 
   const reference = generateReference('VTU');
-  const providerRequestId = metadata.providerRequestId || clubkonnect.generateRequestId();
+  const providerRequestId = metadata.providerRequestId || vtuProvider.generateRequestId();
 
   const transaction = await createDebitWithAtomicWallet({
     userId,
@@ -74,7 +79,11 @@ const processWalletDebit = async (userId, amount, service, description, metadata
     service,
     description,
     reference,
-    metadata: { ...metadata, providerRequestId },
+    metadata: {
+      ...metadata,
+      providerRequestId,
+      vtpassRequestId: metadata.vtpassRequestId || providerRequestId,
+    },
   });
 
   logWallet('info', 'Wallet debited for VTU purchase', {
@@ -83,6 +92,7 @@ const processWalletDebit = async (userId, amount, service, description, metadata
     reference,
     service,
     providerRequestId,
+    vtuProvider: metadata.vtuProvider,
   });
 
   return transaction;
@@ -141,13 +151,12 @@ const finalizeTransaction = async (transaction, success, metadata = {}) => {
       reference: transaction.reference,
       service: transaction.service,
       refundReference: refundResult?.refundTransaction?.reference,
-      providerStatus: metadata.providerResponse?.status,
       failureReason: buildRefundReason(metadata),
     });
-    logClubkonnect('error', 'VTU provider rejected purchase', {
+    logProviderError(metadata.vtuProvider || 'clubkonnect', 'error', 'VTU provider rejected purchase', {
       reference: transaction.reference,
       service: transaction.service,
-      response: metadata.providerResponse,
+      response: metadata.providerResponse || metadata.vtpassResponse,
       error: metadata.error,
     });
   }
@@ -171,30 +180,36 @@ const executeVtuPurchase = async ({
   applyPricing = true,
   pricingServiceId = service,
 }) => {
-  clubkonnect.assertClubkonnectConfigured();
+  await vtuProvider.assertActiveProviderConfigured();
+  const providerName = await vtuProvider.getActiveProviderName();
 
   const chargedAmount = applyPricing
     ? await applyServicePricing(pricingServiceId, amount)
     : amount;
 
-  const providerRequestId = clubkonnect.generateRequestId();
+  const providerRequestId = vtuProvider.generateRequestId();
 
   const transaction = await processWalletDebit(userId, chargedAmount, service, description, {
     ...metadata,
     originalAmount: amount,
     chargedAmount,
     providerRequestId,
+    vtuProvider: providerName,
   });
 
   try {
     const result = await providerCall(providerRequestId);
-    const outcome = clubkonnect.resolvePurchaseOutcome(result);
-    const purchaseDetails = clubkonnect.extractPurchaseDetails(result, service);
+    const outcome = await vtuProvider.resolvePurchaseOutcome(result);
+    const purchaseDetails = await vtuProvider.extractPurchaseDetails(result, service);
     const finalizeMetadata = {
       providerResponse: result,
+      vtuProvider: providerName,
       providerOrderId: purchaseDetails.providerOrderId,
       purchaseDetails,
     };
+    if (providerName === 'vtpass') {
+      finalizeMetadata.vtpassResponse = result;
+    }
 
     if (outcome.outcome === 'pending') {
       const pendingTx = await markTransactionPending(transaction, finalizeMetadata);
@@ -212,9 +227,8 @@ const executeVtuPurchase = async ({
     const success = outcome.outcome === 'success';
 
     if (!success) {
-      logClubkonnect('error', 'Clubkonnect purchase returned failure', {
+      logProviderError(providerName, 'error', 'VTU provider purchase returned failure', {
         service,
-        status: result?.status,
         response: result,
         requestId: providerRequestId,
       });
@@ -237,35 +251,40 @@ const executeVtuPurchase = async ({
       };
     }
 
+    const failureMessage = success
+      ? `${description.split(':')[0]} completed successfully`
+      : await buildPurchaseFailureMessage(description, finalizeMetadata);
+
     return {
       success,
       transaction: updatedTx,
       purchaseDetails,
       refundTransaction: refundResult?.refundTransaction || null,
-      message: success
-        ? `${description.split(':')[0]} completed successfully`
-        : buildPurchaseFailureMessage(description, finalizeMetadata),
+      message: failureMessage,
       refunded: !success,
     };
   } catch (providerError) {
-    logClubkonnect('error', 'Clubkonnect purchase threw', {
+    logProviderError(providerName, 'error', 'VTU provider purchase threw', {
       service,
       message: providerError.message,
-      response: providerError.providerResponse,
+      response: providerError.providerResponse || providerError.vtpassResponse,
     });
 
     const finalizeMetadata = {
       error: providerError.message,
-      providerResponse: providerError.providerResponse,
+      providerResponse: providerError.providerResponse || providerError.vtpassResponse,
+      vtuProvider: providerName,
     };
+    if (providerName === 'vtpass') {
+      finalizeMetadata.vtpassResponse = finalizeMetadata.providerResponse;
+    }
+
     const { transaction: updatedTx, refundResult } = await safeFinalizeTransaction(
       transaction,
       false,
       finalizeMetadata,
     );
-    const error = new Error(
-      buildPurchaseFailureMessage(description, finalizeMetadata)
-    );
+    const error = new Error(await buildPurchaseFailureMessage(description, finalizeMetadata));
     error.statusCode = providerError.statusCode === 502 ? 502 : 400;
     error.data = formatTransactionPayload(updatedTx, {
       refunded: true,

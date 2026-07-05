@@ -146,6 +146,16 @@ assertContains(
   'Clubkonnect reconciliation worker'
 );
 assertContains(
+  'src/services/vtpassReconciliationWorker.js',
+  'startVtpassReconciliationWorker',
+  'VTpass reconciliation worker'
+);
+assertContains(
+  'src/services/vtuProviderService.js',
+  'getActiveProviderName',
+  'VTU provider switcher'
+);
+assertContains(
   'src/routes/adminRoutes.js',
   "router.get('/search'",
   'Admin global search route'

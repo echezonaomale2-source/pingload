@@ -41,6 +41,12 @@ services:
         sync: false
       - key: CLUBKONNECT_API_KEY
         sync: false
+      - key: VTPASS_API_KEY
+        sync: false
+      - key: VTPASS_PUBLIC_KEY
+        sync: false
+      - key: VTPASS_SECRET_KEY
+        sync: false
       - key: TERMII_API_KEY
         sync: false
       - key: TERMII_EMAIL_CONFIGURATION_ID
@@ -59,6 +65,8 @@ services:
         value: live
       - key: CLUBKONNECT_BASE_URL
         value: https://www.clubkonnect.com
+      - key: VTPASS_ENV
+        value: live
 
       # Termii
       - key: TERMII_SENDER_ID

@@ -21,6 +21,11 @@ const PAYSTACK_BASE_URL = process.env.PAYSTACK_BASE_URL || 'https://api.paystack
 
 const CLUBKONNECT_BASE_URL = process.env.CLUBKONNECT_BASE_URL || 'https://www.clubkonnect.com';
 
+const vtpassEnv = (process.env.VTPASS_ENV || (isSandboxMode ? 'sandbox' : 'live')).toLowerCase();
+const VTPASS_BASE_URL = process.env.VTPASS_BASE_URL
+  || (vtpassEnv === 'live' ? 'https://vtpass.com/api' : 'https://sandbox.vtpass.com/api');
+const vtpassIsSandbox = vtpassEnv === 'sandbox';
+
 const maskKey = (key) => {
   if (!key) return null;
   if (key.length <= 8) return '****';
@@ -72,6 +77,17 @@ const serviceConfig = {
       && clubkonnectUserId !== 'dev-placeholder'),
   },
 
+  vtpass: {
+    env: vtpassEnv,
+    mode: vtpassIsSandbox ? 'sandbox' : 'live',
+    baseUrl: VTPASS_BASE_URL,
+    apiKey: process.env.VTPASS_API_KEY || '',
+    publicKey: process.env.VTPASS_PUBLIC_KEY || '',
+    secretKey: process.env.VTPASS_SECRET_KEY || '',
+    isSandbox: vtpassIsSandbox,
+    configured: Boolean(process.env.VTPASS_API_KEY && process.env.VTPASS_SECRET_KEY),
+  },
+
   termii: {
     baseUrl: process.env.TERMII_BASE_URL || 'https://api.ng.termii.com/api',
     apiKey: termiiApiKey,
@@ -120,6 +136,12 @@ serviceConfig.getPublicConfig = () => ({
     baseUrl: serviceConfig.clubkonnect.baseUrl,
     configured: serviceConfig.clubkonnect.configured,
   },
+  vtpass: {
+    mode: serviceConfig.vtpass.mode,
+    baseUrl: serviceConfig.vtpass.baseUrl,
+    isSandbox: serviceConfig.vtpass.isSandbox,
+    configured: serviceConfig.vtpass.configured,
+  },
   termii: {
     configured: serviceConfig.termii.configured,
   },
@@ -146,7 +168,7 @@ serviceConfig.getAppConfig = () => {
 
 serviceConfig.printStartupBanner = () => {
   if (isProduction) {
-    console.log(`Pingload API [PRODUCTION] — Paystack ${serviceConfig.paystack.mode}, Clubkonnect live`);
+    console.log(`Pingload API [PRODUCTION] — Paystack ${serviceConfig.paystack.mode}, VTU providers: Clubkonnect + VTpass`);
     return;
   }
 
@@ -159,6 +181,8 @@ serviceConfig.printStartupBanner = () => {
   console.log(`  Paystack Key   : ${maskKey(paystackSecretKey) || 'NOT SET'}`);
   console.log(`  Clubkonnect    : ${serviceConfig.clubkonnect.baseUrl}`);
   console.log(`  Clubkonnect ID : ${maskKey(clubkonnectUserId) || 'NOT SET'}`);
+  console.log(`  VTpass         : ${serviceConfig.vtpass.mode.toUpperCase()} (${serviceConfig.vtpass.baseUrl})`);
+  console.log(`  VTpass Key     : ${maskKey(process.env.VTPASS_API_KEY) || 'NOT SET'}`);
   console.log(`  Dev OTP Mode   : ${serviceConfig.developmentMode ? 'ON (OTP logged)' : 'OFF'}`);
   console.log(`  Service Logs   : ${serviceConfig.loggingEnabled ? 'ON' : 'OFF'}`);
   console.log(`  FCM Push       : ${serviceConfig.firebase.configured ? 'ON' : 'OFF'}`);

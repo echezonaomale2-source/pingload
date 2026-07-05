@@ -24,14 +24,16 @@ if (serviceConfig.isProduction) {
     'JWT_SECRET',
     'PAYSTACK_SECRET_KEY',
     'PAYSTACK_PUBLIC_KEY',
-    'CLUBKONNECT_USER_ID',
-    'CLUBKONNECT_API_KEY',
     'TERMII_API_KEY',
     'ADMIN_PASSWORD',
     'CORS_ORIGIN',
     'FRONTEND_URL',
     'API_PUBLIC_URL',
   ].forEach(requireEnv);
+
+  if (!serviceConfig.clubkonnect.configured && !serviceConfig.vtpass.configured) {
+    throw new Error('Configure CLUBKONNECT_* or VTPASS_* credentials when NODE_ENV=production');
+  }
 
   if (serviceConfig.serviceMode !== 'production' && serviceConfig.serviceMode !== 'live') {
     throw new Error('SERVICE_MODE must be "production" when NODE_ENV=production');
@@ -53,15 +55,26 @@ if (serviceConfig.isProduction) {
     throw new Error('ADMIN_PASSWORD must be changed from the default in production');
   }
 
-  ['PAYSTACK_SECRET_KEY', 'PAYSTACK_PUBLIC_KEY', 'CLUBKONNECT_USER_ID', 'CLUBKONNECT_API_KEY', 'TERMII_API_KEY'].forEach((key) => {
+  ['PAYSTACK_SECRET_KEY', 'PAYSTACK_PUBLIC_KEY', 'TERMII_API_KEY'].forEach((key) => {
     rejectPlaceholder(key, ['<your-', 'xxx', 'dev-placeholder']);
   });
+  if (serviceConfig.clubkonnect.configured) {
+    ['CLUBKONNECT_USER_ID', 'CLUBKONNECT_API_KEY'].forEach((key) => {
+      rejectPlaceholder(key, ['<your-', 'xxx', 'dev-placeholder']);
+    });
+  }
+  if (serviceConfig.vtpass.configured) {
+    ['VTPASS_API_KEY', 'VTPASS_SECRET_KEY'].forEach((key) => {
+      rejectPlaceholder(key, ['<your-', 'xxx', 'dev-placeholder']);
+    });
+  }
 } else if (serviceConfig.isDevelopment) {
-  ['PAYSTACK_SECRET_KEY', 'CLUBKONNECT_USER_ID'].forEach((key) => {
-    if (!process.env[key] || process.env[key].includes('<your-')) {
-      console.warn(`Warning: ${key} is not set — wallet funding and VTU purchases will be limited`);
-    }
-  });
+  if (!serviceConfig.clubkonnect.configured && !serviceConfig.vtpass.configured) {
+    console.warn('Warning: No VTU provider credentials configured — VTU purchases will be limited');
+  }
+  if (!process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY.includes('<your-')) {
+    console.warn('Warning: PAYSTACK_SECRET_KEY is not set — wallet funding will be limited');
+  }
 }
 
 const parseCorsOrigins = () => {

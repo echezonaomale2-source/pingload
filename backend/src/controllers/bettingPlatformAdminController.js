@@ -1,5 +1,5 @@
 const BettingPlatform = require('../models/BettingPlatform');
-const { syncBettingPlatformsFromClubkonnect } = require('../services/bettingPlatformService');
+const { syncBettingPlatforms } = require('../services/bettingPlatformService');
 
 const adminListBettingPlatforms = async (req, res, next) => {
   try {
@@ -16,8 +16,14 @@ const adminUpdateBettingPlatform = async (req, res, next) => {
     const updates = {};
     const { enabled, providerServiceId, vtpassServiceId, minAmount, maxAmount, order, name } = req.body;
     if (enabled !== undefined) updates.enabled = Boolean(enabled);
-    if (providerServiceId !== undefined) updates.providerServiceId = providerServiceId || null;
-    if (vtpassServiceId !== undefined) updates.providerServiceId = vtpassServiceId || null;
+    if (providerServiceId !== undefined) {
+      updates.providerServiceId = providerServiceId || null;
+      updates.vtpassServiceId = providerServiceId || null;
+    }
+    if (vtpassServiceId !== undefined) {
+      updates.providerServiceId = vtpassServiceId || null;
+      updates.vtpassServiceId = vtpassServiceId || null;
+    }
     if (minAmount !== undefined) updates.minAmount = Number(minAmount);
     if (maxAmount !== undefined) updates.maxAmount = Number(maxAmount);
     if (order !== undefined) updates.order = Number(order);
@@ -39,7 +45,7 @@ const adminUpdateBettingPlatform = async (req, res, next) => {
 
 const adminSyncBettingPlatforms = async (req, res, next) => {
   try {
-    const result = await syncBettingPlatformsFromClubkonnect();
+    const result = await syncBettingPlatforms();
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);

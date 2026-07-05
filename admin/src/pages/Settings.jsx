@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Lock } from 'lucide-react';
+import { Save, Lock, Server } from 'lucide-react';
 import { PageHeader, PageLoader, ErrorAlert } from '../components';
 import { settingsApi, getErrorMessage } from '../services/adminService';
 import { useDialog } from '../hooks/useDialog';
@@ -117,6 +117,37 @@ const SettingsPage = () => {
               <button type="button" onClick={() => updateSetting('otpRequired', !settings.otpRequired)} className={`relative h-7 w-12 rounded-full transition ${settings.otpRequired ? 'bg-primary' : 'bg-slate-300'}`}>
                 <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${settings.otpRequired ? 'left-5' : 'left-0.5'}`} />
               </button>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Server size={16} className="text-primary" />
+                <p className="text-sm font-semibold text-slate-800">VTU Provider</p>
+              </div>
+              <p className="mb-3 text-xs text-slate-500">Choose which provider fulfills airtime, data, bills, and betting purchases.</p>
+              <div className="space-y-2">
+                {[
+                  { id: 'clubkonnect', label: 'Clubkonnect' },
+                  { id: 'vtpass', label: 'VTpass' },
+                ].map((option) => {
+                  const configured = settings.providerStatus?.[option.id]?.configured;
+                  const active = settings.vtuProvider === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      disabled={!configured}
+                      onClick={() => updateSetting('vtuProvider', option.id)}
+                      className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition ${active ? 'border-primary bg-primary/5' : 'border-slate-200'} ${!configured ? 'cursor-not-allowed opacity-50' : 'hover:border-primary/40'}`}
+                    >
+                      <span className="font-semibold text-slate-800">{option.label}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${configured ? (active ? 'bg-primary text-white' : 'bg-emerald-100 text-emerald-700') : 'bg-slate-100 text-slate-500'}`}>
+                        {configured ? (active ? 'Active' : 'Available') : 'Not configured'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div>

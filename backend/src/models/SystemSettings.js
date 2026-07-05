@@ -19,6 +19,11 @@ const systemSettingsSchema = new mongoose.Schema(
     maxWalletFund: { type: Number, default: 500000 },
     referralBonus: { type: Number, default: 100 },
     supportEmail: { type: String, default: 'support@pingload.top' },
+    vtuProvider: {
+      type: String,
+      enum: ['clubkonnect', 'vtpass'],
+      default: 'clubkonnect',
+    },
     services: {
       type: [serviceToggleSchema],
       default: [

@@ -13,6 +13,8 @@ const { signToken, verifyToken } = require('../config/jwt');
 const { revokeToken } = require('../services/tokenAuthService');
 const adjustWallet = require('../utils/adjustWallet');
 const { buildSafeRegex, parsePagination } = require('../utils/safeQuery');
+const vtuProvider = require('../services/vtuProviderService');
+const serviceConfig = require('../config/serviceConfig');
 
 // POST /admin/auth/login
 const login = async (req, res, next) => {
@@ -819,6 +821,7 @@ const closeTicket = async (req, res, next) => {
 const getSettings = async (req, res, next) => {
   try {
     const settings = await SystemSettings.getSettings();
+    const providerStatus = await vtuProvider.getProviderStatus();
     res.json({
       success: true,
       data: {
@@ -828,6 +831,8 @@ const getSettings = async (req, res, next) => {
         maxWalletFund: settings.maxWalletFund,
         referralBonus: settings.referralBonus,
         supportEmail: settings.supportEmail,
+        vtuProvider: settings.vtuProvider,
+        providerStatus,
       },
     });
   } catch (error) {
@@ -839,12 +844,34 @@ const getSettings = async (req, res, next) => {
 const updateSettings = async (req, res, next) => {
   try {
     const settings = await SystemSettings.getSettings();
-    const allowed = ['maintenanceMode', 'otpRequired', 'minWalletFund', 'maxWalletFund', 'referralBonus', 'supportEmail'];
+    const allowed = ['maintenanceMode', 'otpRequired', 'minWalletFund', 'maxWalletFund', 'referralBonus', 'supportEmail', 'vtuProvider'];
     allowed.forEach((key) => {
       if (req.body[key] !== undefined) settings[key] = req.body[key];
     });
+
+    if (req.body.vtuProvider !== undefined) {
+      const provider = req.body.vtuProvider;
+      if (!['clubkonnect', 'vtpass'].includes(provider)) {
+        return res.status(400).json({ success: false, message: 'Invalid VTU provider' });
+      }
+      if (provider === 'vtpass' && !serviceConfig.vtpass.configured) {
+        return res.status(400).json({ success: false, message: 'VTpass credentials are not configured on the server' });
+      }
+      if (provider === 'clubkonnect' && !serviceConfig.clubkonnect.configured) {
+        return res.status(400).json({ success: false, message: 'Clubkonnect credentials are not configured on the server' });
+      }
+      settings.vtuProvider = provider;
+      vtuProvider.invalidateProviderCache();
+    }
+
     await settings.save();
-    res.json({ success: true, data: settings });
+    res.json({
+      success: true,
+      data: {
+        ...settings.toObject(),
+        providerStatus: await vtuProvider.getProviderStatus(),
+      },
+    });
   } catch (error) {
     next(error);
   }

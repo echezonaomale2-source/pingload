@@ -101,7 +101,7 @@ const DataPlansPage = () => {
     setSyncing(true);
     try {
       const res = await dataPlansApi.sync();
-      dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} data plan(s) from Clubkonnect`);
+      dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} data plan(s)`);
       fetchPlans();
     } catch (err) {
       dialog.notifyError(getErrorMessage(err));
@@ -151,7 +151,7 @@ const DataPlansPage = () => {
         action={(
           <div className="flex gap-2">
             <button type="button" onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-60">
-              <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> Sync from Clubkonnect
+              <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> Sync Plans
             </button>
             <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
               <Plus size={18} /> Add Plan

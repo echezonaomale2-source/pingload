@@ -4,7 +4,7 @@ const ElectricityPlan = require('../models/ElectricityPlan');
 const TvPlan = require('../models/TvPlan');
 const EducationProduct = require('../models/EducationProduct');
 const serviceConfig = require('../config/serviceConfig');
-const clubkonnect = require('../services/clubkonnectService');
+const vtuProvider = require('../services/vtuProviderService');
 const assertServiceEnabled = require('../utils/assertServiceEnabled');
 const {
   executeVtuPurchase,
@@ -53,7 +53,7 @@ const buyAirtime = async (req, res, next) => {
       amount,
       description: `Airtime purchase: ₦${amount} for ${phone} (${network})`,
       metadata: { network, phone },
-      providerCall: (requestId) => clubkonnect.purchaseAirtime({ network, phone, amount, requestId }),
+      providerCall: (requestId) => vtuProvider.purchaseAirtime({ network, phone, amount, requestId }),
     });
 
     sendPurchaseResponse(res, result);
@@ -97,12 +97,13 @@ const fetchDataPlans = async (req, res, next) => {
     }
 
     // Fallback to Clubkonnect catalogue when no local plans are configured.
-    if (serviceConfig.clubkonnect.configured) {
+    const activeProvider = await vtuProvider.getActiveProviderName();
+    if (vtuProvider.isProviderConfigured(activeProvider)) {
       try {
-        const result = await clubkonnect.getDataPlans(network);
+        const result = await vtuProvider.getDataPlans(network);
         const variations = dedupeByCode(result.content?.variations || [], 'variation_code');
         if (variations.length > 0) {
-          return res.json({ success: true, data: variations, source: 'clubkonnect' });
+          return res.json({ success: true, data: variations, source: activeProvider });
         }
       } catch {
         // fall through
@@ -159,7 +160,7 @@ const buyData = async (req, res, next) => {
       amount: validatedAmount,
       description: `Data purchase for ${phone} (${network})`,
       metadata: { network, phone, variationCode },
-      providerCall: (requestId) => clubkonnect.purchaseData({ network, phone, variationCode, requestId }),
+      providerCall: (requestId) => vtuProvider.purchaseData({ network, phone, variationCode, requestId }),
     });
 
     sendPurchaseResponse(res, result);
@@ -216,7 +217,7 @@ const payElectricity = async (req, res, next) => {
         phone,
         providerServiceId: plan.providerServiceId || plan.vtpassServiceId,
       },
-      providerCall: (requestId) => clubkonnect.payElectricity({
+      providerCall: (requestId) => vtuProvider.payElectricity({
         provider: plan.providerId,
         serviceId: plan.providerServiceId || plan.vtpassServiceId,
         meterNumber,
@@ -245,10 +246,10 @@ const payElectricity = async (req, res, next) => {
 
 const verifyElectricityMeter = async (req, res, next) => {
   try {
-    clubkonnect.assertClubkonnectConfigured();
+    await vtuProvider.assertActiveProviderConfigured();
     const { provider, meterNumber, meterType } = req.body;
     const plan = await resolveElectricityProvider(provider);
-    const result = await clubkonnect.verifyElectricityMeter({
+    const result = await vtuProvider.verifyElectricityMeter({
       provider: plan.providerId,
       serviceId: plan.providerServiceId || plan.vtpassServiceId,
       meterNumber,
@@ -297,9 +298,10 @@ const fetchTVPackages = async (req, res, next) => {
       });
     }
 
-    if (serviceConfig.clubkonnect.configured) {
+    const activeProvider = await vtuProvider.getActiveProviderName();
+    if (vtuProvider.isProviderConfigured(activeProvider)) {
       try {
-        const result = await clubkonnect.getTVPackages(provider);
+        const result = await vtuProvider.getTVPackages(provider);
         const packages = dedupeByCode(
           (result.content?.variations || []).map((pkg) => ({
             code: pkg.variation_code,
@@ -309,7 +311,7 @@ const fetchTVPackages = async (req, res, next) => {
           'code'
         );
         if (packages.length > 0) {
-          return res.json({ success: true, data: packages, source: 'clubkonnect' });
+          return res.json({ success: true, data: packages, source: activeProvider });
         }
       } catch {
         // fall through
@@ -324,9 +326,9 @@ const fetchTVPackages = async (req, res, next) => {
 
 const verifyTVSmartcard = async (req, res, next) => {
   try {
-    clubkonnect.assertClubkonnectConfigured();
+    await vtuProvider.assertActiveProviderConfigured();
     const { provider, smartcardNumber } = req.body;
-    const result = await clubkonnect.verifyTVSmartcard({ provider, smartcardNumber });
+    const result = await vtuProvider.verifyTVSmartcard({ provider, smartcardNumber });
 
     res.json({
       success: true,
@@ -357,7 +359,7 @@ const payTV = async (req, res, next) => {
       amount: validatedAmount,
       description: `TV subscription: ${provider} for ${smartcardNumber}`,
       metadata: { provider, smartcardNumber, variationCode, phone },
-      providerCall: (requestId) => clubkonnect.payTV({
+      providerCall: (requestId) => vtuProvider.payTV({
         provider, smartcardNumber, variationCode, phone, requestId,
       }),
     });
@@ -424,8 +426,8 @@ const buyEducationPin = async (req, res, next) => {
       },
       applyPricing: true,
       pricingServiceId: 'education',
-      providerCall: (requestId) => clubkonnect.purchaseEducationPin({
-        providerServiceId: product.providerServiceId || product.vtpassServiceId,
+      providerCall: (requestId) => vtuProvider.purchaseEducationPin({
+        serviceId: product.providerServiceId || product.vtpassServiceId,
         variationCode: product.variationCode,
         quantity: qty,
         phone,
@@ -458,7 +460,7 @@ const fetchEducationProducts = async (req, res, next) => {
 
     const syncProduct = async (product) => product.toObject();
 
-    if (serviceConfig.clubkonnect.configured) {
+    if (vtuProvider.isProviderConfigured(await vtuProvider.getActiveProviderName())) {
       const synced = await Promise.all(allProducts.map(syncProduct));
       enabledProducts = synced.filter((product) => product.enabled);
     } else {
@@ -487,7 +489,7 @@ const fetchEducationProducts = async (req, res, next) => {
 
 const verifyBettingCustomer = async (req, res, next) => {
   try {
-    clubkonnect.assertClubkonnectConfigured();
+    await vtuProvider.assertActiveProviderConfigured();
     const { platform, customerId } = req.body;
     const bettingPlatform = await getPlatformById(platform);
     const providerServiceId = bettingPlatform?.providerServiceId || bettingPlatform?.vtpassServiceId;
@@ -495,7 +497,7 @@ const verifyBettingCustomer = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'This betting platform is not available' });
     }
 
-    const result = await clubkonnect.verifyBettingCustomer({
+    const result = await vtuProvider.verifyBettingCustomer({
       providerServiceId,
       platformId: bettingPlatform.platformId,
       customerId,
@@ -561,7 +563,7 @@ const fundBetting = async (req, res, next) => {
         phone,
       },
       applyPricing: false,
-      providerCall: (requestId) => clubkonnect.fundBettingWallet({
+      providerCall: (requestId) => vtuProvider.fundBettingWallet({
         providerServiceId,
         platformId: bettingPlatform.platformId,
         customerId,

@@ -1,8 +1,18 @@
 const BettingPlatform = require('../models/BettingPlatform');
+const SystemSettings = require('../models/SystemSettings');
 const catalog = require('../config/bettingPlatformCatalog');
 const { resolveBettingCompanyCode } = require('../config/clubkonnectMappings');
-const { logClubkonnect } = require('../utils/logger');
+const vtpass = require('./vtpassService');
+const { logClubkonnect, logVtpass } = require('../utils/logger');
 const serviceConfig = require('../config/serviceConfig');
+
+const normalizeText = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+const matchCatalogEntry = (service) => {
+  const haystack = normalizeText(`${service.serviceID || ''} ${service.name || ''}`);
+  return catalog.find((entry) =>
+    entry.patterns?.some((pattern) => haystack.includes(normalizeText(pattern))));
+};
 
 const applyEnvOverrides = async () => {
   const raw = process.env.BETTING_PROVIDER_SERVICE_IDS || process.env.BETTING_VTPASS_SERVICE_IDS;
@@ -24,6 +34,7 @@ const applyEnvOverrides = async () => {
       {
         $set: {
           providerServiceId: String(providerServiceId),
+          vtpassServiceId: String(providerServiceId),
           enabled: true,
           lastSyncedAt: new Date(),
         },
@@ -89,6 +100,7 @@ const syncBettingPlatformsFromClubkonnect = async () => {
         $set: {
           name: entry.name,
           providerServiceId,
+          vtpassServiceId: providerServiceId,
           minAmount: entry.minAmount,
           maxAmount: entry.maxAmount,
           enabled: true,
@@ -112,7 +124,116 @@ const syncBettingPlatformsFromClubkonnect = async () => {
   return {
     synced: discovered.length + envApplied.length,
     discovered: [...discovered, ...envApplied.map((item) => ({ ...item, source: 'env' }))],
+    source: 'clubkonnect',
   };
+};
+
+const syncBettingPlatformsFromVtpass = async () => {
+  await BettingPlatform.ensureDefaults();
+  const envApplied = await applyEnvOverrides();
+  if (!serviceConfig.vtpass.configured) {
+    return {
+      synced: envApplied.length,
+      discovered: envApplied,
+      reason: envApplied.length ? 'Loaded from BETTING_VTPASS_SERVICE_IDS' : 'VTpass is not configured',
+      source: 'vtpass',
+    };
+  }
+
+  let services = [];
+  try {
+    services = await vtpass.listAllServices();
+  } catch (error) {
+    logVtpass('error', 'Failed to list VTpass services for betting sync', { message: error.message });
+    return {
+      synced: envApplied.length,
+      discovered: envApplied,
+      reason: error.message,
+      source: 'vtpass',
+    };
+  }
+
+  const discovered = [];
+  const matchedPlatformIds = new Set(envApplied.map((item) => item.platformId));
+
+  for (const service of services) {
+    const entry = matchCatalogEntry(service);
+    if (!entry) continue;
+
+    matchedPlatformIds.add(entry.platformId);
+    discovered.push({
+      platformId: entry.platformId,
+      vtpassServiceId: service.serviceID,
+      name: service.name || entry.name,
+    });
+
+    await BettingPlatform.findOneAndUpdate(
+      { platformId: entry.platformId },
+      {
+        $set: {
+          name: service.name || entry.name,
+          vtpassServiceId: service.serviceID,
+          providerServiceId: service.serviceID,
+          minAmount: Number(service.minimium_amount || entry.minAmount) || entry.minAmount,
+          maxAmount: Number(service.maximum_amount || entry.maxAmount) || entry.maxAmount,
+          enabled: true,
+          lastSyncedAt: new Date(),
+        },
+      }
+    );
+  }
+
+  for (const entry of catalog) {
+    if (matchedPlatformIds.has(entry.platformId) || !entry.patterns?.length) continue;
+
+    const probe = await vtpass.probeBettingServiceId(entry.platformId);
+    if (!probe?.serviceID) continue;
+
+    matchedPlatformIds.add(entry.platformId);
+    discovered.push({
+      platformId: entry.platformId,
+      vtpassServiceId: probe.serviceID,
+      source: 'probe',
+    });
+
+    await BettingPlatform.findOneAndUpdate(
+      { platformId: entry.platformId },
+      {
+        $set: {
+          vtpassServiceId: probe.serviceID,
+          providerServiceId: probe.serviceID,
+          enabled: true,
+          lastSyncedAt: new Date(),
+        },
+      }
+    );
+  }
+
+  for (const item of envApplied) {
+    matchedPlatformIds.add(item.platformId);
+  }
+
+  await BettingPlatform.updateMany(
+    { platformId: { $nin: [...matchedPlatformIds] } },
+    { $set: { enabled: false } }
+  );
+
+  logVtpass('info', 'Betting platform sync completed', {
+    discoveredCount: discovered.length,
+    envOverrideCount: envApplied.length,
+  });
+
+  return {
+    synced: discovered.length + envApplied.length,
+    discovered: [...discovered, ...envApplied.map((item) => ({ ...item, source: 'env' }))],
+    source: 'vtpass',
+  };
+};
+
+const syncBettingPlatforms = async () => {
+  const settings = await SystemSettings.getSettings();
+  if (settings.vtuProvider === 'vtpass') return syncBettingPlatformsFromVtpass();
+  return syncBettingPlatformsFromClubkonnect();
 };
 
 module.exports = {
@@ -120,4 +241,6 @@ module.exports = {
   getPlatformById,
   mapPublicPlatform,
   syncBettingPlatformsFromClubkonnect,
+  syncBettingPlatformsFromVtpass,
+  syncBettingPlatforms,
 };

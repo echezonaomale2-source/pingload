@@ -35,7 +35,7 @@ const BettingPlatformsPage = () => {
     setSyncing(true);
     try {
       const res = await bettingPlatformsApi.sync();
-      dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} platform(s) from Clubkonnect`);
+      dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} platform(s)`);
       fetchPlatforms();
     } catch (err) {
       dialog.notifyError(getErrorMessage(err));
@@ -75,10 +75,10 @@ const BettingPlatformsPage = () => {
     <div>
       <PageHeader
         title="Betting Platforms"
-        subtitle="Clubkonnect betting wallet funding platforms"
+        subtitle="Betting wallet funding platforms (syncs from active VTU provider)"
         action={(
           <button type="button" onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">
-            <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> Sync from Clubkonnect
+            <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> Sync Platforms
           </button>
         )}
       />

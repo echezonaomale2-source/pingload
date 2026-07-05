@@ -11,7 +11,8 @@ const {
   listEnabledPlatforms,
   mapPublicPlatform,
 } = require('../services/bettingPlatformService');
-const clubkonnect = require('../services/clubkonnectService');
+const vtuProvider = require('../services/vtuProviderService');
+const serviceConfig = require('../config/serviceConfig');
 const serviceConfig = require('../config/serviceConfig');
 
 const isDuplicateKeyError = (error) => error?.code === 11000;
@@ -462,9 +463,10 @@ const adminEducationPurchases = async (req, res, next) => {
 
 const adminSyncDataPlansFromClubkonnect = async (req, res, next) => {
   try {
-    clubkonnect.assertClubkonnectConfigured();
+    const source = await vtuProvider.getActiveProviderName();
+    await vtuProvider.assertActiveProviderConfigured();
     const network = String(req.query.network || 'mtn').toLowerCase();
-    const result = await clubkonnect.getDataPlans(network);
+    const result = await vtuProvider.getDataPlans(network);
     const variations = result.content?.variations || [];
     let synced = 0;
 
@@ -488,7 +490,7 @@ const adminSyncDataPlansFromClubkonnect = async (req, res, next) => {
       synced += 1;
     }
 
-    res.json({ success: true, data: { synced, network, source: 'clubkonnect' } });
+    res.json({ success: true, data: { synced, network, source } });
   } catch (error) {
     next(error);
   }
@@ -496,9 +498,10 @@ const adminSyncDataPlansFromClubkonnect = async (req, res, next) => {
 
 const adminSyncTvPlansFromClubkonnect = async (req, res, next) => {
   try {
-    clubkonnect.assertClubkonnectConfigured();
+    const source = await vtuProvider.getActiveProviderName();
+    await vtuProvider.assertActiveProviderConfigured();
     const provider = String(req.query.provider || 'dstv').toLowerCase();
-    const result = await clubkonnect.getTVPackages(provider);
+    const result = await vtuProvider.getTVPackages(provider);
     const variations = result.content?.variations || [];
     let synced = 0;
 
@@ -520,7 +523,7 @@ const adminSyncTvPlansFromClubkonnect = async (req, res, next) => {
       synced += 1;
     }
 
-    res.json({ success: true, data: { synced, provider, source: 'clubkonnect' } });
+    res.json({ success: true, data: { synced, provider, source } });
   } catch (error) {
     next(error);
   }
