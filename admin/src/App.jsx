@@ -29,7 +29,6 @@ import ElectricityPlansPage from './pages/ElectricityPlans';
 import TvPlansPage from './pages/TvPlans';
 import RevenuePage from './pages/Revenue';
 import SecurityEventsPage from './pages/SecurityEvents';
-import ProviderLogosPage from './pages/ProviderLogos';
 
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -57,7 +56,6 @@ const AppRoutes = () => (
       <Route path="tv-plans" element={<TvPlansPage />} />
       <Route path="revenue" element={<RevenuePage />} />
       <Route path="security-events" element={<SecurityEventsPage />} />
-      <Route path="provider-logos" element={<ProviderLogosPage />} />
       <Route path="kyc" element={<KycPage />} />
       <Route path="faq" element={<FaqPage />} />
       <Route path="notifications" element={<NotificationsPage />} />

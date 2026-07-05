@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  DollarSign, TrendingUp, Calendar, Wallet, PieChart as PieIcon,
+  DollarSign, TrendingUp, Calendar, Wallet, PieChart as PieIcon, ArrowLeftRight,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -44,32 +44,34 @@ const RevenuePage = () => {
     count: row.count,
   }));
 
+  const fmtCount = (n) => Number(n || 0).toLocaleString();
+
   return (
     <div>
       <PageHeader
-        title="Revenue Dashboard"
-        subtitle="Revenue, commission, and service breakdown"
+        title="Transactions Dashboard"
+        subtitle="Transaction volume, commission, and service breakdown"
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard title="Total Revenue" value={formatCurrency(totals.totalRevenue)} icon={DollarSign} color="success" />
+        <StatCard title="Total Transactions" value={fmtCount(totals.totalTransactions)} icon={ArrowLeftRight} color="success" />
         <StatCard title="Total Commission" value={formatCurrency(totals.totalCommission)} icon={Wallet} color="purple" />
-        <StatCard title="Revenue Today" value={formatCurrency(totals.revenueToday)} icon={Calendar} color="primary" />
-        <StatCard title="Revenue This Week" value={formatCurrency(totals.revenueWeek)} icon={TrendingUp} color="secondary" />
-        <StatCard title="Revenue This Month" value={formatCurrency(totals.revenueMonth)} icon={PieIcon} color="warning" />
-        <StatCard title="Revenue This Year" value={formatCurrency(totals.revenueYear)} icon={DollarSign} color="success" />
+        <StatCard title="Transactions Today" value={fmtCount(totals.transactionsToday)} icon={Calendar} color="primary" />
+        <StatCard title="Transactions This Week" value={fmtCount(totals.transactionsWeek)} icon={TrendingUp} color="secondary" />
+        <StatCard title="Transactions This Month" value={fmtCount(totals.transactionsMonth)} icon={PieIcon} color="warning" />
+        <StatCard title="Transactions This Year" value={fmtCount(totals.transactionsYear)} icon={DollarSign} color="success" />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-4 text-sm font-bold text-slate-700">Monthly Revenue Trend</h3>
+          <h3 className="mb-4 text-sm font-bold text-slate-700">Monthly Transaction Trend</h3>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={monthlyTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis dataKey="month" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v) => formatCurrency(v)} />
-              <Area type="monotone" dataKey="revenue" stroke="#2563EB" fill="#2563EB33" strokeWidth={2} />
+              <Tooltip />
+              <Area type="monotone" dataKey="transactions" stroke="#2563EB" fill="#2563EB33" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
