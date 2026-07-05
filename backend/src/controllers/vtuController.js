@@ -481,6 +481,37 @@ const fetchEducationProducts = async (req, res, next) => {
   }
 };
 
+const verifyBettingCustomer = async (req, res, next) => {
+  try {
+    vtpass.assertVtpassConfigured();
+    const { platform, customerId } = req.body;
+    const bettingPlatform = await getPlatformById(platform);
+    if (!bettingPlatform?.vtpassServiceId) {
+      return res.status(400).json({ success: false, message: 'This betting platform is not available' });
+    }
+
+    const result = await vtpass.verifyBettingCustomer({
+      vtpassServiceId: bettingPlatform.vtpassServiceId,
+      customerId,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        customerName: result.content?.Customer_Name || result.content?.customerName,
+        customerId,
+        platformName: bettingPlatform.name,
+        raw: result.content,
+      },
+    });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
+};
+
 const fundBetting = async (req, res, next) => {
   try {
     await assertServiceEnabled('betting');
@@ -607,6 +638,11 @@ const tvVerifyValidation = [
   body('smartcardNumber').trim().notEmpty().withMessage('Smartcard number is required'),
 ];
 
+const bettingVerifyValidation = [
+  body('platform').trim().notEmpty().withMessage('Betting platform is required'),
+  body('customerId').trim().notEmpty().withMessage('Customer ID is required'),
+];
+
 const bettingValidation = [
   body('platform').trim().notEmpty().withMessage('Betting platform is required'),
   body('customerId').trim().notEmpty().withMessage('Customer ID is required'),
@@ -632,6 +668,7 @@ module.exports = {
   payTV,
   buyEducationPin,
   fetchEducationProducts,
+  verifyBettingCustomer,
   fundBetting,
   airtimeValidation,
   dataValidation,
@@ -640,5 +677,6 @@ module.exports = {
   tvValidation,
   tvVerifyValidation,
   educationValidation,
+  bettingVerifyValidation,
   bettingValidation,
 };

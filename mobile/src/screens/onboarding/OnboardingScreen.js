@@ -7,6 +7,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { ONBOARDING_SLIDES } from '../../utils/constants';
 import CustomButton from '../../components/CustomButton';
 import { requestPushPermissionDuringOnboarding } from '../../services/pushNotificationService';
+import { ONBOARDING_SEEN_KEY } from '../../navigation/AuthNavigator';
+import * as SecureStore from 'expo-secure-store';
 
 const { width } = Dimensions.get('window');
 
@@ -27,6 +29,7 @@ const OnboardingScreen = ({ navigation }) => {
       // User can still use the app without push notifications.
     } finally {
       setRequestingPermission(false);
+      await SecureStore.setItemAsync(ONBOARDING_SEEN_KEY, '1');
       navigation.replace('Login');
     }
   };

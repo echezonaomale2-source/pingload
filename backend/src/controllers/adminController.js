@@ -375,15 +375,36 @@ const getWalletHistory = async (req, res, next) => {
     const pagination = parsePagination({ page, limit });
     const filter = { service: { $in: ['admin_credit', 'admin_debit', 'wallet_funding'] } };
 
-    const transactions = await Transaction.find(filter)
-      .populate('userId', 'fullName')
-      .sort({ createdAt: -1 })
-      .skip(pagination.skip)
-      .limit(pagination.limit);
+    const regex = buildSafeRegex(search);
+    if (regex) {
+      const users = await User.find({ fullName: regex }).select('_id');
+      const userIds = users.map((u) => u._id);
+      if (userIds.length) {
+        filter.userId = { $in: userIds };
+      } else {
+        return res.json({
+          success: true,
+          data: [],
+          pagination: {
+            page: pagination.page,
+            limit: pagination.limit,
+            total: 0,
+            pages: 0,
+          },
+        });
+      }
+    }
 
-    const total = await Transaction.countDocuments(filter);
+    const [transactions, total] = await Promise.all([
+      Transaction.find(filter)
+        .populate('userId', 'fullName')
+        .sort({ createdAt: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit),
+      Transaction.countDocuments(filter),
+    ]);
 
-    let data = transactions.map((t) => ({
+    const data = transactions.map((t) => ({
       id: t._id,
       userId: t.userId?._id,
       userName: t.userId?.fullName || 'Unknown',
@@ -393,11 +414,6 @@ const getWalletHistory = async (req, res, next) => {
       note: t.description,
       createdAt: t.createdAt,
     }));
-
-    if (search) {
-      const q = search.toLowerCase();
-      data = data.filter((d) => d.userName.toLowerCase().includes(q) || String(d.id).includes(q));
-    }
 
     res.json({
       success: true,

@@ -5,8 +5,9 @@ import { walletService } from '../services/walletService';
 import { isBiometricEnabledLocally } from '../services/biometricService';
 import { hasLoginPin, setLoginPin, clearLoginPin } from '../services/loginPinService';
 import { syncDeviceTokenWithBackend, updateAppBadgeCount } from '../services/pushNotificationService';
-import { unregisterPushOnLogout } from '../hooks/usePushNotifications';
+import { unregisterPushOnLogout, flushPendingNotificationNavigation } from '../hooks/usePushNotifications';
 import { clearPendingNotificationNav } from '../utils/pendingNotificationNav';
+import { onAppLocked } from '../utils/appLockEvents';
 
 const BOOTSTRAP_TIMEOUT_MS = 12000;
 
@@ -33,6 +34,7 @@ export const AuthProvider = ({ children }) => {
     setNeedsLoginPinSetup(false);
     setIsAuthenticated(true);
     syncDeviceTokenWithBackend().catch(() => {});
+    flushPendingNotificationNavigation().catch(() => {});
   }, []);
 
   const resolveUnlockGate = useCallback(async (userData) => {
@@ -129,6 +131,15 @@ export const AuthProvider = ({ children }) => {
     loadUser().finally(() => clearTimeout(watchdog));
     return () => clearTimeout(watchdog);
   }, [loadUser]);
+
+  useEffect(() => {
+    return onAppLocked(() => {
+      setIsAuthenticated(false);
+      if (user) {
+        resolveUnlockGate(user);
+      }
+    });
+  }, [user, resolveUnlockGate]);
 
   const completeSession = async (userData, token, initialBalance = null, { isNewAccount = false } = {}) => {
     await SecureStore.setItemAsync('token', token);

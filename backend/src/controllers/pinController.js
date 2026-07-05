@@ -1,6 +1,14 @@
 const { body } = require('express-validator');
 const User = require('../models/User');
 const verifyTransactionPin = require('../utils/verifyTransactionPin');
+const { developmentMode } = require('../config/env');
+const {
+  sendOTP,
+  verifyOTP,
+  clearEmailVerification,
+  OTP_PURPOSES,
+} = require('../services/termiiService');
+const { recordSecurityEvent } = require('../services/securityEventService');
 
 const pinValidation = [
   body('pin').matches(/^\d{4}$/).withMessage('PIN must be exactly 4 digits'),
@@ -8,6 +16,11 @@ const pinValidation = [
 
 const changePinValidation = [
   body('currentPin').matches(/^\d{4}$/).withMessage('Current PIN must be 4 digits'),
+  body('newPin').matches(/^\d{4}$/).withMessage('New PIN must be 4 digits'),
+];
+
+const resetWithOtpValidation = [
+  body('otp').optional().isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
   body('newPin').matches(/^\d{4}$/).withMessage('New PIN must be 4 digits'),
 ];
 
@@ -89,11 +102,90 @@ const verifyPin = async (req, res, next) => {
   }
 };
 
+const forgotTransactionPin = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('email phoneNumber hasTransactionPin');
+    if (!user?.hasTransactionPin) {
+      return res.status(400).json({ success: false, message: 'No transaction PIN set. Create one instead.' });
+    }
+
+    const result = await sendOTP({
+      email: user.email,
+      phone: user.phoneNumber,
+      purpose: OTP_PURPOSES.TRANSACTION_PIN_RESET,
+    });
+
+    res.json({
+      success: true,
+      message: result.message,
+      data: {
+        channel: result.channel,
+        expiresInSeconds: result.expiresInSeconds,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const resetTransactionPinWithOtp = async (req, res, next) => {
+  try {
+    const { otp, newPin } = req.body;
+    const user = await User.findById(req.user._id).select('+transactionPin email phoneNumber hasTransactionPin');
+
+    if (!user?.hasTransactionPin) {
+      return res.status(400).json({ success: false, message: 'No transaction PIN set. Create one instead.' });
+    }
+
+    if (!developmentMode) {
+      if (!otp) {
+        return res.status(400).json({ success: false, message: 'OTP code is required' });
+      }
+
+      const result = await verifyOTP({
+        email: user.email,
+        phone: user.phoneNumber,
+        code: otp,
+        purpose: OTP_PURPOSES.TRANSACTION_PIN_RESET,
+      });
+
+      if (!result.success) {
+        return res.status(400).json({ success: false, message: result.message });
+      }
+    }
+
+    user.transactionPin = newPin;
+    user.transactionPinFailedAttempts = 0;
+    user.transactionPinLockedUntil = null;
+    await user.save();
+
+    clearEmailVerification(user.email, OTP_PURPOSES.TRANSACTION_PIN_RESET);
+
+    await recordSecurityEvent({
+      userId: user._id,
+      eventType: 'transaction_pin_reset',
+      severity: 'medium',
+      message: 'Transaction PIN reset via OTP',
+      req,
+    });
+
+    res.json({ success: true, message: 'Transaction PIN reset successfully' });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
+};
+
 module.exports = {
   pinValidation,
   changePinValidation,
+  resetWithOtpValidation,
   getPinStatus,
   createPin,
   changePin,
   verifyPin,
+  forgotTransactionPin,
+  resetTransactionPinWithOtp,
 };

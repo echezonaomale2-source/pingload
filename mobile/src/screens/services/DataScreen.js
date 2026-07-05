@@ -7,7 +7,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { NETWORKS } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatters';
 import { handleVtuPurchaseError, handleVtuPurchaseResult } from '../../utils/vtuHelpers';
-import { detectNetworkFromPhone, NETWORK_LABELS } from '../../utils/networkDetection';
+import { detectNetworkFromPhone, NETWORK_LABELS, normalizePhone } from '../../utils/networkDetection';
 import NetworkSelector from '../../components/NetworkSelector';
 import FormInput from '../../components/FormInput';
 import CustomButton from '../../components/CustomButton';
@@ -80,14 +80,15 @@ const DataScreen = ({ navigation }) => {
   };
 
   const handlePhoneChange = useCallback((value) => {
-    setPhone(value);
-    const detected = detectNetworkFromPhone(value);
+    const normalized = normalizePhone(value);
+    setPhone(normalized);
+    const detected = detectNetworkFromPhone(normalized);
     if (detected) {
       setNetworkHint(`Detected: ${NETWORK_LABELS[detected] || detected}`);
       if (!network || network !== detected) {
         fetchPlans(detected);
       }
-    } else if (value.replace(/\D/g, '').length >= 4) {
+    } else if (normalized.replace(/\D/g, '').length >= 4) {
       setNetworkHint('Could not detect network — please select manually.');
     } else {
       setNetworkHint('');
@@ -118,7 +119,7 @@ const DataScreen = ({ navigation }) => {
     try {
       const response = await vtuService.buyData({
         network,
-        phone,
+        phone: normalizePhone(phone),
         variationCode: selectedPlan.variation_code,
         amount: parseFloat(selectedPlan.variation_amount),
         pin,

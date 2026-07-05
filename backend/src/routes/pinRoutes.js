@@ -7,8 +7,11 @@ const {
   createPin,
   changePin,
   verifyPin,
+  forgotTransactionPin,
+  resetTransactionPinWithOtp,
   pinValidation,
   changePinValidation,
+  resetWithOtpValidation,
 } = require('../controllers/pinController');
 
 const router = express.Router();
@@ -16,6 +19,8 @@ const router = express.Router();
 router.get('/status', protect, getPinStatus);
 router.post('/create', protect, authLimiter, pinValidation, validate, createPin);
 router.put('/change', protect, authLimiter, changePinValidation, validate, changePin);
+router.post('/forgot', protect, authLimiter, forgotTransactionPin);
+router.post('/reset-with-otp', protect, authLimiter, resetWithOtpValidation, validate, resetTransactionPinWithOtp);
 router.post('/verify', protect, authLimiter, pinValidation, validate, verifyPin);
 
 module.exports = router;

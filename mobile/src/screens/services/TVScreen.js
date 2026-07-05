@@ -87,6 +87,10 @@ const TVScreen = ({ navigation }) => {
       dialog.alertError('Missing Details', 'Please fill in all fields');
       return;
     }
+    if (!customerName) {
+      dialog.alertError('Verify Required', 'Please verify your smartcard before paying');
+      return;
+    }
     setShowPin(true);
   };
 

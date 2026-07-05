@@ -1,5 +1,6 @@
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
+import './src/bootstrap/fcmBootstrap';
 import React, { useState, useCallback, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
@@ -42,8 +43,12 @@ const queryClient = new QueryClient({
 });
 
 const PushNotificationBridge = () => {
-  const { isAuthenticated } = useAuth();
-  usePushNotifications(isAuthenticated);
+  const { isAuthenticated, user, isBootstrapping } = useAuth();
+  usePushNotifications({
+    enableListeners: isAuthenticated,
+    enableTokenSync: Boolean(user) && !isBootstrapping,
+    enableFcmHandlers: Boolean(user) && !isBootstrapping,
+  });
   return null;
 };
 
@@ -82,6 +87,7 @@ const RootNavigator = () => {
   if (!splashDone) {
     return (
       <PaperProvider theme={paperTheme}>
+        <PushNotificationBridge />
         <SplashScreen onFinish={handleSplashFinish} bootstrapDone={!isBootstrapping} />
         <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={statusBarBg} />
       </PaperProvider>
@@ -91,6 +97,7 @@ const RootNavigator = () => {
   if (needsLoginPinSetup) {
     return (
       <PaperProvider theme={paperTheme}>
+        <PushNotificationBridge />
         <LoginPinSetupScreen />
         <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={statusBarBg} />
       </PaperProvider>
@@ -100,6 +107,7 @@ const RootNavigator = () => {
   if (awaitingUnlock === 'biometric') {
     return (
       <PaperProvider theme={paperTheme}>
+        <PushNotificationBridge />
         <BiometricUnlockScreen />
         <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={statusBarBg} />
       </PaperProvider>
@@ -109,6 +117,7 @@ const RootNavigator = () => {
   if (awaitingUnlock === 'pin') {
     return (
       <PaperProvider theme={paperTheme}>
+        <PushNotificationBridge />
         <LoginPinUnlockScreen />
         <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={statusBarBg} />
       </PaperProvider>

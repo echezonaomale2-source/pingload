@@ -1,8 +1,10 @@
 import Pagination from './Pagination';
 
-const DataTable = ({ columns, data, onRowClick, page = 1, pageSize = 8, onPageChange }) => {
-  const totalPages = Math.ceil(data.length / pageSize);
-  const paginated = data.slice((page - 1) * pageSize, page * pageSize);
+const DataTable = ({ columns, data, onRowClick, page = 1, pageSize = 8, onPageChange, totalPages: serverTotalPages, serverPaginated = false }) => {
+  const totalPages = serverPaginated
+    ? Math.max(1, serverTotalPages || 1)
+    : Math.max(1, Math.ceil(data.length / pageSize));
+  const paginated = serverPaginated ? data : data.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/80 dark:bg-slate-800">

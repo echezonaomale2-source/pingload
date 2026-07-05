@@ -12,6 +12,7 @@ const securityEventSchema = new mongoose.Schema(
         'login_failed',
         'password_reset',
         'password_changed',
+        'transaction_pin_reset',
         'otp_failed',
         'device_changed',
         'suspicious_activity',

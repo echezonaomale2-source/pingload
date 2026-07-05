@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import PinPad from '../../components/PinPad';
 import { useTheme } from '../../context/ThemeContext';
 import { useDialog } from '../../hooks/useDialog';
+import { authService } from '../../services/authService';
 import { setLoginPin } from '../../services/loginPinService';
 
 const ChangeLoginPinScreen = ({ navigation }) => {
@@ -44,6 +45,7 @@ const ChangeLoginPinScreen = ({ navigation }) => {
 
     setSaving(true);
     try {
+      await authService.setupLoginPin(next);
       await setLoginPin(next);
       dialog.showSuccess({
         title: 'Login PIN Updated',

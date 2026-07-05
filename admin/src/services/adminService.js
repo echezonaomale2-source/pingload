@@ -71,6 +71,20 @@ export const tvPlansApi = {
   delete: (id) => api.delete(`/admin/tv-plans/${id}`),
 };
 
+export const educationProductsApi = {
+  list: (params) => api.get('/admin/education-products', { params }),
+  create: (data) => api.post('/admin/education-products', data),
+  update: (id, data) => api.patch(`/admin/education-products/${id}`, data),
+  delete: (id) => api.delete(`/admin/education-products/${id}`),
+  purchases: (params) => api.get('/admin/education/purchases', { params }),
+};
+
+export const bettingPlatformsApi = {
+  list: () => api.get('/admin/betting-platforms'),
+  update: (id, data) => api.patch(`/admin/betting-platforms/${id}`, data),
+  sync: () => api.post('/admin/betting-platforms/sync'),
+};
+
 export const kycApi = {
   list: (params) => api.get('/admin/kyc', { params }),
   get: (id) => api.get(`/admin/kyc/${id}`),

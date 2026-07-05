@@ -68,6 +68,11 @@ const TransactionPinScreen = ({ navigation }) => {
       {hasPin && (
         <FormInput label="Current PIN" value={currentPin} onChangeText={(v) => setCurrentPin(v.replace(/\D/g, '').slice(0, 4))} keyboardType="number-pad" secureTextEntry maxLength={4} />
       )}
+      {hasPin && (
+        <TouchableOpacity onPress={() => navigation.navigate('ForgotTransactionPin')} style={styles.forgotBtn}>
+          <Text style={styles.forgotText}>Forgot transaction PIN?</Text>
+        </TouchableOpacity>
+      )}
       <FormInput label="New PIN" value={pin} onChangeText={(v) => setPin(v.replace(/\D/g, '').slice(0, 4))} keyboardType="number-pad" secureTextEntry maxLength={4} />
       <FormInput label="Confirm PIN" value={confirmPin} onChangeText={(v) => setConfirmPin(v.replace(/\D/g, '').slice(0, 4))} keyboardType="number-pad" secureTextEntry maxLength={4} />
 
@@ -81,6 +86,8 @@ const createStyles = (colors) => StyleSheet.create({
   backBtn: { marginBottom: 16 },
   title: { fontSize: 28, fontWeight: '800', color: colors.text },
   subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 8, marginBottom: 24 },
+  forgotBtn: { alignSelf: 'flex-end', marginBottom: 16, marginTop: -8 },
+  forgotText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
 });
 
 export default TransactionPinScreen;

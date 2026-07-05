@@ -4,6 +4,8 @@ import { PageHeader, SearchBar, DataTable, Badge, PageLoader, ErrorAlert } from 
 import { refundsApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency, formatDate, SERVICE_LABELS } from '../utils/formatters';
 
+const PAGE_SIZE = 10;
+
 const RefundsPage = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -11,13 +13,17 @@ const RefundsPage = () => {
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
   const [refunds, setRefunds] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const fetchRefunds = useCallback(() => {
     setLoading(true);
-    refundsApi.list({ search, startDate, endDate, page, limit: 10 })
-      .then((res) => setRefunds(res.data.data))
+    refundsApi.list({ search, startDate, endDate, page, limit: PAGE_SIZE })
+      .then((res) => {
+        setRefunds(res.data.data);
+        setTotal(res.data.pagination?.total || 0);
+      })
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
   }, [search, startDate, endDate, page]);
@@ -93,6 +99,9 @@ const RefundsPage = () => {
           columns={columns}
           data={refunds}
           page={page}
+          pageSize={PAGE_SIZE}
+          totalPages={Math.ceil(total / PAGE_SIZE)}
+          serverPaginated
           onPageChange={setPage}
           onRowClick={(row) => navigate(`/refunds/${row.id}`)}
         />

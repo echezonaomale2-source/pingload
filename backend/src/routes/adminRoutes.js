@@ -73,6 +73,11 @@ const {
   adminDeleteProviderLogo,
 } = require('../controllers/providerLogoController');
 const { getRefunds, getRefundById } = require('../controllers/refundController');
+const {
+  adminListBettingPlatforms,
+  adminUpdateBettingPlatform,
+  adminSyncBettingPlatforms,
+} = require('../controllers/bettingPlatformAdminController');
 const { protectAdmin } = require('../middleware/adminAuth');
 const { adminAuthLimiter } = require('../middleware/rateLimiter');
 const validate = require('../middleware/validate');
@@ -148,6 +153,10 @@ router.post('/education-products', protectAdmin, educationProductValidation, val
 router.patch('/education-products/:id', protectAdmin, adminUpdateEducationProduct);
 router.delete('/education-products/:id', protectAdmin, adminDeleteEducationProduct);
 router.get('/education/purchases', protectAdmin, adminEducationPurchases);
+
+router.get('/betting-platforms', protectAdmin, adminListBettingPlatforms);
+router.patch('/betting-platforms/:id', protectAdmin, adminUpdateBettingPlatform);
+router.post('/betting-platforms/sync', protectAdmin, adminSyncBettingPlatforms);
 
 router.get('/kyc', protectAdmin, adminListKyc);
 router.get('/kyc/:id', protectAdmin, adminGetKyc);

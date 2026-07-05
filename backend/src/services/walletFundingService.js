@@ -7,6 +7,7 @@ const generateReference = require('../utils/generateReference');
 const { buildPaystackCallbackUrl } = require('../utils/paystackUrls');
 const { paystack, frontendUrl } = require('../config/env');
 const { logWallet } = require('../utils/logger');
+const { tryCreditReferralBonus } = require('./referralService');
 
 const assertPaystackConfigured = () => {
   if (!paystack.secretKey) {
@@ -192,6 +193,10 @@ const creditWalletFromFunding = async ({
     verifiedVia,
     service: 'wallet_funding',
   });
+
+  if (!result.alreadyProcessed) {
+    tryCreditReferralBonus(result.transaction.userId).catch(() => {});
+  }
 
   return result;
 };

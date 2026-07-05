@@ -95,7 +95,7 @@ const createDebitWithAtomicWallet = async ({
   const run = async (session) => {
     await atomicWalletDebit({ userId, amount, session });
 
-    const createOptions = session ? { session } : {};
+    const createOptions = session ? { session, ordered: true } : {};
     const created = await Transaction.create([{
       userId,
       transactionType: 'debit',
@@ -125,7 +125,7 @@ const createTransferWithAtomicWallet = async ({
     await atomicWalletDebit({ userId: senderUser._id, amount, session });
     await atomicWalletCredit({ userId: recipientUser._id, amount, session });
 
-    const createOptions = session ? { session } : {};
+    const createOptions = session ? { session, ordered: true } : {};
     const [debitTx, creditTx] = await Transaction.create([
       {
         userId: senderUser._id,
@@ -170,7 +170,7 @@ const createAdminAdjustmentWithAtomicWallet = async ({
       await atomicWalletDebit({ userId, amount, session });
     }
 
-    const createOptions = session ? { session } : {};
+    const createOptions = session ? { session, ordered: true } : {};
     const created = await Transaction.create([{
       userId,
       transactionType: type,
@@ -225,7 +225,7 @@ const createRefundWithAtomicWallet = async ({
     });
 
     const refundedAt = new Date();
-    const createOptions = session ? { session } : {};
+    const createOptions = session ? { session, ordered: true } : {};
     const created = await Transaction.create([{
       userId: originalTransaction.userId,
       transactionType: 'refund',

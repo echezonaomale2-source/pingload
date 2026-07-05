@@ -15,6 +15,7 @@ const upstreamMessage = (error, fallback) => {
 const OTP_PURPOSES = {
   REGISTRATION: 'registration',
   PASSWORD_RESET: 'password_reset',
+  TRANSACTION_PIN_RESET: 'transaction_pin_reset',
 };
 
 const OTP_EXPIRY_MS = 90 * 1000;
@@ -106,7 +107,9 @@ const sendEmailOtp = async (email, purpose) => {
   const otp = generateOtp();
   const messageText = purpose === OTP_PURPOSES.PASSWORD_RESET
     ? 'Your Pingload password reset code is <CODE>. Valid for 90 seconds.'
-    : 'Your Pingload verification code is <CODE>. Valid for 90 seconds.';
+    : purpose === OTP_PURPOSES.TRANSACTION_PIN_RESET
+      ? 'Your Pingload transaction PIN reset code is <CODE>. Valid for 90 seconds.'
+      : 'Your Pingload verification code is <CODE>. Valid for 90 seconds.';
 
   if (termii.emailConfigurationId) {
     await axios.post(`${termii.baseUrl}/email/otp/send`, {

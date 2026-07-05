@@ -5,4 +5,6 @@ export const pinService = {
   create: (pin) => api.post('/pin/create', { pin }),
   change: (currentPin, newPin) => api.put('/pin/change', { currentPin, newPin }),
   verify: (pin) => api.post('/pin/verify', { pin }),
+  forgotPin: () => api.post('/pin/forgot'),
+  resetWithOtp: (otp, newPin) => api.post('/pin/reset-with-otp', { otp, newPin }),
 };

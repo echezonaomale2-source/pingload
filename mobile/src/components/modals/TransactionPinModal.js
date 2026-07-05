@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TextInput } from 'react-native';
+import { View, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import ModalShell from './ModalShell';
@@ -13,6 +13,7 @@ const TransactionPinModal = ({
   title = 'Enter Transaction PIN',
   subtitle = 'Enter your 4-digit PIN to authorize this transaction',
   loading = false,
+  onForgotPin,
 }) => {
   const [pin, setPin] = useState('');
   const inputRef = useRef(null);
@@ -57,6 +58,12 @@ const TransactionPinModal = ({
         ))}
       </View>
 
+      {onForgotPin ? (
+        <TouchableOpacity onPress={onForgotPin} style={styles.forgotBtn}>
+          <Text style={styles.forgotText}>Forgot PIN?</Text>
+        </TouchableOpacity>
+      ) : null}
+
       <ModalButtonRow>
         <ModalButton title="Cancel" onPress={onClose} variant="cancel" />
         <ModalButton
@@ -81,6 +88,8 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 18, marginBottom: 8 },
   dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: brand.grayBorder },
   dotFilled: { backgroundColor: brand.blue, borderColor: brand.blue },
+  forgotBtn: { alignSelf: 'center', marginBottom: 12 },
+  forgotText: { color: brand.blue, fontSize: 13, fontWeight: '700' },
 });
 
 export default TransactionPinModal;

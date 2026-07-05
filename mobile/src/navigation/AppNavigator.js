@@ -19,6 +19,7 @@ import ChangePasswordScreen from '../screens/profile/ChangePasswordScreen';
 import SettingsScreen from '../screens/profile/SettingsScreen';
 import SecurityScreen from '../screens/profile/SecurityScreen';
 import TransactionPinScreen from '../screens/profile/TransactionPinScreen';
+import ForgotTransactionPinScreen from '../screens/profile/ForgotTransactionPinScreen';
 import KycScreen from '../screens/profile/KycScreen';
 import FaqScreen from '../screens/support/FaqScreen';
 import TransferScreen from '../screens/wallet/TransferScreen';
@@ -46,6 +47,7 @@ const AppNavigator = () => (
     <Stack.Screen name="Settings" component={SettingsScreen} />
     <Stack.Screen name="Security" component={SecurityScreen} />
     <Stack.Screen name="TransactionPin" component={TransactionPinScreen} />
+    <Stack.Screen name="ForgotTransactionPin" component={ForgotTransactionPinScreen} />
     <Stack.Screen name="KYC" component={KycScreen} />
     <Stack.Screen name="FAQ" component={FaqScreen} />
     <Stack.Screen name="Transfer" component={TransferScreen} />

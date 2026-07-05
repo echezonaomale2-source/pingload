@@ -7,6 +7,8 @@ import { formatCurrency, formatDate, SERVICE_LABELS } from '../utils/formatters'
 const SERVICES_FILTER = ['all', 'airtime', 'data', 'electricity', 'tv', 'betting', 'education', 'wallet_funding', 'admin_credit', 'admin_debit'];
 const STATUS_FILTER = ['all', 'successful', 'pending', 'failed'];
 
+const PAGE_SIZE = 8;
+
 const TransactionsPage = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -14,13 +16,17 @@ const TransactionsPage = () => {
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
   const [transactions, setTransactions] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const fetchTx = useCallback(() => {
     setLoading(true);
-    transactionsApi.list({ search, service, status, page, limit: 8 })
-      .then((res) => setTransactions(res.data.data))
+    transactionsApi.list({ search, service, status, page, limit: PAGE_SIZE })
+      .then((res) => {
+        setTransactions(res.data.data);
+        setTotal(res.data.pagination?.total || 0);
+      })
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
   }, [search, service, status, page]);
@@ -53,7 +59,16 @@ const TransactionsPage = () => {
       </div>
 
       {loading ? <PageLoader /> : (
-        <DataTable columns={columns} data={transactions} page={page} onPageChange={setPage} onRowClick={(row) => navigate(`/transactions/${row.id}`)} />
+        <DataTable
+          columns={columns}
+          data={transactions}
+          page={page}
+          pageSize={PAGE_SIZE}
+          totalPages={Math.ceil(total / PAGE_SIZE)}
+          serverPaginated
+          onPageChange={setPage}
+          onRowClick={(row) => navigate(`/transactions/${row.id}`)}
+        />
       )}
     </div>
   );

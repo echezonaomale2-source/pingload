@@ -10,6 +10,7 @@ const {
   payTV,
   buyEducationPin,
   fetchEducationProducts,
+  verifyBettingCustomer,
   fundBetting,
   airtimeValidation,
   dataValidation,
@@ -18,6 +19,7 @@ const {
   tvValidation,
   tvVerifyValidation,
   educationValidation,
+  bettingVerifyValidation,
   bettingValidation,
 } = require('../controllers/vtuController');
 const validate = require('../middleware/validate');
@@ -42,6 +44,7 @@ router.post('/tv/verify', tvVerifyValidation, validate, verifyTVSmartcard);
 router.post('/tv', idempotency('vtu:tv'), tvValidation, validate, payTV);
 router.post('/education', idempotency('vtu:education'), educationValidation, validate, buyEducationPin);
 router.get('/education-products', fetchEducationProducts);
+router.post('/betting/verify', bettingVerifyValidation, validate, verifyBettingCustomer);
 router.post('/betting', idempotency('vtu:betting'), bettingValidation, validate, fundBetting);
 
 module.exports = router;

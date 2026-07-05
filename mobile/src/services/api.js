@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../utils/constants';
 import { getLoadingMessage } from '../utils/loadingMessages';
 import { showGlobalLoader, hideGlobalLoader } from '../utils/loadingService';
 import { isOnline } from '../utils/networkStatus';
+import { emitAppLocked } from '../utils/appLockEvents';
 
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -85,7 +86,9 @@ api.interceptors.response.use(
       const isPinError = /transaction pin|incorrect pin|current pin/.test(message);
       const isAuthFailure = /not authorized|token invalid|session expired|invalid token|user not found|user access required|unlock the app/i.test(message);
       const isAppLocked = error.response?.data?.code === 'APP_LOCKED';
-      if (!isPinError && !isAppLocked && isAuthFailure) {
+      if (isAppLocked) {
+        emitAppLocked();
+      } else if (!isPinError && isAuthFailure) {
         await SecureStore.deleteItemAsync('token');
       }
     }

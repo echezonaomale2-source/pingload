@@ -8,10 +8,12 @@ import { useTheme } from '../../context/ThemeContext';
 import { formatDate } from '../../utils/formatters';
 import { notificationService } from '../../services/transactionService';
 import { updateAppBadgeCount } from '../../services/pushNotificationService';
+import { navigateFromNotification } from '../../navigation/navigationRef';
 import ScreenHeader from '../../components/ScreenHeader';
 import { PageLoader } from '../../components/loading';
 
-const NotificationsScreen = () => {
+const NotificationsScreen = ({ route }) => {
+  const highlightId = route?.params?.highlightId;
   const queryClient = useQueryClient();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -39,6 +41,26 @@ const NotificationsScreen = () => {
     await notificationService.markAsRead(id);
     refetch();
     await syncBadge(Math.max(0, unreadCount - 1));
+  };
+
+  const handlePress = async (item) => {
+    if (!item.isRead) {
+      await handleMarkRead(item._id);
+    }
+
+    const transactionId = item.metadata?.transactionId;
+    if (transactionId) {
+      navigateFromNotification({
+        screen: 'TransactionDetails',
+        transactionId: String(transactionId),
+        notificationId: item._id,
+      });
+      return;
+    }
+
+    if (item.type === 'security') {
+      navigateFromNotification({ screen: 'Security' });
+    }
   };
 
   const handleMarkAllRead = async () => {
@@ -80,8 +102,12 @@ const NotificationsScreen = () => {
         }
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={[styles.item, !item.isRead && styles.unread]}
-            onPress={() => handleMarkRead(item._id)}
+            style={[
+              styles.item,
+              !item.isRead && styles.unread,
+              highlightId === item._id && styles.highlighted,
+            ]}
+            onPress={() => handlePress(item)}
             activeOpacity={0.7}
           >
             <View style={[styles.icon, { backgroundColor: `${colors.primary}15` }]}>
@@ -108,6 +134,7 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.card, borderRadius: 12, marginBottom: 8,
   },
   unread: { borderLeftWidth: 3, borderLeftColor: colors.primary },
+  highlighted: { borderWidth: 1, borderColor: colors.primary },
   icon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   content: { flex: 1 },
   title: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4 },

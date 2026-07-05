@@ -193,7 +193,11 @@ const FundWalletScreen = ({ navigation }) => {
 
       <View style={styles.secureNote}>
         <Ionicons name="shield-checkmark" size={16} color={colors.success} />
-        <Text style={styles.secureText}>Secured by Paystack · Use test card 4084084084084081</Text>
+        <Text style={styles.secureText}>
+          {__DEV__
+            ? 'Secured by Paystack · Use test card 4084084084084081'
+            : 'Secured by Paystack'}
+        </Text>
       </View>
     </SafeAreaView>
   );

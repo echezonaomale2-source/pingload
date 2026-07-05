@@ -5,6 +5,8 @@ import { PageHeader, SearchBar, DataTable, Badge, PageLoader, ErrorAlert } from 
 import { usersApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency, formatDate } from '../utils/formatters';
 
+const PAGE_SIZE = 8;
+
 const UsersPage = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -16,7 +18,7 @@ const UsersPage = () => {
 
   const fetchUsers = useCallback(() => {
     setLoading(true);
-    usersApi.list({ search, page, limit: 8 })
+    usersApi.list({ search, page, limit: PAGE_SIZE })
       .then((res) => {
         setUsers(res.data.data);
         setTotal(res.data.pagination?.total || 0);
@@ -38,6 +40,33 @@ const UsersPage = () => {
     { key: 'joinedAt', label: 'Joined', render: (r) => formatDate(r.joinedAt) },
   ];
 
+  const handleExport = async () => {
+    try {
+      const res = await usersApi.list({ search, page: 1, limit: 5000 });
+      const rows = res.data.data || [];
+      const header = 'ID,Name,Email,Phone,Balance,Status,KYC,Joined\n';
+      const csv = header + rows.map((r) => [
+        r.id,
+        `"${(r.fullName || '').replace(/"/g, '""')}"`,
+        r.email,
+        r.phone,
+        r.walletBalance,
+        r.status,
+        r.kycStatus,
+        r.joinedAt,
+      ].join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pingload-users-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  };
+
   if (error) return <ErrorAlert message={error} />;
 
   return (
@@ -46,7 +75,7 @@ const UsersPage = () => {
         title="User Management"
         subtitle={`${total} registered users`}
         action={
-          <button type="button" className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-primary/20 hover:bg-primary-dark">
+          <button type="button" onClick={handleExport} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-primary/20 hover:bg-primary-dark">
             <UserPlus size={18} /> Export Users
           </button>
         }
@@ -57,7 +86,16 @@ const UsersPage = () => {
       </div>
 
       {loading ? <PageLoader /> : (
-        <DataTable columns={columns} data={users} page={page} onPageChange={setPage} onRowClick={(row) => navigate(`/users/${row.id}`)} />
+        <DataTable
+          columns={columns}
+          data={users}
+          page={page}
+          pageSize={PAGE_SIZE}
+          totalPages={Math.ceil(total / PAGE_SIZE)}
+          serverPaginated
+          onPageChange={setPage}
+          onRowClick={(row) => navigate(`/users/${row.id}`)}
+        />
       )}
     </div>
   );

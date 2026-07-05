@@ -74,7 +74,17 @@ const TransferScreen = ({ navigation }) => {
         loading={loading}
       />
 
-      <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={handleTransfer} loading={loading} title="Authorize Transfer" />
+      <TransactionPinModal
+        visible={showPin}
+        onClose={() => setShowPin(false)}
+        onConfirm={handleTransfer}
+        loading={loading}
+        title="Authorize Transfer"
+        onForgotPin={() => {
+          setShowPin(false);
+          navigation.navigate('ForgotTransactionPin');
+        }}
+      />
     </SafeAreaView>
   );
 };

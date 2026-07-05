@@ -5,10 +5,13 @@ import { walletsApi, usersApi, getErrorMessage } from '../services/adminService'
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { useDialog } from '../hooks/useDialog';
 
+const PAGE_SIZE = 8;
+
 const WalletsPage = () => {
   const dialog = useDialog();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [history, setHistory] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,11 +25,12 @@ const WalletsPage = () => {
   const fetchData = useCallback(() => {
     setLoading(true);
     Promise.all([
-      walletsApi.history({ search, page, limit: 8 }),
+      walletsApi.history({ search, page, limit: PAGE_SIZE }),
       usersApi.list({ limit: 50 }),
     ])
       .then(([histRes, usersRes]) => {
         setHistory(histRes.data.data);
+        setTotal(histRes.data.pagination?.total || 0);
         setUsers(usersRes.data.data);
       })
       .catch((err) => setError(getErrorMessage(err)))
@@ -94,11 +98,21 @@ const WalletsPage = () => {
       )}
 
       <div className="mb-4">
-        <SearchBar value={search} onChange={setSearch} placeholder="Search wallet history..." className="max-w-md" />
+        <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search wallet history..." className="max-w-md" />
       </div>
 
       <h3 className="mb-3 text-base font-bold text-slate-800">Wallet History</h3>
-      {loading ? <PageLoader /> : <DataTable columns={columns} data={history} page={page} onPageChange={setPage} />}
+      {loading ? <PageLoader /> : (
+        <DataTable
+          columns={columns}
+          data={history}
+          page={page}
+          pageSize={PAGE_SIZE}
+          totalPages={Math.ceil(total / PAGE_SIZE)}
+          serverPaginated
+          onPageChange={setPage}
+        />
+      )}
 
       <Modal open={!!walletModal} onClose={() => setWalletModal(null)} title={walletModal === 'credit' ? 'Credit Wallet' : 'Debit Wallet'}>
         <div className="space-y-4">
