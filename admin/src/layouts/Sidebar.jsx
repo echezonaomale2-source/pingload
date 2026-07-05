@@ -19,7 +19,7 @@ const NAV = [
   { to: '/data-plans', icon: Database, label: 'Data Plans' },
   { to: '/electricity-plans', icon: Zap, label: 'Electricity' },
   { to: '/tv-plans', icon: Tv, label: 'TV Plans' },
-  { to: '/revenue', icon: DollarSign, label: 'Transactions' },
+  { to: '/revenue', icon: DollarSign, label: 'Revenue' },
   { to: '/security-events', icon: ShieldAlert, label: 'Security Events' },
   { to: '/kyc', icon: ShieldCheck, label: 'KYC' },
   { to: '/faq', icon: HelpCircle, label: 'FAQ' },
