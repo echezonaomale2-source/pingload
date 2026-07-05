@@ -57,7 +57,7 @@ const verifyTransactionPin = async (userId, pin, req = null) => {
         ? 'Too many incorrect PIN attempts. Transaction PIN locked for 30 minutes.'
         : 'Incorrect transaction PIN'
     );
-    error.statusCode = user.transactionPinFailedAttempts >= MAX_ATTEMPTS ? 423 : 401;
+    error.statusCode = user.transactionPinFailedAttempts >= MAX_ATTEMPTS ? 423 : 400;
     throw error;
   }
 

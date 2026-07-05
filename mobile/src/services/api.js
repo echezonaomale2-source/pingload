@@ -81,7 +81,12 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 401 && !config?.skipAuthLogout) {
-      await SecureStore.deleteItemAsync('token');
+      const message = (error.response?.data?.message || '').toLowerCase();
+      const isPinError = /transaction pin|incorrect pin|current pin/.test(message);
+      const isAuthFailure = /not authorized|token invalid|session expired|invalid token|user not found|user access required/.test(message);
+      if (!isPinError && isAuthFailure) {
+        await SecureStore.deleteItemAsync('token');
+      }
     }
 
     return Promise.reject(error);

@@ -51,7 +51,7 @@ const changePin = async (req, res, next) => {
 
     const valid = await user.comparePin(currentPin);
     if (!valid) {
-      return res.status(401).json({ success: false, message: 'Current PIN is incorrect' });
+      return res.status(400).json({ success: false, message: 'Current PIN is incorrect' });
     }
 
     user.transactionPin = newPin;
@@ -75,7 +75,7 @@ const verifyPin = async (req, res, next) => {
 
     const valid = await user.comparePin(pin);
     if (!valid) {
-      return res.status(401).json({ success: false, message: 'Incorrect transaction PIN' });
+      return res.status(400).json({ success: false, message: 'Incorrect transaction PIN' });
     }
 
     res.json({ success: true, message: 'PIN verified' });
