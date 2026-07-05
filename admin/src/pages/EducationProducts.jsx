@@ -10,7 +10,7 @@ const emptyForm = {
   examType: 'waec',
   productCode: '',
   name: '',
-  vtpassServiceId: '',
+  providerServiceId: '',
   amount: '',
   enabled: true,
   order: 0,
@@ -45,7 +45,7 @@ const EducationProductsPage = () => {
       examType: product.examType,
       productCode: product.productCode,
       name: product.name,
-      vtpassServiceId: product.vtpassServiceId,
+      providerServiceId: product.providerServiceId,
       amount: product.amount,
       enabled: product.enabled,
       order: product.order ?? 0,
@@ -91,7 +91,7 @@ const EducationProductsPage = () => {
     { key: 'examType', label: 'Exam', render: (r) => r.examType?.toUpperCase() },
     { key: 'name', label: 'Name' },
     { key: 'productCode', label: 'Code' },
-    { key: 'vtpassServiceId', label: 'VTpass ID' },
+    { key: 'providerServiceId', label: 'Clubkonnect ID' },
     { key: 'amount', label: 'Amount', render: (r) => formatCurrency(r.amount) },
     { key: 'enabled', label: 'Status', render: (r) => (r.enabled ? 'Enabled' : 'Disabled') },
     {
@@ -134,8 +134,8 @@ const EducationProductsPage = () => {
           <select value={form.examType} onChange={(e) => setForm({ ...form, examType: e.target.value })} className="w-full rounded-xl border px-4 py-2.5 text-sm">
             {EXAM_TYPES.map((type) => <option key={type} value={type}>{type.toUpperCase()}</option>)}
           </select>
-          {['productCode', 'name', 'vtpassServiceId', 'amount', 'order'].map((field) => (
-            <input key={field} value={form[field]} onChange={(e) => setForm({ ...form, [field]: e.target.value })} placeholder={field} className="w-full rounded-xl border px-4 py-2.5 text-sm" />
+          {['productCode', 'name', 'providerServiceId', 'amount', 'order'].map((field) => (
+            <input key={field} value={form[field]} onChange={(e) => setForm({ ...form, [field]: e.target.value })} placeholder={field === 'providerServiceId' ? 'Clubkonnect service ID' : field} className="w-full rounded-xl border px-4 py-2.5 text-sm" />
           ))}
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />

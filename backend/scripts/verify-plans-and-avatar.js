@@ -89,7 +89,7 @@ async function main() {
     const created = await admin.post('/admin/electricity-plans', {
       providerId: `test-disco-${Date.now()}`,
       name: 'Test Disco',
-      vtpassServiceId: 'test-electric',
+      providerServiceId: 'test-electric',
       minAmount: 1000,
       maxAmount: 50000,
       order: 99,

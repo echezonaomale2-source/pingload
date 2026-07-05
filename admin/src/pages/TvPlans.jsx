@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { PageHeader, DataTable, Modal, PageLoader, ErrorAlert } from '../components';
 import { tvPlansApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency } from '../utils/formatters';
@@ -17,6 +17,7 @@ const TvPlansPage = () => {
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchPlans = useCallback(() => {
     setLoading(true);
@@ -82,6 +83,19 @@ const TvPlansPage = () => {
     }
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await tvPlansApi.sync();
+      dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} TV plan(s) from Clubkonnect`);
+      fetchPlans();
+    } catch (err) {
+      dialog.notifyError(getErrorMessage(err));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const columns = [
     { key: 'provider', label: 'Provider', render: (r) => <span className="uppercase font-bold">{r.provider}</span> },
     { key: 'name', label: 'Bouquet' },
@@ -116,11 +130,16 @@ const TvPlansPage = () => {
       <PageHeader
         title="TV Plans"
         subtitle="Manage DStv, GOtv, and StarTimes bouquets shown in the user app"
-        action={
-          <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
-            <Plus size={18} /> Add Plan
-          </button>
-        }
+        action={(
+          <div className="flex gap-2">
+            <button type="button" onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-60">
+              <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> Sync from Clubkonnect
+            </button>
+            <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
+              <Plus size={18} /> Add Plan
+            </button>
+          </div>
+        )}
       />
 
       <div className="mb-4 flex gap-2">
@@ -146,7 +165,7 @@ const TvPlansPage = () => {
             {PROVIDERS.map((p) => <option key={p} value={p}>{p.toUpperCase()}</option>)}
           </select>
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Bouquet name" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder="VTpass variation code" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
+          <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder="Clubkonnect plan code" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Price (₦)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="Display order" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <label className="flex items-center gap-2 text-sm">

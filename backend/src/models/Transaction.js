@@ -73,6 +73,6 @@ transactionSchema.index({ userId: 1, createdAt: -1 });
 transactionSchema.index({ userId: 1, status: 1 });
 transactionSchema.index({ service: 1, status: 1, createdAt: -1 });
 transactionSchema.index({ transactionType: 1, refundedAt: -1 });
-transactionSchema.index({ 'metadata.vtpassRequestId': 1 }, { sparse: true });
+transactionSchema.index({ 'metadata.providerRequestId': 1 }, { sparse: true });
 
 module.exports = mongoose.model('Transaction', transactionSchema);

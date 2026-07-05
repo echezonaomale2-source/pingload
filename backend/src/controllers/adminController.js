@@ -98,6 +98,7 @@ const adminSearch = async (req, res, next) => {
       Transaction.find({
         $or: [
           { reference: regex },
+          { 'metadata.providerRequestId': regex },
           { 'metadata.vtpassRequestId': regex },
           { refundReference: regex },
           { originalTransactionReference: regex },

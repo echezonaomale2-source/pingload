@@ -1,18 +1,18 @@
-/** Official provider logo URLs (VTpass CDN + public brand assets). */
-const VTpass = 'https://vtpass.com/resources/products/200X200';
+/** Default provider logo URLs (public brand assets). */
+const PRODUCT_CDN = 'https://vtpass.com/resources/products/200X200';
 
 module.exports = {
   DEFAULT_LOGO_URLS: {
-    mtn: `${VTpass}/MTN-Airtime.jpg`,
-    airtel: `${VTpass}/Airtel-Airtime.jpg`,
-    glo: `${VTpass}/GLO-Airtime.jpg`,
-    '9mobile': `${VTpass}/9mobile-Airtime.jpg`,
-    dstv: `${VTpass}/DSTV.jpg`,
-    gotv: `${VTpass}/GOTV.jpg`,
-    startimes: `${VTpass}/Startimes.jpg`,
-    waec: `${VTpass}/WAEC-Registration-PIN.jpg`,
-    neco: `${VTpass}/NECO.jpg`,
-    jamb: `${VTpass}/JAMB-PIN.jpg`,
+    mtn: `${PRODUCT_CDN}/MTN-Airtime.jpg`,
+    airtel: `${PRODUCT_CDN}/Airtel-Airtime.jpg`,
+    glo: `${PRODUCT_CDN}/GLO-Airtime.jpg`,
+    '9mobile': `${PRODUCT_CDN}/9mobile-Airtime.jpg`,
+    dstv: `${PRODUCT_CDN}/DSTV.jpg`,
+    gotv: `${PRODUCT_CDN}/GOTV.jpg`,
+    startimes: `${PRODUCT_CDN}/Startimes.jpg`,
+    waec: `${PRODUCT_CDN}/WAEC-Registration-PIN.jpg`,
+    neco: `${PRODUCT_CDN}/NECO.jpg`,
+    jamb: `${PRODUCT_CDN}/JAMB-PIN.jpg`,
     bet9ja: 'https://www.bet9ja.com/favicon.ico',
     sportybet: 'https://www.sportybet.com/favicon.ico',
     betking: 'https://www.betking.com/favicon.ico',
@@ -20,14 +20,14 @@ module.exports = {
     bangbet: 'https://www.bangbet.com/favicon.ico',
     merrybet: 'https://merrybet.com/favicon.ico',
     premierbet: 'https://www.premierbet.com/favicon.ico',
-    ikeja: `${VTpass}/Ikeja-Electric.jpg`,
-    eko: `${VTpass}/Eko-Electric.jpg`,
-    abuja: `${VTpass}/Abuja-Electric.jpg`,
-    kaduna: `${VTpass}/Kaduna-Electric.jpg`,
-    kano: `${VTpass}/Kano-Electric.jpg`,
-    portharcourt: `${VTpass}/Port-Harcourt-Electric.jpg`,
-    jos: `${VTpass}/Jos-Electric.jpg`,
-    ibadan: `${VTpass}/Ibadan-Electric.jpg`,
+    ikeja: `${PRODUCT_CDN}/Ikeja-Electric.jpg`,
+    eko: `${PRODUCT_CDN}/Eko-Electric.jpg`,
+    abuja: `${PRODUCT_CDN}/Abuja-Electric.jpg`,
+    kaduna: `${PRODUCT_CDN}/Kaduna-Electric.jpg`,
+    kano: `${PRODUCT_CDN}/Kano-Electric.jpg`,
+    portharcourt: `${PRODUCT_CDN}/Port-Harcourt-Electric.jpg`,
+    jos: `${PRODUCT_CDN}/Jos-Electric.jpg`,
+    ibadan: `${PRODUCT_CDN}/Ibadan-Electric.jpg`,
   },
   DEFAULT_PROVIDERS: [
     { providerId: 'mtn', name: 'MTN', category: 'network', order: 1 },

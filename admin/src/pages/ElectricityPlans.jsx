@@ -8,7 +8,7 @@ import { useDialog } from '../hooks/useDialog';
 const emptyForm = {
   providerId: '',
   name: '',
-  vtpassServiceId: '',
+  providerServiceId: '',
   minAmount: 500,
   maxAmount: 500000,
   enabled: true,
@@ -39,7 +39,7 @@ const ElectricityPlansPage = () => {
     setForm({
       providerId: plan.providerId,
       name: plan.name,
-      vtpassServiceId: plan.vtpassServiceId,
+      providerServiceId: plan.providerServiceId,
       minAmount: plan.minAmount,
       maxAmount: plan.maxAmount,
       enabled: plan.enabled,
@@ -96,7 +96,7 @@ const ElectricityPlansPage = () => {
   const columns = [
     { key: 'providerId', label: 'ID', render: (r) => <span className="font-mono text-xs">{r.providerId}</span> },
     { key: 'name', label: 'Provider' },
-    { key: 'vtpassServiceId', label: 'VTpass ID', render: (r) => <span className="font-mono text-xs">{r.vtpassServiceId}</span> },
+    { key: 'providerServiceId', label: 'Clubkonnect ID', render: (r) => <span className="font-mono text-xs">{r.providerServiceId}</span> },
     {
       key: 'range',
       label: 'Amount Range',
@@ -152,7 +152,7 @@ const ElectricityPlansPage = () => {
         <div className="space-y-3">
           <input value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })} placeholder="Provider ID (e.g. ikeja)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Display name" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input value={form.vtpassServiceId} onChange={(e) => setForm({ ...form, vtpassServiceId: e.target.value })} placeholder="VTpass service ID (e.g. ikeja-electric)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
+          <input value={form.providerServiceId} onChange={(e) => setForm({ ...form, providerServiceId: e.target.value })} placeholder="Clubkonnect disco code (e.g. 02 for Ikeja)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <div className="grid grid-cols-2 gap-3">
             <input type="number" value={form.minAmount} onChange={(e) => setForm({ ...form, minAmount: e.target.value })} placeholder="Min amount" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
             <input type="number" value={form.maxAmount} onChange={(e) => setForm({ ...form, maxAmount: e.target.value })} placeholder="Max amount" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />

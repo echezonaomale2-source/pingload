@@ -3,7 +3,7 @@ const generateReference = require('../utils/generateReference');
 const { createRefundWithAtomicWallet } = require('./walletTransactionService');
 const { deliverUserNotification } = require('./notificationDeliveryService');
 const { logWallet, logApiFailure } = require('../utils/logger');
-const { extractVtpassFailureReason } = require('./vtpassService');
+const { extractProviderFailureReason } = require('./clubkonnectService');
 
 const SERVICE_LABELS = {
   airtime: 'Airtime',
@@ -84,8 +84,9 @@ const processRefund = async ({
 
 const buildRefundReason = (metadata = {}) => {
   if (metadata.error) return metadata.error;
-  const vtpassReason = extractVtpassFailureReason(metadata.vtpassResponse);
-  if (vtpassReason) return vtpassReason;
+  const providerReason = extractProviderFailureReason(metadata.providerResponse || metadata.vtpassResponse);
+  if (providerReason) return providerReason;
+  if (metadata.providerResponse?.description) return metadata.providerResponse.description;
   if (metadata.vtpassResponse?.response_description) return metadata.vtpassResponse.response_description;
   if (metadata.failureReason) return metadata.failureReason;
   return 'Purchase failed at service provider';

@@ -4,12 +4,11 @@ const nodeEnv = process.env.NODE_ENV || 'development';
 const isProduction = nodeEnv === 'production';
 
 /**
- * SERVICE_MODE controls Paystack + VTpass environments together.
- * - sandbox | test | development  → Paystack test keys + VTpass sandbox
- * - production | live             → Paystack live keys + VTpass live
+ * SERVICE_MODE controls Paystack + Clubkonnect environments together.
+ * - sandbox | test | development  → Paystack test keys
+ * - production | live             → Paystack live keys + Clubkonnect live
  *
  * Defaults to "production" when NODE_ENV=production, otherwise "sandbox".
- * Individual overrides: PAYSTACK_ENV=test|live, VTPASS_ENV=sandbox|live
  */
 const SERVICE_MODE = (process.env.SERVICE_MODE || (isProduction ? 'production' : 'sandbox')).toLowerCase();
 
@@ -17,12 +16,10 @@ const SANDBOX_MODES = new Set(['sandbox', 'test', 'development', 'dev']);
 const isSandboxMode = SANDBOX_MODES.has(SERVICE_MODE);
 
 const paystackEnv = (process.env.PAYSTACK_ENV || (isSandboxMode ? 'test' : 'live')).toLowerCase();
-const vtpassEnv = (process.env.VTPASS_ENV || (isSandboxMode ? 'sandbox' : 'live')).toLowerCase();
 
 const PAYSTACK_BASE_URL = process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co';
 
-const VTPASS_BASE_URL = process.env.VTPASS_BASE_URL
-  || (vtpassEnv === 'live' ? 'https://vtpass.com/api' : 'https://sandbox.vtpass.com/api');
+const CLUBKONNECT_BASE_URL = process.env.CLUBKONNECT_BASE_URL || 'https://www.clubkonnect.com';
 
 const maskKey = (key) => {
   if (!key) return null;
@@ -34,7 +31,6 @@ const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY || '';
 const paystackPublicKey = process.env.PAYSTACK_PUBLIC_KEY || '';
 
 const paystackIsTest = paystackEnv === 'test' || paystackSecretKey.startsWith('sk_test_');
-const vtpassIsSandbox = vtpassEnv === 'sandbox';
 
 const resolveDevelopmentMode = () => {
   if (isProduction) return process.env.DEVELOPMENT_MODE === 'true';
@@ -44,6 +40,9 @@ const resolveDevelopmentMode = () => {
 
 const termiiApiKey = process.env.TERMII_API_KEY || '';
 const termiiConfigured = Boolean(termiiApiKey && termiiApiKey !== 'dev-placeholder');
+
+const clubkonnectUserId = process.env.CLUBKONNECT_USER_ID || '';
+const clubkonnectApiKey = process.env.CLUBKONNECT_API_KEY || '';
 
 const serviceConfig = {
   nodeEnv,
@@ -64,15 +63,13 @@ const serviceConfig = {
     configured: Boolean(paystackSecretKey && paystackPublicKey),
   },
 
-  vtpass: {
-    env: vtpassEnv,
-    mode: vtpassIsSandbox ? 'sandbox' : 'live',
-    baseUrl: VTPASS_BASE_URL,
-    apiKey: process.env.VTPASS_API_KEY || '',
-    publicKey: process.env.VTPASS_PUBLIC_KEY || '',
-    secretKey: process.env.VTPASS_SECRET_KEY || '',
-    isSandbox: vtpassIsSandbox,
-    configured: Boolean(process.env.VTPASS_API_KEY && process.env.VTPASS_SECRET_KEY),
+  clubkonnect: {
+    baseUrl: CLUBKONNECT_BASE_URL,
+    userId: clubkonnectUserId,
+    apiKey: clubkonnectApiKey,
+    callbackUrl: process.env.CLUBKONNECT_CALLBACK_URL || '',
+    configured: Boolean(clubkonnectUserId && clubkonnectApiKey
+      && clubkonnectUserId !== 'dev-placeholder'),
   },
 
   termii: {
@@ -119,11 +116,9 @@ serviceConfig.getPublicConfig = () => ({
     isTestMode: serviceConfig.paystack.isTestMode,
     configured: serviceConfig.paystack.configured,
   },
-  vtpass: {
-    mode: serviceConfig.vtpass.mode,
-    baseUrl: serviceConfig.vtpass.baseUrl,
-    isSandbox: serviceConfig.vtpass.isSandbox,
-    configured: serviceConfig.vtpass.configured,
+  clubkonnect: {
+    baseUrl: serviceConfig.clubkonnect.baseUrl,
+    configured: serviceConfig.clubkonnect.configured,
   },
   termii: {
     configured: serviceConfig.termii.configured,
@@ -151,7 +146,7 @@ serviceConfig.getAppConfig = () => {
 
 serviceConfig.printStartupBanner = () => {
   if (isProduction) {
-    console.log(`Pingload API [PRODUCTION] — Paystack ${serviceConfig.paystack.mode}, VTpass ${serviceConfig.vtpass.mode}`);
+    console.log(`Pingload API [PRODUCTION] — Paystack ${serviceConfig.paystack.mode}, Clubkonnect live`);
     return;
   }
 
@@ -162,8 +157,8 @@ serviceConfig.printStartupBanner = () => {
   console.log(`  SERVICE_MODE   : ${SERVICE_MODE}`);
   console.log(`  Paystack       : ${serviceConfig.paystack.mode.toUpperCase()} (${serviceConfig.paystack.baseUrl})`);
   console.log(`  Paystack Key   : ${maskKey(paystackSecretKey) || 'NOT SET'}`);
-  console.log(`  VTpass         : ${serviceConfig.vtpass.mode.toUpperCase()} (${serviceConfig.vtpass.baseUrl})`);
-  console.log(`  VTpass Key     : ${maskKey(process.env.VTPASS_API_KEY) || 'NOT SET'}`);
+  console.log(`  Clubkonnect    : ${serviceConfig.clubkonnect.baseUrl}`);
+  console.log(`  Clubkonnect ID : ${maskKey(clubkonnectUserId) || 'NOT SET'}`);
   console.log(`  Dev OTP Mode   : ${serviceConfig.developmentMode ? 'ON (OTP logged)' : 'OFF'}`);
   console.log(`  Service Logs   : ${serviceConfig.loggingEnabled ? 'ON' : 'OFF'}`);
   console.log(`  FCM Push       : ${serviceConfig.firebase.configured ? 'ON' : 'OFF'}`);

@@ -11,6 +11,8 @@ const {
   listEnabledPlatforms,
   mapPublicPlatform,
 } = require('../services/bettingPlatformService');
+const clubkonnect = require('../services/clubkonnectService');
+const serviceConfig = require('../config/serviceConfig');
 
 const isDuplicateKeyError = (error) => error?.code === 11000;
 
@@ -39,7 +41,7 @@ const electricityPlanValidation = [
   body('providerId').trim().notEmpty().withMessage('Provider ID is required')
     .matches(/^[a-z0-9_-]+$/i).withMessage('Provider ID must be alphanumeric'),
   body('name').trim().notEmpty().withMessage('Provider name is required'),
-  body('vtpassServiceId').trim().notEmpty().withMessage('VTpass service ID is required'),
+  body('providerServiceId').trim().notEmpty().withMessage('Provider service ID is required'),
   body('minAmount').optional().isFloat({ min: 0 }),
   body('maxAmount').optional().isFloat({ min: 0 }),
   body('order').optional().isInt({ min: 0 }),
@@ -60,7 +62,7 @@ const educationProductValidation = [
   body('examType').isIn(['waec', 'neco', 'jamb']).withMessage('Invalid exam type'),
   body('productCode').trim().notEmpty().withMessage('Product code is required'),
   body('name').trim().notEmpty().withMessage('Product name is required'),
-  body('vtpassServiceId').trim().notEmpty().withMessage('VTpass service ID is required'),
+  body('providerServiceId').trim().notEmpty().withMessage('Provider service ID is required'),
   body('amount').isFloat({ min: 0 }).withMessage('Valid amount is required'),
 ];
 
@@ -458,6 +460,72 @@ const adminEducationPurchases = async (req, res, next) => {
   }
 };
 
+const adminSyncDataPlansFromClubkonnect = async (req, res, next) => {
+  try {
+    clubkonnect.assertClubkonnectConfigured();
+    const network = String(req.query.network || 'mtn').toLowerCase();
+    const result = await clubkonnect.getDataPlans(network);
+    const variations = result.content?.variations || [];
+    let synced = 0;
+
+    for (const plan of variations) {
+      if (!plan.variation_code) continue;
+      await DataPlan.findOneAndUpdate(
+        { network, variationCode: plan.variation_code },
+        {
+          $set: {
+            network,
+            name: plan.name || plan.variation_code,
+            dataSize: plan.name || plan.variation_code,
+            validity: plan.validity || '30 days',
+            variationCode: plan.variation_code,
+            amount: parseFloat(plan.variation_amount) || 0,
+            enabled: true,
+          },
+        },
+        { upsert: true, new: true }
+      );
+      synced += 1;
+    }
+
+    res.json({ success: true, data: { synced, network, source: 'clubkonnect' } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const adminSyncTvPlansFromClubkonnect = async (req, res, next) => {
+  try {
+    clubkonnect.assertClubkonnectConfigured();
+    const provider = String(req.query.provider || 'dstv').toLowerCase();
+    const result = await clubkonnect.getTVPackages(provider);
+    const variations = result.content?.variations || [];
+    let synced = 0;
+
+    for (const pkg of variations) {
+      if (!pkg.variation_code) continue;
+      await TvPlan.findOneAndUpdate(
+        { provider, variationCode: pkg.variation_code },
+        {
+          $set: {
+            provider,
+            name: pkg.name || pkg.variation_code,
+            variationCode: pkg.variation_code,
+            amount: parseFloat(pkg.variation_amount) || 0,
+            enabled: true,
+          },
+        },
+        { upsert: true, new: true }
+      );
+      synced += 1;
+    }
+
+    res.json({ success: true, data: { synced, provider, source: 'clubkonnect' } });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   priceValidation,
   planValidation,
@@ -490,4 +558,6 @@ module.exports = {
   adminUpdateEducationProduct,
   adminDeleteEducationProduct,
   adminEducationPurchases,
+  adminSyncDataPlansFromClubkonnect,
+  adminSyncTvPlansFromClubkonnect,
 };

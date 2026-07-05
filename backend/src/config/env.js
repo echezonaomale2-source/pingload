@@ -24,8 +24,8 @@ if (serviceConfig.isProduction) {
     'JWT_SECRET',
     'PAYSTACK_SECRET_KEY',
     'PAYSTACK_PUBLIC_KEY',
-    'VTPASS_API_KEY',
-    'VTPASS_SECRET_KEY',
+    'CLUBKONNECT_USER_ID',
+    'CLUBKONNECT_API_KEY',
     'TERMII_API_KEY',
     'ADMIN_PASSWORD',
     'CORS_ORIGIN',
@@ -41,10 +41,6 @@ if (serviceConfig.isProduction) {
     throw new Error('Paystack test keys (sk_test_*) cannot be used when NODE_ENV=production');
   }
 
-  if (serviceConfig.vtpass.isSandbox) {
-    throw new Error('VTpass sandbox cannot be used when NODE_ENV=production');
-  }
-
   if (serviceConfig.developmentMode) {
     throw new Error('DEVELOPMENT_MODE must be false when NODE_ENV=production');
   }
@@ -57,11 +53,11 @@ if (serviceConfig.isProduction) {
     throw new Error('ADMIN_PASSWORD must be changed from the default in production');
   }
 
-  ['PAYSTACK_SECRET_KEY', 'PAYSTACK_PUBLIC_KEY', 'VTPASS_API_KEY', 'VTPASS_SECRET_KEY', 'TERMII_API_KEY'].forEach((key) => {
+  ['PAYSTACK_SECRET_KEY', 'PAYSTACK_PUBLIC_KEY', 'CLUBKONNECT_USER_ID', 'CLUBKONNECT_API_KEY', 'TERMII_API_KEY'].forEach((key) => {
     rejectPlaceholder(key, ['<your-', 'xxx', 'dev-placeholder']);
   });
 } else if (serviceConfig.isDevelopment) {
-  ['PAYSTACK_SECRET_KEY', 'VTPASS_API_KEY'].forEach((key) => {
+  ['PAYSTACK_SECRET_KEY', 'CLUBKONNECT_USER_ID'].forEach((key) => {
     if (!process.env[key] || process.env[key].includes('<your-')) {
       console.warn(`Warning: ${key} is not set — wallet funding and VTU purchases will be limited`);
     }
@@ -93,7 +89,7 @@ module.exports = {
     otpChannel: process.env.TERMII_OTP_CHANNEL || 'auto',
   },
   paystack: serviceConfig.paystack,
-  vtpass: serviceConfig.vtpass,
+  clubkonnect: serviceConfig.clubkonnect,
   apiPublicUrl: process.env.API_PUBLIC_URL || '',
   frontendUrl: process.env.FRONTEND_URL || (serviceConfig.isProduction ? '' : 'http://localhost:8081'),
   corsOrigins: parseCorsOrigins(),

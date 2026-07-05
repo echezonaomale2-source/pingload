@@ -27,9 +27,9 @@ const legalRoutes = require('./src/routes/legalRoutes');
 const seedAdmin = require('./src/utils/seedAdmin');
 const serviceConfig = require('./src/config/serviceConfig');
 const { initializeFcm } = require('./src/services/fcmService');
-const { verifyVtpassConnectivity } = require('./src/services/vtpassService');
-const { syncBettingPlatformsFromVtpass } = require('./src/services/bettingPlatformService');
-const { startVtpassReconciliationWorker } = require('./src/services/vtpassReconciliationWorker');
+const { verifyClubkonnectConnectivity } = require('./src/services/clubkonnectService');
+const { syncBettingPlatformsFromClubkonnect } = require('./src/services/bettingPlatformService');
+const { startClubkonnectReconciliationWorker } = require('./src/services/clubkonnectReconciliationWorker');
 
 const app = express();
 
@@ -114,30 +114,30 @@ const startServer = async () => {
     console.error(`[FCM] Push notifications DISABLED — invalid Firebase credentials: ${fcmStatus.reason || 'initialization failed'}. The API will keep running; fix FIREBASE_PRIVATE_KEY to re-enable push.`);
   }
 
-  const vtpassStatus = await verifyVtpassConnectivity();
-  if (!vtpassStatus.configured) {
-    console.warn('[VTpass] VTU purchases OFF — API keys not configured.');
-  } else if (vtpassStatus.ok) {
-    console.log(`[VTpass] Connected — ${vtpassStatus.mode} API at ${vtpassStatus.baseUrl}. Purchases enabled.`);
-  } else {
-    console.error(`[VTpass] PURCHASES BLOCKED — ${vtpassStatus.reason}`);
-    if (vtpassStatus.serverIp) {
-      console.error(`[VTpass] Whitelist this outbound IP on your VTpass dashboard: ${vtpassStatus.serverIp}`);
+  const clubkonnectStatus = await verifyClubkonnectConnectivity();
+  if (!clubkonnectStatus.configured) {
+    console.warn('[Clubkonnect] VTU purchases OFF — API credentials not configured.');
+  } else if (clubkonnectStatus.ok) {
+    console.log(`[Clubkonnect] Connected — ${clubkonnectStatus.baseUrl}. Purchases enabled.`);
+    if (clubkonnectStatus.balance != null) {
+      console.log(`[Clubkonnect] Wallet balance: ${clubkonnectStatus.balance}`);
     }
-    if (vtpassStatus.ipWhitelistRequired) {
-      console.error('[VTpass] VTpass error 027 = IP NOT WHITELISTED. Email support@vtpass.com with the IP above.');
+  } else {
+    console.error(`[Clubkonnect] PURCHASES BLOCKED — ${clubkonnectStatus.reason}`);
+    if (clubkonnectStatus.serverIp) {
+      console.error(`[Clubkonnect] Whitelist this outbound IP on your Clubkonnect dashboard: ${clubkonnectStatus.serverIp}`);
     }
   }
 
-  if (serviceConfig.vtpass.configured) {
-    const bettingSync = await syncBettingPlatformsFromVtpass();
+  if (serviceConfig.clubkonnect.configured) {
+    const bettingSync = await syncBettingPlatformsFromClubkonnect();
     if (bettingSync.synced > 0) {
-      console.log(`[Betting] Synced ${bettingSync.synced} platform(s) from VTpass.`);
+      console.log(`[Betting] Synced ${bettingSync.synced} platform(s) from Clubkonnect.`);
     } else {
-      console.warn(`[Betting] No VTpass betting platforms discovered — ${bettingSync.reason || 'whitelist betting products on VTpass or contact support'}`);
+      console.warn(`[Betting] No Clubkonnect betting platforms synced — ${bettingSync.reason || 'check credentials'}`);
     }
 
-    startVtpassReconciliationWorker();
+    startClubkonnectReconciliationWorker();
   }
 
   const server = app.listen(port, '0.0.0.0', () => {

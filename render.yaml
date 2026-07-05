@@ -37,11 +37,9 @@ services:
         sync: false
       - key: PAYSTACK_SECRET_KEY
         sync: false
-      - key: VTPASS_API_KEY
+      - key: CLUBKONNECT_USER_ID
         sync: false
-      - key: VTPASS_PUBLIC_KEY
-        sync: false
-      - key: VTPASS_SECRET_KEY
+      - key: CLUBKONNECT_API_KEY
         sync: false
       - key: TERMII_API_KEY
         sync: false
@@ -56,11 +54,11 @@ services:
       - key: FIREBASE_PRIVATE_KEY
         sync: false
 
-      # Paystack / VTpass
+      # Paystack / Clubkonnect
       - key: PAYSTACK_ENV
         value: live
-      - key: VTPASS_ENV
-        value: live
+      - key: CLUBKONNECT_BASE_URL
+        value: https://www.clubkonnect.com
 
       # Termii
       - key: TERMII_SENDER_ID

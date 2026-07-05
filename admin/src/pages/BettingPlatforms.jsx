@@ -35,7 +35,7 @@ const BettingPlatformsPage = () => {
     setSyncing(true);
     try {
       const res = await bettingPlatformsApi.sync();
-      dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} platform(s) from VTpass`);
+      dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} platform(s) from Clubkonnect`);
       fetchPlatforms();
     } catch (err) {
       dialog.notifyError(getErrorMessage(err));
@@ -47,7 +47,7 @@ const BettingPlatformsPage = () => {
   const columns = [
     { key: 'platformId', label: 'ID' },
     { key: 'name', label: 'Name' },
-    { key: 'vtpassServiceId', label: 'VTpass Service ID', render: (r) => r.vtpassServiceId || '—' },
+    { key: 'providerServiceId', label: 'Clubkonnect ID', render: (r) => r.providerServiceId || '—' },
     {
       key: 'limits',
       label: 'Limits',
@@ -75,10 +75,10 @@ const BettingPlatformsPage = () => {
     <div>
       <PageHeader
         title="Betting Platforms"
-        subtitle="VTpass betting wallet funding platforms"
+        subtitle="Clubkonnect betting wallet funding platforms"
         action={(
           <button type="button" onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">
-            <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> Sync from VTpass
+            <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> Sync from Clubkonnect
           </button>
         )}
       />

@@ -142,7 +142,7 @@ const EducationScreen = ({ navigation, route }) => {
       </TouchableOpacity>
       <ScrollView showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Education Pins</Text>
-        <Text style={styles.subtitle}>WAEC, NECO, and JAMB ePINs via VTpass</Text>
+        <Text style={styles.subtitle}>WAEC, NECO, and JAMB ePINs</Text>
 
         {loadingProducts ? (
           <View style={styles.loadingWrap}>

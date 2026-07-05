@@ -143,7 +143,7 @@ async function main() {
     const created = await admin.post('/admin/electricity-plans', {
       providerId: elecProviderId,
       name: 'Verify Disco',
-      vtpassServiceId: 'verify-electric',
+      providerServiceId: 'verify-electric',
       minAmount: 1000,
       maxAmount: 20000,
       order: 50,

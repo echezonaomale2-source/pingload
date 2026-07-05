@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { PageHeader, DataTable, Modal, PageLoader, ErrorAlert } from '../components';
 import { dataPlansApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency } from '../utils/formatters';
@@ -21,6 +21,7 @@ const DataPlansPage = () => {
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchPlans = useCallback(() => {
     setLoading(true);
@@ -96,6 +97,19 @@ const DataPlansPage = () => {
     }
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await dataPlansApi.sync();
+      dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} data plan(s) from Clubkonnect`);
+      fetchPlans();
+    } catch (err) {
+      dialog.notifyError(getErrorMessage(err));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const columns = [
     { key: 'network', label: 'Network', render: (r) => <span className="uppercase font-bold">{r.network}</span> },
     { key: 'name', label: 'Plan' },
@@ -134,11 +148,16 @@ const DataPlansPage = () => {
       <PageHeader
         title="Data Plans"
         subtitle={`${plans.length} plan${plans.length === 1 ? '' : 's'}${network ? ` · ${network.toUpperCase()}` : ''}`}
-        action={
-          <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
-            <Plus size={18} /> Add Plan
-          </button>
-        }
+        action={(
+          <div className="flex gap-2">
+            <button type="button" onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-60">
+              <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> Sync from Clubkonnect
+            </button>
+            <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
+              <Plus size={18} /> Add Plan
+            </button>
+          </div>
+        )}
       />
 
       <div className="mb-4 flex gap-2">
@@ -181,7 +200,7 @@ const DataPlansPage = () => {
             {VALIDITY_CATEGORIES.map((v) => <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>)}
           </select>
           <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category (optional)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder="VTpass variation code" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder="Clubkonnect plan code" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Price (₦)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <input type="number" value={form.commissionPercent} onChange={(e) => setForm({ ...form, commissionPercent: e.target.value })} placeholder="Commission %" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="Display order" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />

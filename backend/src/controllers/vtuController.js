@@ -4,7 +4,7 @@ const ElectricityPlan = require('../models/ElectricityPlan');
 const TvPlan = require('../models/TvPlan');
 const EducationProduct = require('../models/EducationProduct');
 const serviceConfig = require('../config/serviceConfig');
-const vtpass = require('../services/vtpassService');
+const clubkonnect = require('../services/clubkonnectService');
 const assertServiceEnabled = require('../utils/assertServiceEnabled');
 const {
   executeVtuPurchase,
@@ -18,7 +18,7 @@ const {
   getPlatformById,
 } = require('../services/bettingPlatformService');
 
-/** VTpass sometimes returns duplicate variation_code entries — keep first of each. */
+/** Clubkonnect sometimes returns duplicate plan codes — keep first of each. */
 const dedupeByCode = (items, codeKey) => {
   const seen = new Set();
   return items.filter((item) => {
@@ -53,7 +53,7 @@ const buyAirtime = async (req, res, next) => {
       amount,
       description: `Airtime purchase: ₦${amount} for ${phone} (${network})`,
       metadata: { network, phone },
-      vtpassCall: (requestId) => vtpass.purchaseAirtime({ network, phone, amount, requestId }),
+      providerCall: (requestId) => clubkonnect.purchaseAirtime({ network, phone, amount, requestId }),
     });
 
     sendPurchaseResponse(res, result);
@@ -96,13 +96,13 @@ const fetchDataPlans = async (req, res, next) => {
       });
     }
 
-    // Fallback to VTpass catalogue when no local plans are configured.
-    if (serviceConfig.vtpass.configured) {
+    // Fallback to Clubkonnect catalogue when no local plans are configured.
+    if (serviceConfig.clubkonnect.configured) {
       try {
-        const result = await vtpass.getDataPlans(network);
+        const result = await clubkonnect.getDataPlans(network);
         const variations = dedupeByCode(result.content?.variations || [], 'variation_code');
         if (variations.length > 0) {
-          return res.json({ success: true, data: variations, source: 'vtpass' });
+          return res.json({ success: true, data: variations, source: 'clubkonnect' });
         }
       } catch {
         // fall through
@@ -159,7 +159,7 @@ const buyData = async (req, res, next) => {
       amount: validatedAmount,
       description: `Data purchase for ${phone} (${network})`,
       metadata: { network, phone, variationCode },
-      vtpassCall: (requestId) => vtpass.purchaseData({ network, phone, variationCode, requestId }),
+      providerCall: (requestId) => clubkonnect.purchaseData({ network, phone, variationCode, requestId }),
     });
 
     sendPurchaseResponse(res, result);
@@ -214,11 +214,11 @@ const payElectricity = async (req, res, next) => {
         meterNumber,
         meterType,
         phone,
-        vtpassServiceId: plan.vtpassServiceId,
+        providerServiceId: plan.providerServiceId || plan.vtpassServiceId,
       },
-      vtpassCall: (requestId) => vtpass.payElectricity({
+      providerCall: (requestId) => clubkonnect.payElectricity({
         provider: plan.providerId,
-        serviceId: plan.vtpassServiceId,
+        serviceId: plan.providerServiceId || plan.vtpassServiceId,
         meterNumber,
         meterType,
         amount,
@@ -245,12 +245,12 @@ const payElectricity = async (req, res, next) => {
 
 const verifyElectricityMeter = async (req, res, next) => {
   try {
-    vtpass.assertVtpassConfigured();
+    clubkonnect.assertClubkonnectConfigured();
     const { provider, meterNumber, meterType } = req.body;
     const plan = await resolveElectricityProvider(provider);
-    const result = await vtpass.verifyElectricityMeter({
+    const result = await clubkonnect.verifyElectricityMeter({
       provider: plan.providerId,
-      serviceId: plan.vtpassServiceId,
+      serviceId: plan.providerServiceId || plan.vtpassServiceId,
       meterNumber,
       meterType,
     });
@@ -297,9 +297,9 @@ const fetchTVPackages = async (req, res, next) => {
       });
     }
 
-    if (serviceConfig.vtpass.configured) {
+    if (serviceConfig.clubkonnect.configured) {
       try {
-        const result = await vtpass.getTVPackages(provider);
+        const result = await clubkonnect.getTVPackages(provider);
         const packages = dedupeByCode(
           (result.content?.variations || []).map((pkg) => ({
             code: pkg.variation_code,
@@ -309,7 +309,7 @@ const fetchTVPackages = async (req, res, next) => {
           'code'
         );
         if (packages.length > 0) {
-          return res.json({ success: true, data: packages, source: 'vtpass' });
+          return res.json({ success: true, data: packages, source: 'clubkonnect' });
         }
       } catch {
         // fall through
@@ -324,9 +324,9 @@ const fetchTVPackages = async (req, res, next) => {
 
 const verifyTVSmartcard = async (req, res, next) => {
   try {
-    vtpass.assertVtpassConfigured();
+    clubkonnect.assertClubkonnectConfigured();
     const { provider, smartcardNumber } = req.body;
-    const result = await vtpass.verifyTVSmartcard({ provider, smartcardNumber });
+    const result = await clubkonnect.verifyTVSmartcard({ provider, smartcardNumber });
 
     res.json({
       success: true,
@@ -357,7 +357,7 @@ const payTV = async (req, res, next) => {
       amount: validatedAmount,
       description: `TV subscription: ${provider} for ${smartcardNumber}`,
       metadata: { provider, smartcardNumber, variationCode, phone },
-      vtpassCall: (requestId) => vtpass.payTV({
+      providerCall: (requestId) => clubkonnect.payTV({
         provider, smartcardNumber, variationCode, phone, requestId,
       }),
     });
@@ -424,13 +424,14 @@ const buyEducationPin = async (req, res, next) => {
       },
       applyPricing: true,
       pricingServiceId: 'education',
-      vtpassCall: (requestId) => vtpass.purchaseEducationPin({
-        vtpassServiceId: product.vtpassServiceId,
+      providerCall: (requestId) => clubkonnect.purchaseEducationPin({
+        providerServiceId: product.providerServiceId || product.vtpassServiceId,
         variationCode: product.variationCode,
         quantity: qty,
         phone,
         billersCode: billersCode?.trim(),
         requestId,
+        examType: product.examType,
       }),
     });
 
@@ -455,44 +456,13 @@ const fetchEducationProducts = async (req, res, next) => {
     const allProducts = await EducationProduct.find().sort({ order: 1, amount: 1 });
     let enabledProducts = allProducts.filter((product) => product.enabled);
 
-    const syncProduct = async (product) => {
-      if (!serviceConfig.vtpass.configured) return product.toObject();
+    const syncProduct = async (product) => product.toObject();
 
-      try {
-        const vtpassData = await vtpass.getEducationVariations(product.vtpassServiceId);
-        const variations = vtpassData.content?.variations || [];
-        const match = variations.find((item) => item.variation_code === product.variationCode)
-          || variations[0];
-
-        if (match) {
-          if (product.examType === 'neco' && !product.enabled) {
-            await EducationProduct.findByIdAndUpdate(product._id, {
-              enabled: true,
-              variationCode: match.variation_code,
-              amount: parseFloat(match.variation_amount),
-            });
-            product.enabled = true;
-            product.variationCode = match.variation_code;
-            product.amount = parseFloat(match.variation_amount);
-          }
-
-          return {
-            ...product.toObject(),
-            amount: parseFloat(match.variation_amount),
-            vtpassName: match.name,
-            source: 'vtpass',
-          };
-        }
-      } catch {
-        // VTpass service unavailable for this product
-      }
-
-      return product.toObject();
-    };
-
-    if (serviceConfig.vtpass.configured) {
+    if (serviceConfig.clubkonnect.configured) {
       const synced = await Promise.all(allProducts.map(syncProduct));
       enabledProducts = synced.filter((product) => product.enabled);
+    } else {
+      enabledProducts = allProducts.filter((product) => product.enabled);
     }
 
     const exams = ['waec', 'neco', 'jamb'].map((examType) => {
@@ -517,15 +487,17 @@ const fetchEducationProducts = async (req, res, next) => {
 
 const verifyBettingCustomer = async (req, res, next) => {
   try {
-    vtpass.assertVtpassConfigured();
+    clubkonnect.assertClubkonnectConfigured();
     const { platform, customerId } = req.body;
     const bettingPlatform = await getPlatformById(platform);
-    if (!bettingPlatform?.vtpassServiceId) {
+    const providerServiceId = bettingPlatform?.providerServiceId || bettingPlatform?.vtpassServiceId;
+    if (!providerServiceId) {
       return res.status(400).json({ success: false, message: 'This betting platform is not available' });
     }
 
-    const result = await vtpass.verifyBettingCustomer({
-      vtpassServiceId: bettingPlatform.vtpassServiceId,
+    const result = await clubkonnect.verifyBettingCustomer({
+      providerServiceId,
+      platformId: bettingPlatform.platformId,
       customerId,
     });
 
@@ -559,7 +531,8 @@ const fundBetting = async (req, res, next) => {
     }
 
     const bettingPlatform = await getPlatformById(platform);
-    if (!bettingPlatform?.enabled || !bettingPlatform.vtpassServiceId) {
+    const providerServiceId = bettingPlatform?.providerServiceId || bettingPlatform?.vtpassServiceId;
+    if (!bettingPlatform?.enabled || !providerServiceId) {
       return res.status(400).json({
         success: false,
         message: 'This betting platform is not available right now. Please try another platform or contact support.',
@@ -583,13 +556,14 @@ const fundBetting = async (req, res, next) => {
       metadata: {
         platform: bettingPlatform.platformId,
         platformName: bettingPlatform.name,
-        vtpassServiceId: bettingPlatform.vtpassServiceId,
+        providerServiceId,
         customerId,
         phone,
       },
       applyPricing: false,
-      vtpassCall: (requestId) => vtpass.fundBettingWallet({
-        vtpassServiceId: bettingPlatform.vtpassServiceId,
+      providerCall: (requestId) => clubkonnect.fundBettingWallet({
+        providerServiceId,
+        platformId: bettingPlatform.platformId,
         customerId,
         amount,
         phone,

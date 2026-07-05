@@ -66,8 +66,8 @@ export const dataPlansApi = {
   create: (data) => api.post('/admin/data-plans', data),
   update: (id, data) => api.patch(`/admin/data-plans/${id}`, data),
   delete: (id) => api.delete(`/admin/data-plans/${id}`),
+  sync: () => api.post('/admin/data-plans/sync'),
 };
-
 export const electricityPlansApi = {
   list: () => api.get('/admin/electricity-plans'),
   create: (data) => api.post('/admin/electricity-plans', data),
@@ -80,6 +80,7 @@ export const tvPlansApi = {
   create: (data) => api.post('/admin/tv-plans', data),
   update: (id, data) => api.patch(`/admin/tv-plans/${id}`, data),
   delete: (id) => api.delete(`/admin/tv-plans/${id}`),
+  sync: () => api.post('/admin/tv-plans/sync'),
 };
 
 export const educationProductsApi = {
