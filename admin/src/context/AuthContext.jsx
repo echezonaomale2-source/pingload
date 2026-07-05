@@ -20,7 +20,12 @@ export const AuthProvider = ({ children }) => {
     setAdmin(adminUser);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await adminAuth.logout();
+    } catch {
+      // Clear local session even when offline.
+    }
     storage.removeItem(TOKEN_KEY);
     storage.removeItem(USER_KEY);
     setToken(null);

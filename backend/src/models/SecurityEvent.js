@@ -28,11 +28,13 @@ const securityEventSchema = new mongoose.Schema(
     deviceInfo: { type: String, default: null },
     location: { type: String, default: null },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
+    adminReadAt: { type: Date, default: null, index: true },
   },
   { timestamps: true }
 );
 
 securityEventSchema.index({ createdAt: -1 });
 securityEventSchema.index({ eventType: 1, createdAt: -1 });
+securityEventSchema.index({ adminReadAt: 1, createdAt: -1 });
 
 module.exports = mongoose.model('SecurityEvent', securityEventSchema);

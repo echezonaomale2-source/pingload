@@ -15,6 +15,7 @@ export const authService = {
     api.post('/auth/verify-otp', { email, otp, phone, purpose }),
   register: (data) => api.post('/auth/register', data),
   login: (email, password) => api.post('/auth/login', { email, password }),
+  logout: () => api.post('/auth/logout', {}, { skipGlobalLoader: true }),
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
   resetPassword: (data) => api.post('/auth/reset-password', data),
   getProfile: () => api.get('/auth/profile', { skipGlobalLoader: true }),

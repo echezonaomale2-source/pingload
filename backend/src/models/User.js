@@ -100,6 +100,7 @@ const userSchema = new mongoose.Schema(
     requireLoginPinReset: { type: Boolean, default: false },
     transactionPinFailedAttempts: { type: Number, default: 0, min: 0 },
     transactionPinLockedUntil: { type: Date, default: null },
+    tokenVersion: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

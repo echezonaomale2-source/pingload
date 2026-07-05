@@ -192,6 +192,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    try {
+      await authService.logout();
+    } catch {
+      // Proceed with local cleanup even if server logout fails (offline).
+    }
     await unregisterPushOnLogout();
     await clearPendingNotificationNav().catch(() => {});
     await SecureStore.deleteItemAsync('token');

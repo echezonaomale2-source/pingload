@@ -2,7 +2,12 @@ const express = require('express');
 const { body } = require('express-validator');
 const {
   login,
+  logout,
   getMe,
+  adminSearch,
+  getAdminInbox,
+  getAdminInboxUnreadCount,
+  markAdminInboxRead,
   getDashboardStats,
   getUsers,
   getUserById,
@@ -101,7 +106,13 @@ const walletAdjustValidation = [
 ];
 
 router.post('/auth/login', adminAuthLimiter, adminLoginValidation, validate, login);
+router.post('/auth/logout', protectAdmin, logout);
 router.get('/auth/me', protectAdmin, getMe);
+
+router.get('/search', protectAdmin, adminSearch);
+router.get('/inbox', protectAdmin, getAdminInbox);
+router.get('/inbox/unread-count', protectAdmin, getAdminInboxUnreadCount);
+router.patch('/inbox/read', protectAdmin, markAdminInboxRead);
 
 router.get('/dashboard/stats', protectAdmin, getDashboardStats);
 router.get('/dashboard/revenue', protectAdmin, getRevenueDashboard);

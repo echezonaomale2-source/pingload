@@ -10,7 +10,8 @@ const {
   OTP_PURPOSES,
 } = require('../services/termiiService');
 const generateReferralCode = require('../utils/generateReferralCode');
-const { signToken } = require('../config/jwt');
+const { signToken, verifyToken } = require('../config/jwt');
+const { revokeToken } = require('../services/tokenAuthService');
 const { referralBonus, developmentMode, termii } = require('../config/env');
 
 const sendOtpValidation = [
@@ -125,7 +126,7 @@ const register = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Email already registered' });
     }
 
-    if (!developmentMode && !isEmailOtpVerified(normalizedEmail, OTP_PURPOSES.REGISTRATION)) {
+    if (!developmentMode && !(await isEmailOtpVerified(normalizedEmail, OTP_PURPOSES.REGISTRATION))) {
       return res.status(400).json({
         success: false,
         message: 'Please verify your email with OTP before registering',
@@ -158,8 +159,8 @@ const register = async (req, res, next) => {
       });
     }
 
-    const token = signToken({ id: user._id, tokenType: 'user' });
-    clearEmailVerification(normalizedEmail, OTP_PURPOSES.REGISTRATION);
+    const token = signToken({ id: user._id, tokenType: 'user', tokenVersion: user.tokenVersion ?? 0 });
+    await clearEmailVerification(normalizedEmail, OTP_PURPOSES.REGISTRATION);
 
     res.status(201).json({
       success: true,
@@ -206,7 +207,7 @@ const login = async (req, res, next) => {
     user.appUnlockedUntil = null;
     await user.save();
 
-    const token = signToken({ id: user._id, tokenType: 'user' });
+    const token = signToken({ id: user._id, tokenType: 'user', tokenVersion: user.tokenVersion ?? 0 });
 
     res.json({
       success: true,
@@ -296,7 +297,7 @@ const resetPassword = async (req, res, next) => {
 
     user.passwordHash = newPassword;
     await user.save();
-    clearEmailVerification(normalizedEmail, OTP_PURPOSES.PASSWORD_RESET);
+    await clearEmailVerification(normalizedEmail, OTP_PURPOSES.PASSWORD_RESET);
 
     res.json({ success: true, message: 'Password reset successful' });
   } catch (error) {
@@ -407,12 +408,35 @@ const removeAvatar = async (req, res, next) => {
   }
 };
 
+const logout = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.startsWith('Bearer')
+      ? req.headers.authorization.split(' ')[1]
+      : null;
+
+    if (token) {
+      try {
+        const decoded = verifyToken(token);
+        await revokeToken(token, decoded);
+        await User.findByIdAndUpdate(decoded.id, { $inc: { tokenVersion: 1 } });
+      } catch {
+        // Token may already be invalid; still clear local session on client.
+      }
+    }
+
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAuthConfig,
   sendOtp,
   verifyOtp,
   register,
   login,
+  logout,
   forgotPassword,
   resetPassword,
   getProfile,

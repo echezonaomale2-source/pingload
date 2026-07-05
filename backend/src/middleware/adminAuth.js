@@ -1,5 +1,6 @@
 const Admin = require('../models/Admin');
 const { verifyToken } = require('../config/jwt');
+const { isTokenRevoked, assertTokenSessionValid } = require('../services/tokenAuthService');
 
 const protectAdmin = async (req, res, next) => {
   try {
@@ -9,6 +10,10 @@ const protectAdmin = async (req, res, next) => {
 
     if (!token) {
       return res.status(401).json({ success: false, message: 'Not authorized' });
+    }
+
+    if (await isTokenRevoked(token)) {
+      return res.status(401).json({ success: false, message: 'Session expired. Please log in again.' });
     }
 
     const decoded = verifyToken(token);
@@ -21,11 +26,16 @@ const protectAdmin = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Admin not found' });
     }
 
+    if (!assertTokenSessionValid(decoded, admin.tokenVersion)) {
+      return res.status(401).json({ success: false, message: 'Session expired. Please log in again.' });
+    }
+
     if (!['admin', 'superadmin'].includes(admin.role)) {
       return res.status(403).json({ success: false, message: 'Admin role is not authorized' });
     }
 
     req.admin = admin;
+    req.auth = decoded;
     next();
   } catch {
     return res.status(401).json({ success: false, message: 'Not authorized, token invalid' });

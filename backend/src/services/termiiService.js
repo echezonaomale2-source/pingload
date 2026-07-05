@@ -1,13 +1,14 @@
 const axios = require('axios');
+const OtpChallenge = require('../models/OtpChallenge');
 const { termii, developmentMode } = require('../config/env');
 const { logApiFailure } = require('../utils/logger');
 
 const UPSTREAM_UNAVAILABLE_MESSAGE = 'OTP service is temporarily unavailable. Please try again shortly.';
+const VERIFIED_TTL_MS = 10 * 60 * 1000;
 
 /** Normalize an upstream provider error into a user-safe message. */
 const upstreamMessage = (error, fallback) => {
   const raw = error.response?.data?.message || error.message || fallback;
-  // Termii returns the unhelpful "No message available" on its own 5xx errors.
   if (!raw || /no message available/i.test(raw)) return UPSTREAM_UNAVAILABLE_MESSAGE;
   return raw;
 };
@@ -20,9 +21,6 @@ const OTP_PURPOSES = {
 
 const OTP_EXPIRY_MS = 90 * 1000;
 const MAX_ATTEMPTS = 5;
-
-const otpStore = new Map();
-const verifiedKeys = new Set();
 
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -41,15 +39,54 @@ const storeKey = (email, phone, purpose) => {
   return `${purpose}:${identifier}`;
 };
 
-const markVerified = (email, phone, purpose) => {
-  verifiedKeys.add(storeKey(email, phone, purpose));
+const saveOtpChallenge = async (key, data) => {
+  const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
+  await OtpChallenge.findOneAndUpdate(
+    { key },
+    {
+      key,
+      code: data.code || null,
+      pinId: data.pinId || null,
+      channel: data.channel,
+      attempts: data.attempts ?? 0,
+      purpose: data.purpose,
+      verified: false,
+      destination: data.destination || null,
+      expiresAt,
+    },
+    { upsert: true, new: true }
+  );
 };
 
-const isVerified = (email, phone, purpose) => verifiedKeys.has(storeKey(email, phone, purpose));
+const markVerified = async (email, phone, purpose) => {
+  const key = storeKey(email, phone, purpose);
+  await OtpChallenge.findOneAndUpdate(
+    { key },
+    {
+      key,
+      channel: 'verified',
+      purpose,
+      verified: true,
+      attempts: 0,
+      expiresAt: new Date(Date.now() + VERIFIED_TTL_MS),
+    },
+    { upsert: true, new: true }
+  );
+};
 
-const clearVerification = (email, phone, purpose) => {
-  verifiedKeys.delete(storeKey(email, phone, purpose));
-  otpStore.delete(storeKey(email, phone, purpose));
+const isVerified = async (email, phone, purpose) => {
+  const key = storeKey(email, phone, purpose);
+  const doc = await OtpChallenge.findOne({
+    key,
+    verified: true,
+    expiresAt: { $gt: new Date() },
+  }).select('_id').lean();
+  return Boolean(doc);
+};
+
+const clearVerification = async (email, phone, purpose) => {
+  const key = storeKey(email, phone, purpose);
+  await OtpChallenge.deleteOne({ key });
 };
 
 const assertTermiiConfigured = () => {
@@ -61,13 +98,12 @@ const assertTermiiConfigured = () => {
   }
 };
 
-const sendDevOtp = (email, phone, purpose) => {
+const sendDevOtp = async (email, phone, purpose) => {
   const otp = generateOtp();
   const key = storeKey(email, phone, purpose);
-  otpStore.set(key, {
+  await saveOtpChallenge(key, {
     code: otp,
     channel: 'dev',
-    expiresAt: Date.now() + OTP_EXPIRY_MS,
     attempts: 0,
     purpose,
   });
@@ -125,7 +161,7 @@ const sendEmailOtp = async (email, purpose) => {
       throw error;
     }
     console.warn('[Termii] TERMII_EMAIL_CONFIGURATION_ID not set — OTP logged for email delivery fallback');
-    console.log(`[EMAIL OTP] ${normalizeEmail(email)} code=${otp}`);
+    console.log(`[EMAIL OTP] ${normalizeEmail(email)} code=${otp} (${messageText.replace('<CODE>', otp)})`);
   }
 
   return {
@@ -159,18 +195,14 @@ const sendOTP = async ({ email, phone, purpose = OTP_PURPOSES.REGISTRATION }) =>
   }
 
   const key = storeKey(email, phone, purpose);
-  // SMS is only attempted when explicitly requested (TERMII_OTP_CHANNEL=sms) AND a phone
-  // is supplied. The default "auto" prefers email, which is the configured, reliable channel
-  // and the one registration verifies against. SMS requires an approved Termii sender ID.
   const smsRequested = termii.otpChannel === 'sms' && Boolean(phone);
 
   if (smsRequested) {
     try {
       const smsResult = await sendSmsOtp(phone, purpose);
-      otpStore.set(key, {
+      await saveOtpChallenge(key, {
         pinId: smsResult.pinId,
         channel: 'sms',
-        expiresAt: Date.now() + OTP_EXPIRY_MS,
         attempts: 0,
         purpose,
         destination: smsResult.to,
@@ -190,23 +222,20 @@ const sendOTP = async ({ email, phone, purpose = OTP_PURPOSES.REGISTRATION }) =>
         purpose,
       });
 
-      // Without an email we cannot fall back, so surface the failure.
       if (!email) {
         if (process.env.NODE_ENV === 'development') return sendDevOtp(email, phone, purpose);
         const err = new Error(upstreamMessage(smsError, 'Failed to send OTP via SMS'));
         err.statusCode = 502;
         throw err;
       }
-      // Otherwise fall through to email so the user is never blocked by SMS issues.
     }
   }
 
   try {
     const emailResult = await sendEmailOtp(email, purpose);
-    otpStore.set(key, {
+    await saveOtpChallenge(key, {
       code: emailResult.code,
       channel: 'email',
-      expiresAt: Date.now() + OTP_EXPIRY_MS,
       attempts: 0,
       purpose,
       destination: normalizeEmail(email),
@@ -255,31 +284,31 @@ const verifyOTP = async ({ email, phone, code, purpose = OTP_PURPOSES.REGISTRATI
     return { success: false, message: 'Invalid OTP purpose' };
   }
 
+  const key = storeKey(email, phone, purpose);
+
   if (developmentMode) {
-    const key = storeKey(email, phone, purpose);
-    const stored = otpStore.get(key);
+    const stored = await OtpChallenge.findOne({ key, verified: false }).lean();
     if (stored?.code && stored.code !== code) {
       return { success: false, message: 'Invalid OTP code' };
     }
-    markVerified(email, phone, purpose);
-    otpStore.delete(key);
+    await markVerified(email, phone, purpose);
+    await OtpChallenge.deleteOne({ key, verified: false });
     return { success: true, message: 'OTP verified (development mode)' };
   }
 
-  const key = storeKey(email, phone, purpose);
-  const stored = otpStore.get(key);
+  const stored = await OtpChallenge.findOne({ key, verified: false });
 
   if (!stored) {
     return { success: false, message: 'OTP expired or not found. Request a new one.' };
   }
 
-  if (Date.now() > stored.expiresAt) {
-    otpStore.delete(key);
+  if (stored.expiresAt <= new Date()) {
+    await OtpChallenge.deleteOne({ _id: stored._id });
     return { success: false, message: 'OTP has expired. Request a new one.' };
   }
 
   if (stored.attempts >= MAX_ATTEMPTS) {
-    otpStore.delete(key);
+    await OtpChallenge.deleteOne({ _id: stored._id });
     return { success: false, message: 'Too many attempts. Request a new OTP.' };
   }
 
@@ -294,23 +323,25 @@ const verifyOTP = async ({ email, phone, code, purpose = OTP_PURPOSES.REGISTRATI
 
     if (!valid) {
       stored.attempts += 1;
+      await stored.save();
       return { success: false, message: 'Invalid OTP code' };
     }
 
-    markVerified(email, phone, purpose);
-    otpStore.delete(key);
+    await markVerified(email, phone, purpose);
+    await OtpChallenge.deleteOne({ _id: stored._id });
     return { success: true, message: 'OTP verified successfully' };
   } catch (error) {
     stored.attempts += 1;
+    await stored.save();
     const message = error.response?.data?.message || 'OTP verification failed';
     return { success: false, message };
   }
 };
 
-const isEmailOtpVerified = (email, purpose = OTP_PURPOSES.REGISTRATION) =>
+const isEmailOtpVerified = async (email, purpose = OTP_PURPOSES.REGISTRATION) =>
   isVerified(email, null, purpose);
 
-const clearEmailVerification = (email, purpose = OTP_PURPOSES.REGISTRATION) =>
+const clearEmailVerification = async (email, purpose = OTP_PURPOSES.REGISTRATION) =>
   clearVerification(email, null, purpose);
 
 const sendSecurityAlertEmail = async (email, subject, body) => {

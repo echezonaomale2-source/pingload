@@ -7,8 +7,10 @@ const KycDocument = require('../models/KycDocument');
 const Referral = require('../models/Referral');
 const SystemSettings = require('../models/SystemSettings');
 const SupportTicket = require('../models/SupportTicket');
+const SecurityEvent = require('../models/SecurityEvent');
 const { deliverUserNotification, deliverBulkNotification } = require('../services/notificationDeliveryService');
-const { signToken } = require('../config/jwt');
+const { signToken, verifyToken } = require('../config/jwt');
+const { revokeToken } = require('../services/tokenAuthService');
 const adjustWallet = require('../utils/adjustWallet');
 const { buildSafeRegex, parsePagination } = require('../utils/safeQuery');
 
@@ -25,7 +27,12 @@ const login = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    const token = signToken({ id: admin._id, role: admin.role, tokenType: 'admin' });
+    const token = signToken({
+      id: admin._id,
+      role: admin.role,
+      tokenType: 'admin',
+      tokenVersion: admin.tokenVersion ?? 0,
+    });
     res.json({
       success: true,
       data: {
@@ -41,6 +48,154 @@ const login = async (req, res, next) => {
 // GET /admin/auth/me
 const getMe = async (req, res) => {
   res.json({ success: true, data: req.admin });
+};
+
+// POST /admin/auth/logout
+const logout = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.startsWith('Bearer')
+      ? req.headers.authorization.split(' ')[1]
+      : null;
+
+    if (token) {
+      try {
+        const decoded = verifyToken(token);
+        await revokeToken(token, decoded);
+        await Admin.findByIdAndUpdate(decoded.id, { $inc: { tokenVersion: 1 } });
+      } catch {
+        // Ignore invalid token during logout.
+      }
+    }
+
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /admin/search?q=
+const adminSearch = async (req, res, next) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (!q || q.length < 2) {
+      return res.json({ success: true, data: { users: [], transactions: [] } });
+    }
+
+    const regex = buildSafeRegex(q);
+    const [users, transactions] = await Promise.all([
+      User.find({
+        $or: [
+          { fullName: regex },
+          { email: regex },
+          { phoneNumber: regex },
+          { referralCode: regex },
+        ],
+      })
+        .select('fullName email phoneNumber referralCode accountStatus walletBalance createdAt')
+        .sort({ createdAt: -1 })
+        .limit(8)
+        .lean(),
+      Transaction.find({
+        $or: [
+          { reference: regex },
+          { 'metadata.vtpassRequestId': regex },
+          { refundReference: regex },
+          { originalTransactionReference: regex },
+        ],
+      })
+        .populate('userId', 'fullName email')
+        .sort({ createdAt: -1 })
+        .limit(8)
+        .lean(),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        users: users.map((user) => ({
+          id: user._id,
+          fullName: user.fullName,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          referralCode: user.referralCode,
+          accountStatus: user.accountStatus,
+          walletBalance: user.walletBalance,
+        })),
+        transactions: transactions.map((tx) => ({
+          id: tx._id,
+          reference: tx.reference,
+          amount: tx.amount,
+          status: tx.status,
+          service: tx.service,
+          user: tx.userId?.fullName || null,
+          userEmail: tx.userId?.email || null,
+          createdAt: tx.createdAt,
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /admin/inbox
+const getAdminInbox = async (req, res, next) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 50);
+    const unreadOnly = req.query.unread === 'true';
+
+    const filter = unreadOnly ? { adminReadAt: null } : {};
+    const events = await SecurityEvent.find(filter)
+      .populate('userId', 'fullName email')
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json({
+      success: true,
+      data: events.map((event) => ({
+        id: event._id,
+        eventType: event.eventType,
+        severity: event.severity,
+        message: event.message,
+        user: event.userId?.fullName || null,
+        userEmail: event.userId?.email || null,
+        createdAt: event.createdAt,
+        read: Boolean(event.adminReadAt),
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /admin/inbox/unread-count
+const getAdminInboxUnreadCount = async (req, res, next) => {
+  try {
+    const count = await SecurityEvent.countDocuments({ adminReadAt: null });
+    res.json({ success: true, data: { count } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PATCH /admin/inbox/read
+const markAdminInboxRead = async (req, res, next) => {
+  try {
+    const { ids } = req.body || {};
+    const filter = Array.isArray(ids) && ids.length
+      ? { _id: { $in: ids }, adminReadAt: null }
+      : { adminReadAt: null };
+
+    const result = await SecurityEvent.updateMany(filter, { $set: { adminReadAt: new Date() } });
+    res.json({
+      success: true,
+      message: 'Notifications marked as read',
+      data: { modified: result.modifiedCount },
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // GET /admin/dashboard/stats
@@ -715,7 +870,12 @@ const changePassword = async (req, res, next) => {
 
 module.exports = {
   login,
+  logout,
   getMe,
+  adminSearch,
+  getAdminInbox,
+  getAdminInboxUnreadCount,
+  markAdminInboxRead,
   getDashboardStats,
   getUsers,
   getUserById,

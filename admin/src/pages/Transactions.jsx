@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader, SearchBar, DataTable, Badge, PageLoader, ErrorAlert } from '../components';
 import { transactionsApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency, formatDate, SERVICE_LABELS } from '../utils/formatters';
@@ -11,7 +11,9 @@ const PAGE_SIZE = 8;
 
 const TransactionsPage = () => {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const initialSearch = searchParams.get('search') || '';
+  const [search, setSearch] = useState(initialSearch);
   const [service, setService] = useState('all');
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
@@ -32,6 +34,14 @@ const TransactionsPage = () => {
   }, [search, service, status, page]);
 
   useEffect(() => { fetchTx(); }, [fetchTx]);
+
+  useEffect(() => {
+    const q = searchParams.get('search') || '';
+    if (q !== search) {
+      setSearch(q);
+      setPage(1);
+    }
+  }, [searchParams, search]);
 
   const columns = [
     { key: 'id', label: 'Transaction ID', render: (r) => <span className="font-mono text-xs">{r.reference || String(r.id).slice(-8)}</span> },

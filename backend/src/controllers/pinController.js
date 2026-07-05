@@ -159,7 +159,7 @@ const resetTransactionPinWithOtp = async (req, res, next) => {
     user.transactionPinLockedUntil = null;
     await user.save();
 
-    clearEmailVerification(user.email, OTP_PURPOSES.TRANSACTION_PIN_RESET);
+    await clearEmailVerification(user.email, OTP_PURPOSES.TRANSACTION_PIN_RESET);
 
     await recordSecurityEvent({
       userId: user._id,

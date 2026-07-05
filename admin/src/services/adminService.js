@@ -2,7 +2,18 @@ import api from './api';
 
 export const adminAuth = {
   login: (email, password) => api.post('/admin/auth/login', { email, password }, { skipAuthLogout: true }),
+  logout: () => api.post('/admin/auth/logout', {}, { skipAuthLogout: true, skipGlobalLoader: true }),
   me: () => api.get('/admin/auth/me', { skipGlobalLoader: true }),
+};
+
+export const searchApi = {
+  query: (q) => api.get('/admin/search', { params: { q }, skipGlobalLoader: true }),
+};
+
+export const inboxApi = {
+  list: (params) => api.get('/admin/inbox', { params, skipGlobalLoader: true }),
+  unreadCount: () => api.get('/admin/inbox/unread-count', { skipGlobalLoader: true }),
+  markRead: (ids) => api.patch('/admin/inbox/read', { ids }, { skipGlobalLoader: true }),
 };
 
 export const dashboardApi = {

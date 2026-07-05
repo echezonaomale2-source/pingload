@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ShieldAlert } from 'lucide-react';
 import { PageHeader, DataTable, PageLoader, ErrorAlert } from '../components';
 import { securityEventsApi, getErrorMessage } from '../services/adminService';
 

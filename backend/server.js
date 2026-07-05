@@ -29,6 +29,7 @@ const serviceConfig = require('./src/config/serviceConfig');
 const { initializeFcm } = require('./src/services/fcmService');
 const { verifyVtpassConnectivity } = require('./src/services/vtpassService');
 const { syncBettingPlatformsFromVtpass } = require('./src/services/bettingPlatformService');
+const { startVtpassReconciliationWorker } = require('./src/services/vtpassReconciliationWorker');
 
 const app = express();
 
@@ -135,6 +136,8 @@ const startServer = async () => {
     } else {
       console.warn(`[Betting] No VTpass betting platforms discovered — ${bettingSync.reason || 'whitelist betting products on VTpass or contact support'}`);
     }
+
+    startVtpassReconciliationWorker();
   }
 
   const server = app.listen(port, '0.0.0.0', () => {

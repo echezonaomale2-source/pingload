@@ -115,6 +115,46 @@ assertContains(
   'escapeRegex',
   'Safe regex escaping helper'
 );
+assertNotContains(
+  'src/services/termiiService.js',
+  'otpStore = new Map',
+  'In-memory OTP storage removed'
+);
+assertContains(
+  'src/models/OtpChallenge.js',
+  'expireAfterSeconds: 0',
+  'MongoDB OTP TTL index'
+);
+assertContains(
+  'src/models/RevokedToken.js',
+  'expireAfterSeconds: 0',
+  'JWT denylist TTL index'
+);
+assertContains(
+  'src/routes/authRoutes.js',
+  "router.post('/logout'",
+  'User logout route'
+);
+assertContains(
+  'src/routes/adminRoutes.js',
+  "router.post('/auth/logout'",
+  'Admin logout route'
+);
+assertContains(
+  'src/services/vtpassReconciliationWorker.js',
+  'startVtpassReconciliationWorker',
+  'VTpass reconciliation worker'
+);
+assertContains(
+  'src/routes/adminRoutes.js',
+  "router.get('/search'",
+  'Admin global search route'
+);
+assertContains(
+  'src/middleware/auth.js',
+  'isTokenRevoked',
+  'JWT denylist enforcement for users'
+);
 
 const failures = [];
 

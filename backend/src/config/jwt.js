@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { jwtSecret, jwtExpiresIn } = require('./env');
 
@@ -9,7 +10,11 @@ const signToken = (idOrPayload) => {
     ? { ...idOrPayload, ...(idOrPayload.id != null ? { id: String(idOrPayload.id) } : {}) }
     : { id: String(idOrPayload) };
 
-  return jwt.sign(payload, jwtSecret, { expiresIn: jwtExpiresIn });
+  return jwt.sign(
+    { ...payload, jti: crypto.randomUUID() },
+    jwtSecret,
+    { expiresIn: jwtExpiresIn }
+  );
 };
 
 const verifyToken = (token) => jwt.verify(token, jwtSecret);
