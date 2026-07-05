@@ -19,5 +19,6 @@ export const vtuService = {
   payTV: (data) => post('/vtu/tv', data),
   buyEducationPin: (data) => post('/vtu/education', data),
   getEducationProducts: () => api.get('/vtu/education-products', { skipGlobalLoader: true }),
+  getBettingPlatforms: () => api.get('/services/betting-platforms', { skipGlobalLoader: true }),
   fundBetting: (data) => post('/vtu/betting', data),
 };

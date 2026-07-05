@@ -7,6 +7,10 @@ const EducationProduct = require('../models/EducationProduct');
 const SystemSettings = require('../models/SystemSettings');
 const { groupByValidityCategory, inferValidityCategory } = require('../utils/validityCategory');
 const { groupTvPlans } = require('../utils/tvCategory');
+const {
+  listEnabledPlatforms,
+  mapPublicPlatform,
+} = require('../services/bettingPlatformService');
 
 const isDuplicateKeyError = (error) => error?.code === 11000;
 
@@ -159,6 +163,19 @@ const getElectricityPlans = async (_req, res, next) => {
         maxAmount: p.maxAmount,
         order: p.order,
       })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /services/betting-platforms — public enabled betting providers
+const getBettingPlatforms = async (_req, res, next) => {
+  try {
+    const platforms = await listEnabledPlatforms();
+    res.json({
+      success: true,
+      data: platforms.map(mapPublicPlatform),
     });
   } catch (error) {
     next(error);
@@ -454,6 +471,7 @@ module.exports = {
   adminUpdatePrice,
   getDataPlans,
   getElectricityPlans,
+  getBettingPlatforms,
   getTvPlans,
   adminListDataPlans,
   adminCreateDataPlan,

@@ -14,6 +14,9 @@ const { groupByValidityCategory, inferValidityCategory } = require('../utils/val
 const { groupTvPlans } = require('../utils/tvCategory');
 const { normalizeNigerianPhone, isValidNigerianPhone } = require('../utils/phoneUtils');
 const verifyTransactionPin = require('../utils/verifyTransactionPin');
+const {
+  getPlatformById,
+} = require('../services/bettingPlatformService');
 
 /** VTpass sometimes returns duplicate variation_code entries — keep first of each. */
 const dedupeByCode = (items, codeKey) => {
@@ -489,16 +492,44 @@ const fundBetting = async (req, res, next) => {
         message: 'A valid Nigerian phone number is required (e.g. 08012345678)',
       });
     }
+
+    const bettingPlatform = await getPlatformById(platform);
+    if (!bettingPlatform?.enabled || !bettingPlatform.vtpassServiceId) {
+      return res.status(400).json({
+        success: false,
+        message: 'This betting platform is not available right now. Please try another platform or contact support.',
+      });
+    }
+
+    if (amount < bettingPlatform.minAmount || amount > bettingPlatform.maxAmount) {
+      return res.status(400).json({
+        success: false,
+        message: `Amount must be between ₦${bettingPlatform.minAmount} and ₦${bettingPlatform.maxAmount}`,
+      });
+    }
+
     await verifyTransactionPin(req.user._id, pin, req);
 
     const result = await executeVtuPurchase({
       userId: req.user._id,
       service: 'betting',
       amount,
-      description: `Betting wallet: ₦${amount} to ${platform}`,
-      metadata: { platform, customerId, phone },
+      description: `Betting wallet: ₦${amount} to ${bettingPlatform.name}`,
+      metadata: {
+        platform: bettingPlatform.platformId,
+        platformName: bettingPlatform.name,
+        vtpassServiceId: bettingPlatform.vtpassServiceId,
+        customerId,
+        phone,
+      },
       applyPricing: false,
-      vtpassCall: (requestId) => vtpass.fundBettingWallet({ platform, customerId, amount, phone, requestId }),
+      vtpassCall: (requestId) => vtpass.fundBettingWallet({
+        vtpassServiceId: bettingPlatform.vtpassServiceId,
+        customerId,
+        amount,
+        phone,
+        requestId,
+      }),
     });
 
     sendPurchaseResponse(res, result);
@@ -576,10 +607,8 @@ const tvVerifyValidation = [
   body('smartcardNumber').trim().notEmpty().withMessage('Smartcard number is required'),
 ];
 
-const BETTING_PLATFORMS = ['bet9ja', 'betking', 'sportybet', '1xbet', 'bangbet', 'merrybet', 'premierbet'];
-
 const bettingValidation = [
-  body('platform').isIn(BETTING_PLATFORMS).withMessage('Invalid betting platform'),
+  body('platform').trim().notEmpty().withMessage('Betting platform is required'),
   body('customerId').trim().notEmpty().withMessage('Customer ID is required'),
   body('amount').isFloat({ min: 100 }).withMessage('Minimum betting funding is ₦100'),
   body('phone').optional().custom((value, { req }) => {

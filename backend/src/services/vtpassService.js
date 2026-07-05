@@ -9,6 +9,7 @@ const VTPASS_ERROR_MESSAGES = {
   '019': 'VTpass wallet balance is insufficient',
   '021': 'VTpass account is suspended',
   '027': 'Server IP is not whitelisted on VTpass. Contact VTpass support with your server outbound IP.',
+  '012': 'Betting product is not available on the payment provider',
   '028': 'Product is not whitelisted on your VTpass account',
   '030': 'Duplicate request ID — transaction may already exist',
   '031': 'Invalid request ID format',
@@ -337,26 +338,83 @@ const getEducationVariations = async (vtpassServiceId) => {
   }
 };
 
-const fundBettingWallet = async ({ platform, customerId, amount, phone, requestId }) => {
-  const serviceIds = {
-    bet9ja: 'bet9ja',
-    betking: 'betking',
-    sportybet: 'sportybet',
-    '1xbet': '1xbet',
-    bangbet: 'bangbet',
-    merrybet: 'merrybet',
-    premierbet: 'premierbet',
-  };
-  const serviceID = serviceIds[platform.toLowerCase()];
-  if (!serviceID) {
-    const error = new Error('Unsupported betting platform');
-    error.statusCode = 400;
+const SERVICE_CATEGORIES = [
+  'airtime',
+  'data',
+  'education',
+  'electricity-bill',
+  'insurance',
+  'other-services',
+  'tv-subscription',
+];
+
+const listServicesByCategory = async (identifier) => {
+  try {
+    const response = await vtpassGetClient.get('/services', {
+      params: { identifier },
+    });
+    const content = response.data?.content;
+    return Array.isArray(content) ? content : [];
+  } catch (error) {
+    const data = error.response?.data;
+    if (data?.code === '011') return [];
+    handleVtpassError(error);
+    return [];
+  }
+};
+
+const listAllServices = async () => {
+  const results = await Promise.all(SERVICE_CATEGORIES.map((identifier) => listServicesByCategory(identifier)));
+  const seen = new Set();
+  return results.flat().filter((service) => {
+    const id = service?.serviceID;
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+};
+
+const probeBettingServiceId = async (serviceID) => {
+  try {
+    const response = await vtpassPostClient.post('/merchant-verify', {
+      serviceID,
+      billersCode: '0000000000',
+    });
+    const code = String(response.data?.code || '');
+    if (code === '012' || code === '034' || code === '035') return null;
+    return { serviceID, code, response: response.data };
+  } catch (error) {
+    const code = String(error.response?.data?.code || error.vtpassCode || '');
+    if (code === '012' || code === '034' || code === '035') return null;
+    if (error.response?.data) {
+      return { serviceID, code, response: error.response.data };
+    }
+    return null;
+  }
+};
+
+const verifyBettingCustomer = async ({ vtpassServiceId, customerId }) => {
+  try {
+    const response = await vtpassPostClient.post('/merchant-verify', {
+      serviceID: vtpassServiceId,
+      billersCode: customerId,
+    });
+    return response.data;
+  } catch (error) {
+    handleVtpassError(error);
+  }
+};
+
+const fundBettingWallet = async ({ vtpassServiceId, customerId, amount, phone, requestId }) => {
+  if (!vtpassServiceId) {
+    const error = new Error('Betting platform is not configured on the payment provider');
+    error.statusCode = 503;
     throw error;
   }
   try {
     const response = await vtpassPostClient.post('/pay', {
       request_id: requestId || generateRequestId(),
-      serviceID,
+      serviceID: vtpassServiceId,
       billersCode: customerId,
       amount,
       phone,
@@ -494,6 +552,10 @@ module.exports = {
   verifyTVSmartcard,
   purchaseEducationPin,
   getEducationVariations,
+  listServicesByCategory,
+  listAllServices,
+  probeBettingServiceId,
+  verifyBettingCustomer,
   fundBettingWallet,
   requeryTransaction,
   generateRequestId,

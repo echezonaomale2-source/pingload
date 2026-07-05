@@ -27,6 +27,7 @@ const seedAdmin = require('./src/utils/seedAdmin');
 const serviceConfig = require('./src/config/serviceConfig');
 const { initializeFcm } = require('./src/services/fcmService');
 const { verifyVtpassConnectivity } = require('./src/services/vtpassService');
+const { syncBettingPlatformsFromVtpass } = require('./src/services/bettingPlatformService');
 
 const app = express();
 
@@ -122,6 +123,15 @@ const startServer = async () => {
     }
     if (vtpassStatus.ipWhitelistRequired) {
       console.error('[VTpass] VTpass error 027 = IP NOT WHITELISTED. Email support@vtpass.com with the IP above.');
+    }
+  }
+
+  if (serviceConfig.vtpass.configured) {
+    const bettingSync = await syncBettingPlatformsFromVtpass();
+    if (bettingSync.synced > 0) {
+      console.log(`[Betting] Synced ${bettingSync.synced} platform(s) from VTpass.`);
+    } else {
+      console.warn(`[Betting] No VTpass betting platforms discovered — ${bettingSync.reason || 'whitelist betting products on VTpass or contact support'}`);
     }
   }
 
