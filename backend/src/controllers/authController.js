@@ -188,8 +188,9 @@ const register = async (req, res, next) => {
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = email.trim().toLowerCase();
 
-    const user = await User.findOne({ email }).select('+passwordHash hasTransactionPin accountStatus');
+    const user = await User.findOne({ email: normalizedEmail }).select('+passwordHash hasTransactionPin accountStatus');
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }

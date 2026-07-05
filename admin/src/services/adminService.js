@@ -85,6 +85,12 @@ export const bettingPlatformsApi = {
   sync: () => api.post('/admin/betting-platforms/sync'),
 };
 
+export const providerLogosApi = {
+  list: () => api.get('/admin/provider-logos'),
+  update: (id, data) => api.patch(`/admin/provider-logos/${id}`, data),
+  remove: (id) => api.delete(`/admin/provider-logos/${id}`),
+};
+
 export const kycApi = {
   list: (params) => api.get('/admin/kyc', { params }),
   get: (id) => api.get(`/admin/kyc/${id}`),

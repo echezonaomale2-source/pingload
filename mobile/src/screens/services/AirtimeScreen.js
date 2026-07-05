@@ -14,6 +14,7 @@ import CustomButton from '../../components/CustomButton';
 import { TransactionPinModal } from '../../components/modals';
 import { vtuService } from '../../services/vtuService';
 import { useAuth } from '../../context/AuthContext';
+import { navigateToForgotTransactionPin } from '../../utils/forgotPinNavigation';
 import { useDialog } from '../../hooks/useDialog';
 
 const QUICK_AMOUNTS = [100, 200, 500, 1000, 2000];
@@ -106,7 +107,7 @@ const AirtimeScreen = ({ navigation }) => {
         </View>
 
         <CustomButton title={`Buy ${amount ? formatCurrency(parseFloat(amount)) : 'Airtime'}`} onPress={handlePurchase} loading={loading} />
-        <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPurchase} loading={loading} />
+        <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPurchase} loading={loading} onForgotPin={() => navigateToForgotTransactionPin(navigation, setShowPin)} />
       </ScrollView>
     </SafeAreaView>
   );

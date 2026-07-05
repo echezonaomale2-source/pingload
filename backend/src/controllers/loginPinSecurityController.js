@@ -93,7 +93,17 @@ const getLoginPinStatus = async (req, res, next) => {
 const setupLoginPin = async (req, res, next) => {
   try {
     const { pin } = req.body;
-    const user = await User.findById(req.user._id).select('+loginPin hasLoginPin');
+    let user = await User.findById(req.user._id).select('+loginPin hasLoginPin loginPinLockedUntil requireLoginPinReset');
+    user = await autoUnlockIfExpired(user);
+
+    const statusBefore = getLockStatus(user);
+    if (statusBefore.isLocked) {
+      return res.status(423).json({
+        success: false,
+        message: 'Login PIN is temporarily locked. Please try again later.',
+        data: statusBefore,
+      });
+    }
 
     user.loginPin = pin;
     user.loginPinFailedAttempts = 0;
@@ -137,6 +147,15 @@ const verifyLoginPin = async (req, res, next) => {
         success: false,
         code: 'LOGIN_PIN_NOT_SET',
         message: 'Please set up your login PIN first',
+        data: statusBefore,
+      });
+    }
+
+    if (user.requireLoginPinReset) {
+      return res.status(403).json({
+        success: false,
+        code: 'LOGIN_PIN_RESET_REQUIRED',
+        message: 'Please set a new login PIN in Security settings before unlocking.',
         data: statusBefore,
       });
     }

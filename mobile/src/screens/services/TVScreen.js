@@ -14,6 +14,7 @@ import { TransactionPinModal } from '../../components/modals';
 import { LogoLoader } from '../../components/loading';
 import { vtuService } from '../../services/vtuService';
 import { useAuth } from '../../context/AuthContext';
+import { navigateToForgotTransactionPin } from '../../utils/forgotPinNavigation';
 import { useDialog } from '../../hooks/useDialog';
 
 const TVScreen = ({ navigation }) => {
@@ -192,7 +193,7 @@ const TVScreen = ({ navigation }) => {
         ))}
 
         <CustomButton title="Pay Subscription" onPress={handlePay} loading={loading} disabled={!selectedPackage} />
-        <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPay} loading={loading} />
+        <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPay} loading={loading} onForgotPin={() => navigateToForgotTransactionPin(navigation, setShowPin)} />
       </ScrollView>
     </SafeAreaView>
   );

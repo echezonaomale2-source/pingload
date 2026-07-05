@@ -196,11 +196,22 @@ const executeVtuPurchase = async ({
       });
     }
 
-    const { transaction: updatedTx, refundResult } = await safeFinalizeTransaction(
+    const { transaction: updatedTx, refundResult, finalizeError } = await safeFinalizeTransaction(
       transaction,
       success,
       finalizeMetadata,
     );
+
+    if (finalizeError) {
+      return {
+        success: false,
+        transaction: updatedTx,
+        purchaseDetails,
+        refundTransaction: refundResult?.refundTransaction || null,
+        message: 'Purchase could not be finalized. If your wallet was debited, it will be refunded shortly.',
+        refunded: updatedTx.status !== 'pending',
+      };
+    }
 
     return {
       success,

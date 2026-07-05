@@ -29,6 +29,7 @@ import ElectricityPlansPage from './pages/ElectricityPlans';
 import TvPlansPage from './pages/TvPlans';
 import EducationProductsPage from './pages/EducationProducts';
 import BettingPlatformsPage from './pages/BettingPlatforms';
+import ProviderLogosPage from './pages/ProviderLogos';
 import RevenuePage from './pages/Revenue';
 import SecurityEventsPage from './pages/SecurityEvents';
 
@@ -58,6 +59,7 @@ const AppRoutes = () => (
       <Route path="tv-plans" element={<TvPlansPage />} />
       <Route path="education-products" element={<EducationProductsPage />} />
       <Route path="betting-platforms" element={<BettingPlatformsPage />} />
+      <Route path="provider-logos" element={<ProviderLogosPage />} />
       <Route path="revenue" element={<RevenuePage />} />
       <Route path="security-events" element={<SecurityEventsPage />} />
       <Route path="kyc" element={<KycPage />} />

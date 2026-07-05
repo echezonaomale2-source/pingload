@@ -13,6 +13,7 @@ import { TransactionPinModal } from '../../components/modals';
 import { LogoLoader } from '../../components/loading';
 import { vtuService } from '../../services/vtuService';
 import { useAuth } from '../../context/AuthContext';
+import { navigateToForgotTransactionPin } from '../../utils/forgotPinNavigation';
 import { useDialog } from '../../hooks/useDialog';
 
 const METER_TYPES = [
@@ -202,7 +203,7 @@ const ElectricityScreen = ({ navigation }) => {
         />
 
         <CustomButton title="Pay Bill" onPress={handlePay} loading={loading} disabled={!provider} />
-        <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPay} loading={loading} />
+        <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPay} loading={loading} onForgotPin={() => navigateToForgotTransactionPin(navigation, setShowPin)} />
       </ScrollView>
     </SafeAreaView>
   );

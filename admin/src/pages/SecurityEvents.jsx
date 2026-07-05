@@ -10,10 +10,13 @@ const EVENT_TYPES = [
   { value: 'login_failed', label: 'Failed Login' },
   { value: 'password_reset', label: 'Password Reset' },
   { value: 'password_changed', label: 'Password Changed' },
+  { value: 'transaction_pin_reset', label: 'Transaction PIN Reset' },
   { value: 'otp_failed', label: 'OTP Failed' },
   { value: 'device_changed', label: 'Device Changes' },
   { value: 'suspicious_activity', label: 'Suspicious Activity' },
 ];
+
+const PAGE_SIZE = 30;
 
 const severityClass = (severity) => {
   if (severity === 'critical') return 'bg-red-100 text-red-700';
@@ -24,6 +27,8 @@ const severityClass = (severity) => {
 
 const SecurityEventsPage = () => {
   const [events, setEvents] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [eventType, setEventType] = useState('all');
@@ -31,13 +36,18 @@ const SecurityEventsPage = () => {
 
   const fetchEvents = useCallback(() => {
     setLoading(true);
-    securityEventsApi.list({ eventType, search })
-      .then((res) => setEvents(res.data.data))
+    securityEventsApi.list({ eventType, search, page, limit: PAGE_SIZE })
+      .then((res) => {
+        setEvents(res.data.data);
+        setTotal(res.data.pagination?.total || 0);
+      })
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
-  }, [eventType, search]);
+  }, [eventType, search, page]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
+
+  useEffect(() => { setPage(1); }, [eventType, search]);
 
   const columns = [
     {
@@ -86,7 +96,17 @@ const SecurityEventsPage = () => {
         />
       </div>
 
-      {loading ? <PageLoader /> : <DataTable columns={columns} data={events} />}
+      {loading ? <PageLoader /> : (
+        <DataTable
+          columns={columns}
+          data={events}
+          page={page}
+          pageSize={PAGE_SIZE}
+          totalPages={Math.ceil(total / PAGE_SIZE)}
+          serverPaginated
+          onPageChange={setPage}
+        />
+      )}
     </div>
   );
 };

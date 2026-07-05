@@ -16,6 +16,7 @@ import { TransactionPinModal } from '../../components/modals';
 import { LogoLoader } from '../../components/loading';
 import { vtuService } from '../../services/vtuService';
 import { useAuth } from '../../context/AuthContext';
+import { navigateToForgotTransactionPin } from '../../utils/forgotPinNavigation';
 import { useDialog } from '../../hooks/useDialog';
 
 const EducationScreen = ({ navigation, route }) => {
@@ -215,7 +216,7 @@ const EducationScreen = ({ navigation, route }) => {
           </>
         )}
 
-        <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPurchase} loading={loading} />
+        <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPurchase} loading={loading} onForgotPin={() => navigateToForgotTransactionPin(navigation, setShowPin)} />
       </ScrollView>
     </SafeAreaView>
   );

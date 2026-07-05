@@ -39,6 +39,29 @@ const TransactionDetailsScreen = ({ navigation, route }) => {
   });
 
   const tx = data?.data?.data;
+  const purchaseDetails = tx?.metadata?.purchaseDetails || {};
+
+  const purchaseDetailRows = useMemo(() => {
+    const rows = [];
+    const add = (label, value) => {
+      if (value !== null && value !== undefined && String(value).trim()) {
+        rows.push({ label, value: String(value) });
+      }
+    };
+    add('Phone', purchaseDetails.phone);
+    add('Customer', purchaseDetails.customerName);
+    add('Meter token', purchaseDetails.token);
+    add('Units', purchaseDetails.units);
+    add('Product', purchaseDetails.productName);
+    if (purchaseDetails.pins?.length) {
+      purchaseDetails.pins.forEach((pin, index) => {
+        add(`PIN ${index + 1}`, pin.pin || pin.serial);
+      });
+    } else {
+      add('PIN / Code', purchaseDetails.purchasedCode);
+    }
+    return rows;
+  }, [purchaseDetails]);
 
   if (isLoading || !tx) return <PageLoader message="Loading details..." />;
 
@@ -96,6 +119,9 @@ const TransactionDetailsScreen = ({ navigation, route }) => {
             <DetailRow label="Date" value={formatDate(tx.createdAt)} />
             <DetailRow label="Status" value={getStatusLabel(tx.status, tx.transactionType)} valueColor={statusColor} />
             {tx.description ? <DetailRow label="Description" value={tx.description} /> : null}
+            {purchaseDetailRows.map((row) => (
+              <DetailRow key={row.label} label={row.label} value={row.value} />
+            ))}
             {tx.linkedRefund ? (
               <>
                 <View style={styles.sectionHeader}>

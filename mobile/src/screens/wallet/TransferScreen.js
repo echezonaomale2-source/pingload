@@ -9,6 +9,7 @@ import CustomButton from '../../components/CustomButton';
 import { TransactionPinModal } from '../../components/modals';
 import { walletService } from '../../services/walletService';
 import { useAuth } from '../../context/AuthContext';
+import { navigateToForgotTransactionPin } from '../../utils/forgotPinNavigation';
 import { useDialog } from '../../hooks/useDialog';
 
 const TransferScreen = ({ navigation }) => {
@@ -80,10 +81,7 @@ const TransferScreen = ({ navigation }) => {
         onConfirm={handleTransfer}
         loading={loading}
         title="Authorize Transfer"
-        onForgotPin={() => {
-          setShowPin(false);
-          navigation.navigate('ForgotTransactionPin');
-        }}
+        onForgotPin={() => navigateToForgotTransactionPin(navigation, setShowPin)}
       />
     </SafeAreaView>
   );

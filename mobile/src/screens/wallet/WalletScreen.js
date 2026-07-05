@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../context/AuthContext';
-import { walletService } from '../../services/walletService';
+import { transactionService } from '../../services/transactionService';
 import ScreenHeader from '../../components/ScreenHeader';
 import TransactionItem from '../../components/TransactionItem';
 import CustomButton from '../../components/CustomButton';
@@ -27,8 +27,8 @@ const WalletScreen = ({ navigation }) => {
   );
 
   const { data, isLoading } = useQuery({
-    queryKey: ['walletHistory'],
-    queryFn: () => walletService.getHistory(),
+    queryKey: ['walletRecentTransactions'],
+    queryFn: () => transactionService.getTransactions({ limit: 10 }),
     staleTime: 60000,
   });
 
@@ -56,11 +56,11 @@ const WalletScreen = ({ navigation }) => {
         </LinearGradient>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Wallet History</Text>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
           {history.length === 0 ? (
             <View style={styles.empty}>
               <Ionicons name="wallet-outline" size={40} color={colors.textLight} />
-              <Text style={styles.emptyText}>No funding history yet</Text>
+              <Text style={styles.emptyText}>No wallet activity yet</Text>
             </View>
           ) : (
             history.map((tx) => (

@@ -115,16 +115,48 @@ const fetchDataPlans = async (req, res, next) => {
   }
 };
 
+const amountsMatch = (a, b) => Math.abs(Number(a) - Number(b)) < 0.01;
+
+const resolveDataPlanAmount = async ({ network, variationCode, amount }) => {
+  const plan = await DataPlan.findOne({
+    network: String(network).toLowerCase(),
+    variationCode,
+    enabled: true,
+  });
+  if (plan && !amountsMatch(amount, plan.amount)) {
+    const error = new Error(`Invalid plan amount. Expected ₦${plan.amount}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return plan?.amount ?? amount;
+};
+
+const resolveTvPlanAmount = async ({ provider, variationCode, amount }) => {
+  const plan = await TvPlan.findOne({
+    provider: String(provider).toLowerCase(),
+    variationCode,
+    enabled: true,
+  });
+  if (plan && !amountsMatch(amount, plan.amount)) {
+    const error = new Error(`Invalid package amount. Expected ₦${plan.amount}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return plan?.amount ?? amount;
+};
+
 const buyData = async (req, res, next) => {
   try {
     await assertServiceEnabled('data');
     const { network, phone, variationCode, amount, pin } = req.body;
     await verifyTransactionPin(req.user._id, pin, req);
 
+    const validatedAmount = await resolveDataPlanAmount({ network, variationCode, amount });
+
     const result = await executeVtuPurchase({
       userId: req.user._id,
       service: 'data',
-      amount,
+      amount: validatedAmount,
       description: `Data purchase for ${phone} (${network})`,
       metadata: { network, phone, variationCode },
       vtpassCall: (requestId) => vtpass.purchaseData({ network, phone, variationCode, requestId }),
@@ -317,10 +349,12 @@ const payTV = async (req, res, next) => {
     const { provider, smartcardNumber, variationCode, amount, phone, pin } = req.body;
     await verifyTransactionPin(req.user._id, pin, req);
 
+    const validatedAmount = await resolveTvPlanAmount({ provider, variationCode, amount });
+
     const result = await executeVtuPurchase({
       userId: req.user._id,
       service: 'tv',
-      amount,
+      amount: validatedAmount,
       description: `TV subscription: ${provider} for ${smartcardNumber}`,
       metadata: { provider, smartcardNumber, variationCode, phone },
       vtpassCall: (requestId) => vtpass.payTV({

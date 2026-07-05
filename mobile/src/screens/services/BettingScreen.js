@@ -13,7 +13,7 @@ import ProviderSelector from '../../components/ProviderSelector';
 import { TransactionPinModal } from '../../components/modals';
 import { vtuService } from '../../services/vtuService';
 import { useAuth } from '../../context/AuthContext';
-import { useDialog } from '../../hooks/useDialog';
+import { navigateToForgotTransactionPin } from '../../utils/forgotPinNavigation';
 
 const MIN_AMOUNT = 100;
 
@@ -42,6 +42,8 @@ const BettingScreen = ({ navigation, route }) => {
   const [phone, setPhone] = useState(normalizePhone(user?.phoneNumber || ''));
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [customerName, setCustomerName] = useState('');
   const [showPin, setShowPin] = useState(false);
 
   const selectedPlatform = platforms.find((item) => item.id === platform);
@@ -69,6 +71,31 @@ const BettingScreen = ({ navigation, route }) => {
     loadPlatforms();
   }, [loadPlatforms]);
 
+  const handleVerifyCustomer = async () => {
+    if (!platform || !customerId.trim()) {
+      dialog.alertError('Missing Details', 'Select platform and enter customer ID');
+      return;
+    }
+    setVerifying(true);
+    try {
+      const res = await vtuService.verifyBettingCustomer({
+        platform,
+        customerId: customerId.trim(),
+      });
+      const name = res.data.data?.customerName;
+      setCustomerName(name || 'Verified');
+      dialog.showSuccess({
+        title: 'Customer Verified',
+        message: name ? `Account: ${name}` : 'Customer ID verified successfully.',
+      });
+    } catch (err) {
+      dialog.alertError('Verification Failed', err.response?.data?.message || 'Could not verify customer ID');
+      setCustomerName('');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const handleFund = () => {
     if (!platforms.length) {
       dialog.alertError('Unavailable', 'Betting funding is not available right now. Please try again later.');
@@ -76,6 +103,10 @@ const BettingScreen = ({ navigation, route }) => {
     }
     if (!platform || !customerId || !amount || !phone) {
       dialog.alertError('Missing Details', 'Please fill in all fields');
+      return;
+    }
+    if (!customerName) {
+      dialog.alertError('Verify Required', 'Please verify your customer ID before funding');
       return;
     }
     const parsedAmount = parseFloat(amount);
@@ -151,9 +182,13 @@ const BettingScreen = ({ navigation, route }) => {
             <FormInput
               label="Customer ID / Username"
               value={customerId}
-              onChangeText={setCustomerId}
+              onChangeText={(v) => { setCustomerId(v); setCustomerName(''); }}
               autoCapitalize="none"
             />
+            {customerName ? (
+              <Text style={styles.verifiedText}>Verified: {customerName}</Text>
+            ) : null}
+            <CustomButton title="Verify Customer ID" variant="outline" onPress={handleVerifyCustomer} loading={verifying} style={styles.verifyBtn} />
             <FormInput
               label="Phone Number"
               value={phone}
@@ -178,6 +213,7 @@ const BettingScreen = ({ navigation, route }) => {
           onConfirm={confirmFund}
           loading={loading}
           title="Authorize Betting Payment"
+          onForgotPin={() => navigateToForgotTransactionPin(navigation, setShowPin)}
         />
       </ScrollView>
     </SafeAreaView>
@@ -199,6 +235,8 @@ const createStyles = (colors) => StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   emptyText: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+  verifiedText: { color: colors.success, fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  verifyBtn: { marginBottom: 16 },
 });
 
 export default BettingScreen;

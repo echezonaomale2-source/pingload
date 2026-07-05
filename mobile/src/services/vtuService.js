@@ -17,6 +17,7 @@ export const vtuService = {
   getTVPackages: (provider) => api.get(`/vtu/tv-packages/${provider}`, { skipGlobalLoader: true }),
   verifyTVSmartcard: (data) => api.post('/vtu/tv/verify', data),
   payTV: (data) => post('/vtu/tv', data),
+  verifyBettingCustomer: (data) => api.post('/vtu/betting/verify', data),
   buyEducationPin: (data) => post('/vtu/education', data),
   getEducationProducts: () => api.get('/vtu/education-products', { skipGlobalLoader: true }),
   getBettingPlatforms: () => api.get('/services/betting-platforms', { skipGlobalLoader: true }),
