@@ -7,7 +7,9 @@ import PingloadLogo from '../../components/PingloadLogo';
 import { LogoLoader } from '../../components/loading';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import * as Device from 'expo-device';
 import { authenticateWithBiometric, getBiometricSupport } from '../../services/biometricService';
+import { authService } from '../../services/authService';
 
 const BiometricUnlockScreen = () => {
   const { completeUnlock, switchToPinUnlock, user } = useAuth();
@@ -30,6 +32,12 @@ const BiometricUnlockScreen = () => {
     setLoading(false);
 
     if (result.success) {
+      try {
+        await authService.confirmBiometricUnlock({ deviceInfo: Device.modelName || 'device' });
+      } catch {
+        switchToPinUnlock();
+        return;
+      }
       completeUnlock();
       return;
     }

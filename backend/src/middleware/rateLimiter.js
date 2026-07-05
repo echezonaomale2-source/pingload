@@ -32,4 +32,12 @@ const vtuLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-module.exports = { authLimiter, adminAuthLimiter, apiLimiter, vtuLimiter };
+const loginPinLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: 'Too many PIN attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+module.exports = { authLimiter, adminAuthLimiter, apiLimiter, vtuLimiter, loginPinLimiter };

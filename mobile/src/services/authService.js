@@ -48,7 +48,7 @@ export const authService = {
   },
   removeAvatar: () => api.delete('/auth/avatar', { skipGlobalLoader: true }),
   getLoginPinStatus: () => api.get('/auth/login-pin/status', { skipGlobalLoader: true }),
-  recordLoginPinFailure: (data) => api.post('/auth/login-pin/failed', data, { skipGlobalLoader: true }),
-  recordLoginPinSuccess: (data) => api.post('/auth/login-pin/success', data, { skipGlobalLoader: true }),
-  clearLoginPinReset: () => api.post('/auth/login-pin/reset-complete', {}, { skipGlobalLoader: true }),
+  setupLoginPin: (pin) => api.post('/auth/login-pin/setup', { pin }, { skipGlobalLoader: true }),
+  verifyLoginPin: (data) => api.post('/auth/login-pin/verify', data, { skipGlobalLoader: true }),
+  confirmBiometricUnlock: (data) => api.post('/auth/login-pin/biometric-unlock', data || {}, { skipGlobalLoader: true }),
 };

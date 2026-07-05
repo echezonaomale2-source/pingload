@@ -11,11 +11,13 @@ const {
 } = require('../controllers/walletController');
 const validate = require('../middleware/validate');
 const { protect } = require('../middleware/auth');
+const requireAppUnlock = require('../middleware/requireAppUnlock');
 const idempotency = require('../middleware/idempotency');
 
 const router = express.Router();
 
 router.use(protect);
+router.use(requireAppUnlock);
 
 router.get('/balance', getBalance);
 router.get('/payment-config', getPaystackConfig);

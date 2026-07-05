@@ -202,6 +202,9 @@ const login = async (req, res, next) => {
       });
     }
 
+    user.appUnlockedUntil = null;
+    await user.save();
+
     const token = signToken({ id: user._id, tokenType: 'user' });
 
     res.json({

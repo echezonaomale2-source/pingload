@@ -21,13 +21,14 @@ const {
 } = require('../controllers/authController');
 const {
   getLoginPinStatus,
-  recordLoginPinFailure,
-  recordLoginPinSuccess,
-  clearLoginPinResetRequirement,
+  setupLoginPin,
+  verifyLoginPin,
+  confirmBiometricUnlock,
+  loginPinValidation,
 } = require('../controllers/loginPinSecurityController');
 const validate = require('../middleware/validate');
 const { protect } = require('../middleware/auth');
-const { authLimiter } = require('../middleware/rateLimiter');
+const { authLimiter, loginPinLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
@@ -47,8 +48,8 @@ router.put('/avatar', protect, updateAvatar);
 router.delete('/avatar', protect, removeAvatar);
 
 router.get('/login-pin/status', protect, getLoginPinStatus);
-router.post('/login-pin/failed', protect, recordLoginPinFailure);
-router.post('/login-pin/success', protect, recordLoginPinSuccess);
-router.post('/login-pin/reset-complete', protect, clearLoginPinResetRequirement);
+router.post('/login-pin/setup', protect, authLimiter, loginPinValidation, validate, setupLoginPin);
+router.post('/login-pin/verify', protect, loginPinLimiter, loginPinValidation, validate, verifyLoginPin);
+router.post('/login-pin/biometric-unlock', protect, loginPinLimiter, confirmBiometricUnlock);
 
 module.exports = router;

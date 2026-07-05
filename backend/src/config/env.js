@@ -84,7 +84,7 @@ module.exports = {
   isProduction: serviceConfig.isProduction,
   mongodbUri: process.env.MONGODB_URI || defaults.MONGODB_URI,
   jwtSecret: process.env.JWT_SECRET || defaults.JWT_SECRET,
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1d',
   termii: {
     apiKey: process.env.TERMII_API_KEY,
     senderId: process.env.TERMII_SENDER_ID || 'Pingload',

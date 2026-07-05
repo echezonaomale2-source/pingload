@@ -7,7 +7,7 @@ import PingloadLogo from '../../components/PingloadLogo';
 import PinPad from '../../components/PinPad';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { verifyLoginPin, getLoginPinLength } from '../../services/loginPinService';
+import { getLoginPinLength } from '../../services/loginPinService';
 import { authService } from '../../services/authService';
 
 const formatCountdown = (seconds) => {
@@ -44,19 +44,18 @@ const LoginPinUnlockScreen = () => {
       if (status.isLocked) {
         setError('Your account is temporarily locked. Please try again later or sign in with password.');
       }
-      if (status.requireLoginPinReset) {
+      if (status.requireLoginPinReset || status.code === 'LOGIN_PIN_NOT_SET' || !status.hasLoginPin) {
         await forceLoginPinSetup();
-        return;
       }
     } catch {
-      // Offline — allow local verify only; backend sync on next success/failure
+      // Offline — status refresh is best-effort.
     }
   }, [forceLoginPinSetup]);
 
   useEffect(() => {
     getLoginPinLength().then(setPinLength);
     refreshLockStatus();
-  }, [refreshLockStatus, forceLoginPinSetup]);
+  }, [refreshLockStatus]);
 
   useEffect(() => {
     if (!lockStatus?.isLocked || remainingSeconds <= 0) return undefined;
@@ -83,40 +82,28 @@ const LoginPinUnlockScreen = () => {
       setError('');
       setWarning('');
 
-      const valid = await verifyLoginPin(pin);
-
-      if (valid) {
-        try {
-          await authService.recordLoginPinSuccess({ deviceInfo });
-        } catch {
-          // Best effort
-        }
+      try {
+        await authService.verifyLoginPin({ pin, deviceInfo });
         verifyingRef.current = false;
         setVerifying(false);
         completeUnlock();
         return;
-      }
-
-      try {
-        const res = await authService.recordLoginPinFailure({ deviceInfo });
-        const status = res.data?.data;
-        if (status) {
-          setLockStatus(status);
-          setRemainingSeconds(status.remainingSeconds || 0);
-        }
-        setError(res.data?.message || 'Incorrect PIN. Please try again.');
-        if (status?.failedAttempts === 3 && !status?.isLocked) {
-          setWarning('Warning: One more incorrect PIN attempt may temporarily lock your account.');
-        }
       } catch (err) {
         const status = err.response?.data?.data;
         const message = err.response?.data?.message || 'Incorrect PIN. Please try again.';
+        const code = err.response?.data?.code;
+
+        if (code === 'LOGIN_PIN_NOT_SET') {
+          await forceLoginPinSetup();
+          return;
+        }
+
         if (status) {
           setLockStatus(status);
           setRemainingSeconds(status.remainingSeconds || 0);
         }
         setError(message);
-        if (status?.failedAttempts >= 3 && !status?.isLocked) {
+        if (status?.failedAttempts === 3 && !status?.isLocked) {
           setWarning('Warning: One more incorrect PIN attempt may temporarily lock your account.');
         }
       }
@@ -127,7 +114,7 @@ const LoginPinUnlockScreen = () => {
     };
 
     verify();
-  }, [pin, pinLength, verifying, lockStatus?.isLocked, completeUnlock, deviceInfo]);
+  }, [pin, pinLength, verifying, lockStatus?.isLocked, completeUnlock, deviceInfo, forceLoginPinSetup]);
 
   const isLocked = lockStatus?.isLocked && remainingSeconds > 0;
 

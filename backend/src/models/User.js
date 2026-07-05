@@ -53,6 +53,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    loginPin: {
+      type: String,
+      select: false,
+    },
+    hasLoginPin: {
+      type: Boolean,
+      default: false,
+    },
+    appUnlockedUntil: {
+      type: Date,
+      default: null,
+    },
     isEmailVerified: {
       type: Boolean,
       default: false,
@@ -100,6 +112,10 @@ userSchema.pre('save', async function (next) {
     this.transactionPin = await bcrypt.hash(this.transactionPin, 12);
     this.hasTransactionPin = true;
   }
+  if (this.isModified('loginPin') && this.loginPin) {
+    this.loginPin = await bcrypt.hash(this.loginPin, 12);
+    this.hasLoginPin = true;
+  }
   next();
 });
 
@@ -110,6 +126,11 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 userSchema.methods.comparePin = async function (candidatePin) {
   if (!this.transactionPin) return false;
   return bcrypt.compare(candidatePin, this.transactionPin);
+};
+
+userSchema.methods.compareLoginPin = async function (candidatePin) {
+  if (!this.loginPin) return false;
+  return bcrypt.compare(candidatePin, this.loginPin);
 };
 
 module.exports = mongoose.model('User', userSchema);

@@ -174,12 +174,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const finishLoginPinSetup = async (pin) => {
+    await authService.setupLoginPin(pin);
     await setLoginPin(pin);
-    try {
-      await authService.clearLoginPinReset();
-    } catch {
-      // Best effort — PIN is set locally
-    }
     setNeedsLoginPinSetup(false);
     activateSession();
   };

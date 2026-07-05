@@ -83,8 +83,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !config?.skipAuthLogout) {
       const message = (error.response?.data?.message || '').toLowerCase();
       const isPinError = /transaction pin|incorrect pin|current pin/.test(message);
-      const isAuthFailure = /not authorized|token invalid|session expired|invalid token|user not found|user access required/.test(message);
-      if (!isPinError && isAuthFailure) {
+      const isAuthFailure = /not authorized|token invalid|session expired|invalid token|user not found|user access required|unlock the app/i.test(message);
+      const isAppLocked = error.response?.data?.code === 'APP_LOCKED';
+      if (!isPinError && !isAppLocked && isAuthFailure) {
         await SecureStore.deleteItemAsync('token');
       }
     }

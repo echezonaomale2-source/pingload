@@ -3,28 +3,33 @@ import { adminAuth } from '../services/adminService';
 
 const AuthContext = createContext(null);
 
+const TOKEN_KEY = 'pingload_admin_token';
+const USER_KEY = 'pingload_admin_user';
+
+const storage = typeof sessionStorage !== 'undefined' ? sessionStorage : localStorage;
+
 export const AuthProvider = ({ children }) => {
   const [admin, setAdmin] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const persistSession = useCallback((authToken, adminUser) => {
-    localStorage.setItem('pingload_admin_token', authToken);
-    localStorage.setItem('pingload_admin_user', JSON.stringify(adminUser));
+    storage.setItem(TOKEN_KEY, authToken);
+    storage.setItem(USER_KEY, JSON.stringify(adminUser));
     setToken(authToken);
     setAdmin(adminUser);
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('pingload_admin_token');
-    localStorage.removeItem('pingload_admin_user');
+    storage.removeItem(TOKEN_KEY);
+    storage.removeItem(USER_KEY);
     setToken(null);
     setAdmin(null);
   }, []);
 
   useEffect(() => {
     const init = async () => {
-      const saved = localStorage.getItem('pingload_admin_token');
+      const saved = storage.getItem(TOKEN_KEY);
       if (!saved) {
         setLoading(false);
         return;

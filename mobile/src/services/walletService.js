@@ -16,7 +16,7 @@ export const walletService = {
   getBalance: () => api.get('/wallet/balance', { skipGlobalLoader: true }),
   getPaymentConfig: () => api.get('/wallet/payment-config', { skipGlobalLoader: true }),
   fundWallet: (amount) => api.post('/wallet/fund', { amount }, withIdempotency()),
-  transfer: (data) => api.post('/wallet/transfer', data),
+  transfer: (data) => api.post('/wallet/transfer', data, withIdempotency()),
   verifyFunding: (reference) => api.get(`/wallet/verify/${reference}`, {
     showGlobalLoader: true,
     loadingMessage: LOADING_MESSAGES.VERIFY_PAYMENT,

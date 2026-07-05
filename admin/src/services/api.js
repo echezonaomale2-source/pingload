@@ -18,8 +18,13 @@ const shouldShowGlobalLoader = (config) => {
   return ['post', 'put', 'patch', 'delete'].includes(method);
 };
 
+const TOKEN_KEY = 'pingload_admin_token';
+const USER_KEY = 'pingload_admin_user';
+
+const storage = typeof sessionStorage !== 'undefined' ? sessionStorage : localStorage;
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('pingload_admin_token');
+  const token = storage.getItem(TOKEN_KEY);
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
   if (shouldShowGlobalLoader(config)) {
@@ -38,8 +43,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.config && shouldShowGlobalLoader(error.config)) hideGlobalLoader();
     if (error.response?.status === 401 && !error.config?.skipAuthLogout) {
-      localStorage.removeItem('pingload_admin_token');
-      localStorage.removeItem('pingload_admin_user');
+      storage.removeItem(TOKEN_KEY);
+      storage.removeItem(USER_KEY);
       window.location.href = '/login';
     }
     return Promise.reject(error);
