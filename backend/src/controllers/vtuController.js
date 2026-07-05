@@ -13,6 +13,7 @@ const {
 const { groupByValidityCategory, inferValidityCategory } = require('../utils/validityCategory');
 const { groupTvPlans } = require('../utils/tvCategory');
 const { normalizeNigerianPhone, isValidNigerianPhone } = require('../utils/phoneUtils');
+const verifyTransactionPin = require('../utils/verifyTransactionPin');
 
 /** VTpass sometimes returns duplicate variation_code entries — keep first of each. */
 const dedupeByCode = (items, codeKey) => {
@@ -41,7 +42,7 @@ const buyAirtime = async (req, res, next) => {
   try {
     await assertServiceEnabled('airtime');
     const { network, phone, amount, pin } = req.body;
-    await verifyTransactionPin(req.user._id, pin);
+    await verifyTransactionPin(req.user._id, pin, req);
 
     const result = await executeVtuPurchase({
       userId: req.user._id,
@@ -115,7 +116,7 @@ const buyData = async (req, res, next) => {
   try {
     await assertServiceEnabled('data');
     const { network, phone, variationCode, amount, pin } = req.body;
-    await verifyTransactionPin(req.user._id, pin);
+    await verifyTransactionPin(req.user._id, pin, req);
 
     const result = await executeVtuPurchase({
       userId: req.user._id,
@@ -157,7 +158,7 @@ const payElectricity = async (req, res, next) => {
   try {
     await assertServiceEnabled('electricity');
     const { provider, meterNumber, meterType, amount, phone, pin } = req.body;
-    await verifyTransactionPin(req.user._id, pin);
+    await verifyTransactionPin(req.user._id, pin, req);
 
     const plan = await resolveElectricityProvider(provider);
     if (amount < plan.minAmount || amount > plan.maxAmount) {
@@ -311,7 +312,7 @@ const payTV = async (req, res, next) => {
   try {
     await assertServiceEnabled('tv');
     const { provider, smartcardNumber, variationCode, amount, phone, pin } = req.body;
-    await verifyTransactionPin(req.user._id, pin);
+    await verifyTransactionPin(req.user._id, pin, req);
 
     const result = await executeVtuPurchase({
       userId: req.user._id,
@@ -342,7 +343,7 @@ const buyEducationPin = async (req, res, next) => {
     await assertServiceEnabled('education');
 
     const { productId, productCode, quantity = 1, amount, phone, billersCode, pin } = req.body;
-    await verifyTransactionPin(req.user._id, pin);
+    await verifyTransactionPin(req.user._id, pin, req);
 
     const productFilter = productId ? { _id: productId } : { productCode };
     const product = await EducationProduct.findOne({ ...productFilter, enabled: true });
@@ -488,7 +489,7 @@ const fundBetting = async (req, res, next) => {
         message: 'A valid Nigerian phone number is required (e.g. 08012345678)',
       });
     }
-    await verifyTransactionPin(req.user._id, pin);
+    await verifyTransactionPin(req.user._id, pin, req);
 
     const result = await executeVtuPurchase({
       userId: req.user._id,

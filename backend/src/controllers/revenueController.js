@@ -26,6 +26,9 @@ const sumRevenue = async (match) => {
   return result[0]?.total || 0;
 };
 
+const countTransactions = async (match) =>
+  Transaction.countDocuments({ ...match, status: 'successful', transactionType: 'debit' });
+
 const revenueByService = async (match) => {
   const rows = await Transaction.aggregate([
     { $match: { ...match, status: 'successful', transactionType: 'debit' } },
@@ -74,6 +77,11 @@ const getRevenueDashboard = async (_req, res, next) => {
       revenueWeek,
       revenueMonth,
       revenueYear,
+      totalTransactions,
+      transactionsToday,
+      transactionsWeek,
+      transactionsMonth,
+      transactionsYear,
       serviceBreakdown,
       commissionTotal,
       monthlyTrend,
@@ -83,6 +91,11 @@ const getRevenueDashboard = async (_req, res, next) => {
       sumRevenue({ createdAt: { $gte: weekStart } }),
       sumRevenue({ createdAt: { $gte: monthStart } }),
       sumRevenue({ createdAt: { $gte: yearStart } }),
+      countTransactions({}),
+      countTransactions({ createdAt: { $gte: todayStart } }),
+      countTransactions({ createdAt: { $gte: weekStart } }),
+      countTransactions({ createdAt: { $gte: monthStart } }),
+      countTransactions({ createdAt: { $gte: yearStart } }),
       revenueByService({ createdAt: { $gte: monthStart } }),
       estimateCommission({ createdAt: { $gte: monthStart } }),
       Transaction.aggregate([
@@ -110,6 +123,11 @@ const getRevenueDashboard = async (_req, res, next) => {
           revenueWeek,
           revenueMonth,
           revenueYear,
+          totalTransactions,
+          transactionsToday,
+          transactionsWeek,
+          transactionsMonth,
+          transactionsYear,
         },
         serviceBreakdown,
         monthlyTrend: monthlyTrend.map((m) => ({

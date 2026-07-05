@@ -95,7 +95,7 @@ const transferFunds = async (req, res, next) => {
   try {
     const { recipient, amount, pin, note } = req.body;
     const transferAmount = Number(amount);
-    await verifyTransactionPin(req.user._id, pin);
+    await verifyTransactionPin(req.user._id, pin, req);
 
     const recipientUser = await User.findOne({
       $or: [{ email: recipient.toLowerCase() }, { phoneNumber: recipient }],

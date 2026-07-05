@@ -23,10 +23,12 @@ const {
 const validate = require('../middleware/validate');
 const idempotency = require('../middleware/idempotency');
 const { protect } = require('../middleware/auth');
+const { vtuLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
 router.use(protect);
+router.use(vtuLimiter);
 
 router.post('/airtime', idempotency('vtu:airtime'), airtimeValidation, validate, buyAirtime);
 router.get('/data-plans/:network', fetchDataPlans);

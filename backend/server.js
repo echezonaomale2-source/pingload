@@ -43,7 +43,10 @@ app.use('/api/webhooks/paystack', express.raw({ type: 'application/json' }), (re
   next();
 });
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: nodeEnv === 'production',
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(cors({
   origin: corsOrigins.length === 1 ? corsOrigins[0] : corsOrigins,
   credentials: true,

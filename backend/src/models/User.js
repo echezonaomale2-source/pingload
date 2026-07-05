@@ -86,6 +86,8 @@ const userSchema = new mongoose.Schema(
     loginPinFailedAttempts: { type: Number, default: 0, min: 0 },
     loginPinLockedUntil: { type: Date, default: null },
     requireLoginPinReset: { type: Boolean, default: false },
+    transactionPinFailedAttempts: { type: Number, default: 0, min: 0 },
+    transactionPinLockedUntil: { type: Date, default: null },
   },
   { timestamps: true }
 );

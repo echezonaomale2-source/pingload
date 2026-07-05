@@ -24,4 +24,12 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-module.exports = { authLimiter, adminAuthLimiter, apiLimiter };
+const vtuLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  message: { success: false, message: 'Too many purchase attempts, please try again shortly' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+module.exports = { authLimiter, adminAuthLimiter, apiLimiter, vtuLimiter };
