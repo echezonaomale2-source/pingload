@@ -13,7 +13,6 @@ const {
 } = require('../services/bettingPlatformService');
 const vtuProvider = require('../services/vtuProviderService');
 const serviceConfig = require('../config/serviceConfig');
-const serviceConfig = require('../config/serviceConfig');
 
 const isDuplicateKeyError = (error) => error?.code === 11000;
 
