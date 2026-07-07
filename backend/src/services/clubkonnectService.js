@@ -17,12 +17,21 @@ const TERMINAL_FAILURE = new Set(['ORDER_CANCELLED', 'ORDER_ERROR']);
 
 const CLUBKONNECT_ERROR_MESSAGES = {
   INVALID_CREDENTIALS: 'Clubkonnect credentials are invalid',
+  INVALID_APICREDENTIALS: 'Clubkonnect API credentials are invalid',
   MISSING_CREDENTIALS: 'Clubkonnect credentials are missing',
   INSUFFICIENT_BALANCE: 'Clubkonnect wallet balance is insufficient',
   INVALID_RECIPIENT: 'Invalid phone number or customer ID',
   INVALID_METERNO: 'Invalid meter number',
   INVALID_SMARTCARDNO: 'Invalid smartcard number',
 };
+
+const CLUBKONNECT_FAILURE_STATUSES = new Set([
+  'INVALID_APICREDENTIALS',
+  'INVALID_CREDENTIALS',
+  'MISSING_CREDENTIALS',
+  'ORDER_ERROR',
+  'ORDER_CANCELLED',
+]);
 
 const apiClient = attachClubkonnectLogger(axios.create({
   baseURL: serviceConfig.clubkonnect.baseUrl,
@@ -68,8 +77,34 @@ const extractProviderFailureReason = (result) => {
   }
   if (remark) return String(remark);
   const status = String(result.status || '').toUpperCase();
+  if (CLUBKONNECT_FAILURE_STATUSES.has(status) || status.startsWith('INVALID')) {
+    return CLUBKONNECT_ERROR_MESSAGES[status] || status.replace(/_/g, ' ').toLowerCase();
+  }
   if (status.includes('ERROR')) return result.description || status.replace(/_/g, ' ').toLowerCase();
   return null;
+};
+
+const isHtmlPayload = (text) => typeof text === 'string' && /<!DOCTYPE html|<html/i.test(text);
+
+const summarizeClubkonnectProbeFailure = (result, serverIp) => {
+  const reason = extractProviderFailureReason(result);
+  if (reason && isHtmlPayload(reason)) {
+    return serverIp
+      ? `Clubkonnect blocked the request — whitelist server IP ${serverIp} on your Clubkonnect dashboard`
+      : 'Clubkonnect returned an HTML error page — verify API credentials and IP whitelist';
+  }
+  return reason || 'Clubkonnect wallet probe failed';
+};
+
+const isWalletBalanceHealthy = (balance) => {
+  if (!balance || typeof balance !== 'object') return false;
+  const status = String(balance.status || '').toUpperCase();
+  if (status) {
+    if (CLUBKONNECT_FAILURE_STATUSES.has(status) || status.startsWith('INVALID') || status.includes('ERROR')) {
+      return false;
+    }
+  }
+  return balance.balance !== undefined && balance.balance !== null && String(balance.balance).trim() !== '';
 };
 
 const resolvePurchaseOutcome = (result) => {
@@ -503,19 +538,18 @@ const verifyClubkonnectConnectivity = async () => {
 
   try {
     const balance = await getWalletBalance();
-    const status = String(balance?.status || '').toUpperCase();
-    if (status && !status.includes('ERROR')) {
+    if (isWalletBalanceHealthy(balance)) {
       return {
         ok: true,
         configured: true,
         baseUrl: serviceConfig.clubkonnect.baseUrl,
         serverIp,
         purchasesEnabled: true,
-        balance: balance?.balance || null,
+        balance: balance.balance,
       };
     }
 
-    const reason = extractProviderFailureReason(balance) || 'Clubkonnect wallet probe failed';
+    const reason = summarizeClubkonnectProbeFailure(balance, serverIp);
     logClubkonnect('error', 'Clubkonnect startup probe failed', { reason, serverIp, response: balance });
 
     return {

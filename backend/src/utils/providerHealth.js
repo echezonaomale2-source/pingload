@@ -1,5 +1,14 @@
 const VtuProviderConfig = require('../models/VtuProviderConfig');
 
+const sanitizeHealthMessage = (message) => {
+  if (!message) return 'Connection failed';
+  const text = String(message).replace(/\s+/g, ' ').trim();
+  if (/<!DOCTYPE html|<html/i.test(text)) {
+    return 'Provider returned an HTML error page — verify credentials and IP whitelist';
+  }
+  return text.length > 240 ? `${text.slice(0, 240)}...` : text;
+};
+
 const persistProviderHealth = async (providerId, result = {}) => {
   const now = new Date();
   const healthStatus = result.ok
@@ -9,7 +18,7 @@ const persistProviderHealth = async (providerId, result = {}) => {
       : 'unknown';
   const message = result.ok
     ? 'Connection successful'
-    : result.reason || 'Connection failed';
+    : sanitizeHealthMessage(result.reason || 'Connection failed');
 
   await VtuProviderConfig.findOneAndUpdate(
     { providerId },

@@ -46,8 +46,8 @@ const resolveDevelopmentMode = () => {
 const termiiApiKey = process.env.TERMII_API_KEY || '';
 const termiiConfigured = Boolean(termiiApiKey && termiiApiKey !== 'dev-placeholder');
 
-const clubkonnectUserId = process.env.CLUBKONNECT_USER_ID || '';
-const clubkonnectApiKey = process.env.CLUBKONNECT_API_KEY || '';
+const clubkonnectUserId = (process.env.CLUBKONNECT_USER_ID || '').trim();
+const clubkonnectApiKey = (process.env.CLUBKONNECT_API_KEY || '').trim();
 
 const serviceConfig = {
   nodeEnv,
