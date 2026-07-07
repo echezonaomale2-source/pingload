@@ -25,23 +25,11 @@ const {
   buildProviderCatalogQuery,
   buildMultiProviderCatalogQuery,
 } = require('../utils/resolveProviderFields');
+const {
+  mapDataPlanForPublicApi,
+} = require('../utils/dataPlanFields');
 
-const mapDataPlanForApi = (plan) => {
-  const provider = plan.vtuProvider || 'clubkonnect';
-  return {
-    variation_code: resolveVariationCode(plan, provider),
-    name: plan.name,
-    variation_amount: String(plan.amount),
-    dataSize: plan.dataSize,
-    validity: plan.validity,
-    validityCategory: plan.validityCategory || inferValidityCategory(plan.validity),
-    category: plan.category || '',
-    commissionPercent: plan.commissionPercent || 0,
-    order: plan.order || 0,
-    vtuProvider: provider,
-    planId: String(plan._id),
-  };
-};
+const mapDataPlanForApi = (plan) => mapDataPlanForPublicApi(plan, inferValidityCategory);
 
 /** Clubkonnect sometimes returns duplicate plan codes — keep first of each. */
 const dedupeByCode = (items, codeKey) => {
@@ -144,7 +132,13 @@ const fetchDataPlans = async (req, res, next) => {
 
 const amountsMatch = (a, b) => Math.abs(Number(a) - Number(b)) < 0.01;
 
-const findDataPlan = async ({ network, variationCode }) => {
+const findDataPlan = async ({ network, variationCode, planId }) => {
+  if (planId) {
+    const plan = await DataPlan.findById(planId);
+    if (!plan || !plan.enabled) return null;
+    if (network && plan.network !== String(network).toLowerCase()) return null;
+    return plan;
+  }
   const catalogProviders = await vtuProvider.getCatalogProviders('data');
   return DataPlan.findOne(
     buildMultiProviderCatalogQuery({
@@ -155,8 +149,17 @@ const findDataPlan = async ({ network, variationCode }) => {
   );
 };
 
-const resolveDataPlanAmount = async ({ network, variationCode, amount }) => {
-  const plan = await findDataPlan({ network, variationCode });
+const resolveDataPurchaseCode = (plan) => {
+  if (!plan) return null;
+  const provider = plan.vtuProvider || 'clubkonnect';
+  if (provider === 'vtpass') {
+    return plan.providerVariationCode || plan.providerPlanCode || plan.vtpassVariationCode || plan.variationCode;
+  }
+  return plan.providerProductCode || plan.providerPlanCode || plan.planCode || plan.variationCode;
+};
+
+const resolveDataPlanAmount = async ({ network, variationCode, amount, planId }) => {
+  const plan = await findDataPlan({ network, variationCode, planId });
   if (plan && !amountsMatch(amount, plan.amount)) {
     const error = new Error(`Invalid plan amount. Expected ₦${plan.amount}`);
     error.statusCode = 400;
@@ -165,21 +168,20 @@ const resolveDataPlanAmount = async ({ network, variationCode, amount }) => {
   return { amount: plan?.amount ?? amount, plan };
 };
 
-const resolveDataProviderCode = async ({ network, variationCode, plan }) => {
-  const resolvedPlan = plan || await findDataPlan({ network, variationCode });
+const resolveDataProviderCode = async ({ network, variationCode, plan, planId }) => {
+  const resolvedPlan = plan || await findDataPlan({ network, variationCode, planId });
   if (!resolvedPlan) return variationCode;
-  const provider = resolvedPlan.vtuProvider || 'clubkonnect';
-  return resolveVariationCode(resolvedPlan, provider) || variationCode;
+  return resolveDataPurchaseCode(resolvedPlan) || variationCode;
 };
 
 const findTvPlan = async ({ provider, variationCode }) => {
-  const catalogProviders = await vtuProvider.getCatalogProviders('tv');
+  const routedProvider = await vtuProvider.getRoutedProviderName('tv');
   return TvPlan.findOne(
-    buildMultiProviderCatalogQuery({
+    buildProviderCatalogQuery({
       provider: String(provider).toLowerCase(),
       enabled: true,
       ...variationCodeQuery(variationCode),
-    }, catalogProviders)
+    }, routedProvider)
   );
 };
 
@@ -203,11 +205,18 @@ const resolveTvProviderCode = async ({ provider, variationCode, plan }) => {
 const buyData = async (req, res, next) => {
   try {
     await assertServiceEnabled('data');
-    const { network, phone, variationCode, amount, pin } = req.body;
+    const { network, phone, variationCode, amount, pin, planId } = req.body;
     await verifyTransactionPin(req.user._id, pin, req);
 
-    const { amount: validatedAmount, plan: dataPlan } = await resolveDataPlanAmount({ network, variationCode, amount });
-    const providerCode = await resolveDataProviderCode({ network, variationCode, plan: dataPlan });
+    const { amount: validatedAmount, plan: dataPlan } = await resolveDataPlanAmount({
+      network, variationCode, amount, planId,
+    });
+    if (!dataPlan && planId) {
+      return res.status(404).json({ success: false, message: 'Selected data plan was not found' });
+    }
+    const providerCode = await resolveDataProviderCode({
+      network, variationCode, plan: dataPlan, planId,
+    });
     const purchaseProvider = dataPlan?.vtuProvider || await vtuProvider.getRoutedProviderName('data');
 
     const result = await executeVtuPurchase({
@@ -237,12 +246,12 @@ const buyData = async (req, res, next) => {
 
 const resolveElectricityProvider = async (providerId) => {
   await ElectricityPlan.ensureDefaults();
-  const catalogProviders = await vtuProvider.getCatalogProviders('electricity');
+  const routedProvider = await vtuProvider.getRoutedProviderName('electricity');
   const plan = await ElectricityPlan.findOne(
-    buildMultiProviderCatalogQuery({
+    buildProviderCatalogQuery({
       providerId: String(providerId).toLowerCase(),
       enabled: true,
-    }, catalogProviders)
+    }, routedProvider)
   ).select('+vtpassServiceId');
   if (!plan) {
     const error = new Error('Electricity provider is unavailable');
@@ -353,11 +362,11 @@ const verifyElectricityMeter = async (req, res, next) => {
 const fetchTVPackages = async (req, res, next) => {
   try {
     const { provider } = req.params;
-    const catalogProviders = await vtuProvider.getCatalogProviders('tv');
+    const routedProvider = await vtuProvider.getRoutedProviderName('tv');
     await TvPlan.ensureDefaults();
 
     const localPlans = await TvPlan.find(
-      buildMultiProviderCatalogQuery({ provider, enabled: true }, catalogProviders)
+      buildProviderCatalogQuery({ provider, enabled: true }, routedProvider)
     ).sort({ order: 1, amount: 1 });
     if (localPlans.length > 0) {
       const mapped = localPlans.map((p) => {
@@ -377,32 +386,31 @@ const fetchTVPackages = async (req, res, next) => {
         data: mapped,
         groups: groupTvPlans(mapped),
         source: 'local',
-        catalogProviders,
+        vtuProvider: routedProvider,
       });
     }
 
-    for (const activeProvider of catalogProviders) {
-      if (!vtuProvider.isProviderConfigured(activeProvider)) continue;
+    if (vtuProvider.isProviderConfigured(routedProvider)) {
       try {
-        const result = await vtuProvider.getTVPackages(provider, activeProvider);
+        const result = await vtuProvider.getTVPackages(provider, routedProvider);
         const packages = dedupeByCode(
           (result.content?.variations || []).map((pkg) => ({
             code: pkg.variation_code,
             name: pkg.name,
             amount: parseFloat(pkg.variation_amount),
-            vtuProvider: activeProvider,
+            vtuProvider: routedProvider,
           })),
           'code'
         );
         if (packages.length > 0) {
-          return res.json({ success: true, data: packages, source: activeProvider, catalogProviders });
+          return res.json({ success: true, data: packages, source: routedProvider, vtuProvider: routedProvider });
         }
       } catch {
-        // try next provider
+        // fall through
       }
     }
 
-    res.json({ success: true, data: [], source: 'local', catalogProviders });
+    res.json({ success: true, data: [], source: 'local', vtuProvider: routedProvider });
   } catch (error) {
     next(error);
   }
@@ -473,9 +481,9 @@ const buyEducationPin = async (req, res, next) => {
     await verifyTransactionPin(req.user._id, pin, req);
 
     const productFilter = productId ? { _id: productId } : { productCode };
-    const catalogProviders = await vtuProvider.getCatalogProviders('education');
+    const routedProvider = await vtuProvider.getRoutedProviderName('education');
     const product = await EducationProduct.findOne(
-      buildMultiProviderCatalogQuery({ ...productFilter, enabled: true }, catalogProviders)
+      buildProviderCatalogQuery({ ...productFilter, enabled: true }, routedProvider)
     ).select('+vtpassServiceId');
     if (!product) {
       return res.status(404).json({ success: false, message: 'Education product not found or disabled' });
@@ -551,9 +559,9 @@ const fetchEducationProducts = async (req, res, next) => {
     await assertServiceEnabled('education');
     await EducationProduct.ensureDefaults();
 
-    const catalogProviders = await vtuProvider.getCatalogProviders('education');
+    const routedProvider = await vtuProvider.getRoutedProviderName('education');
     const allProducts = await EducationProduct.find(
-      buildMultiProviderCatalogQuery({}, catalogProviders)
+      buildProviderCatalogQuery({}, routedProvider)
     ).sort({ order: 1, amount: 1 });
     const enabledProducts = allProducts.filter((product) => product.enabled);
 
@@ -571,7 +579,7 @@ const fetchEducationProducts = async (req, res, next) => {
       };
     });
 
-    res.json({ success: true, data: enabledProducts, exams, catalogProviders });
+    res.json({ success: true, data: enabledProducts, exams, vtuProvider: routedProvider });
   } catch (error) {
     next(error);
   }
@@ -709,6 +717,7 @@ const dataValidation = [
   body('network').isIn(['mtn', 'airtel', 'glo', '9mobile']).withMessage('Invalid network'),
   body('phone').matches(/^0[789][01]\d{8}$/).withMessage('Invalid Nigerian phone number'),
   body('variationCode').notEmpty().withMessage('Data plan is required'),
+  body('planId').optional().isMongoId().withMessage('Invalid plan ID'),
   body('amount').isFloat({ min: 100 }).withMessage('Invalid amount'),
   pinValidation,
 ];

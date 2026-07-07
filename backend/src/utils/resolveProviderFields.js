@@ -20,7 +20,14 @@ const resolveServiceId = (record, provider) => {
 };
 
 const variationCodeQuery = (code) => ({
-  $or: [{ variationCode: code }, { planCode: code }, { vtpassVariationCode: code }],
+  $or: [
+    { providerPlanCode: code },
+    { variationCode: code },
+    { planCode: code },
+    { vtpassVariationCode: code },
+    { providerVariationCode: code },
+    { providerProductCode: code },
+  ],
 });
 
 const assignVariationCodeForProvider = (payload, provider) => {

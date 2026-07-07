@@ -23,6 +23,14 @@ const migrateVtuSettings = async (settings) => {
     });
   }
 
+  if (!settings.dataProviderEnabled) {
+    settings.dataProviderEnabled = {
+      clubkonnect: settings.providerEnabled?.clubkonnect !== false,
+      vtpass: settings.providerEnabled?.vtpass !== false,
+    };
+    changed = true;
+  }
+
   if (!settings.providerEnabled) {
     settings.providerEnabled = { clubkonnect: true, vtpass: true };
     changed = true;

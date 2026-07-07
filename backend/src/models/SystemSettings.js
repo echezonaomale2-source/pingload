@@ -20,6 +20,14 @@ const providerEnabledSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const dataProviderEnabledSchema = new mongoose.Schema(
+  {
+    clubkonnect: { type: Boolean, default: true },
+    vtpass: { type: Boolean, default: true },
+  },
+  { _id: false }
+);
+
 const serviceRoutingSchema = new mongoose.Schema(
   {
     airtime: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
@@ -49,6 +57,10 @@ const systemSettingsSchema = new mongoose.Schema(
     },
     providerEnabled: {
       type: providerEnabledSchema,
+      default: () => ({ clubkonnect: true, vtpass: true }),
+    },
+    dataProviderEnabled: {
+      type: dataProviderEnabledSchema,
       default: () => ({ clubkonnect: true, vtpass: true }),
     },
     serviceRouting: {

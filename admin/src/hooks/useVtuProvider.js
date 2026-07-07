@@ -33,7 +33,9 @@ export const useVtuProvider = () => {
     return () => window.removeEventListener('focus', onFocus);
   }, [refresh]);
 
-  const activeProviders = providers.filter((p) => p.enabled && p.configured).map((p) => p.providerId);
+  const activeProviders = (providers || [])
+    .filter((p) => p.dataEnabled && p.configured)
+    .map((p) => p.providerId);
   const selected = status?.preferred || status?.active || 'clubkonnect';
   const label = providerLabel(selected);
   const otherLabel = providerLabel(selected === 'vtpass' ? 'clubkonnect' : 'vtpass');

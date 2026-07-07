@@ -22,11 +22,17 @@ import { useDialog } from '../../hooks/useDialog';
 const dedupeDataPlans = (plans) => {
   const seen = new Set();
   return (plans || []).filter((plan) => {
-    const code = plan.variation_code;
-    if (!code || seen.has(code)) return false;
-    seen.add(code);
+    const key = plan.planId || `${plan.provider || plan.vtuProvider || 'clubkonnect'}:${plan.variation_code}`;
+    if (!plan.variation_code || seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
+};
+
+const providerLabel = (plan) => {
+  if (plan.providerLabel) return plan.providerLabel;
+  const provider = plan.provider || plan.vtuProvider;
+  return provider === 'vtpass' ? 'VTpass' : 'Clubkonnect';
 };
 
 const GROUP_ORDER = ['daily', 'weekly', 'monthly', 'yearly'];
@@ -129,6 +135,7 @@ const DataScreen = ({ navigation }) => {
         network,
         phone: normalizePhone(phone),
         variationCode: selectedPlan.variation_code,
+        planId: selectedPlan.planId,
         amount: parseFloat(selectedPlan.variation_amount),
         pin,
       });
@@ -204,10 +211,10 @@ const DataScreen = ({ navigation }) => {
           </View>
         )}
 
-        {activeGroup?.plans?.length ? activeGroup.plans.map((plan, index) => (
+        {activeGroup?.plans?.length ? activeGroup.plans.map((plan) => (
           <TouchableOpacity
-            key={`${plan.variation_code}-${index}`}
-            style={[styles.planItem, selectedPlan?.variation_code === plan.variation_code && styles.planActive]}
+            key={plan.planId || `${plan.provider}-${plan.variation_code}`}
+            style={[styles.planItem, selectedPlan?.planId === plan.planId && styles.planActive]}
             onPress={() => setSelectedPlan(plan)}
           >
             <View style={styles.planInfo}>
@@ -217,6 +224,7 @@ const DataScreen = ({ navigation }) => {
                   {[plan.dataSize, plan.validity].filter(Boolean).join(' · ')}
                 </Text>
               ) : null}
+              <Text style={styles.planProvider}>{providerLabel(plan)}</Text>
             </View>
             <Text style={styles.planPrice}>{formatCurrency(parseFloat(plan.variation_amount))}</Text>
           </TouchableOpacity>
@@ -227,10 +235,10 @@ const DataScreen = ({ navigation }) => {
         {planGroups.find((g) => g.category === 'other')?.plans?.length > 0 && (
           <>
             <Text style={styles.otherHeading}>Other Plans</Text>
-            {planGroups.find((g) => g.category === 'other').plans.map((plan, index) => (
+            {planGroups.find((g) => g.category === 'other').plans.map((plan) => (
               <TouchableOpacity
-                key={`other-${plan.variation_code}-${index}`}
-                style={[styles.planItem, selectedPlan?.variation_code === plan.variation_code && styles.planActive]}
+                key={`other-${plan.planId || plan.variation_code}`}
+                style={[styles.planItem, selectedPlan?.planId === plan.planId && styles.planActive]}
                 onPress={() => setSelectedPlan(plan)}
               >
                 <View style={styles.planInfo}>
@@ -240,6 +248,7 @@ const DataScreen = ({ navigation }) => {
                       {[plan.dataSize, plan.validity].filter(Boolean).join(' · ')}
                     </Text>
                   ) : null}
+                  <Text style={styles.planProvider}>{providerLabel(plan)}</Text>
                 </View>
                 <Text style={styles.planPrice}>{formatCurrency(parseFloat(plan.variation_amount))}</Text>
               </TouchableOpacity>
@@ -318,6 +327,7 @@ const createStyles = (colors) => StyleSheet.create({
   planInfo: { flex: 1, marginRight: 12 },
   planName: { fontSize: 14, fontWeight: '700', color: colors.text },
   planMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  planProvider: { fontSize: 11, color: colors.primary, marginTop: 4, fontWeight: '700' },
   planPrice: { fontSize: 14, fontWeight: '800', color: colors.primary },
 });
 

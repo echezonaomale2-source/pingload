@@ -5,9 +5,10 @@ const TvPlan = require('../models/TvPlan');
 const vtuProvider = require('../services/vtuProviderService');
 const routing = require('../services/vtuRoutingService');
 const { bumpCatalogVersion } = require('../utils/catalogInvalidation');
-const { VTU_SERVICES, PROVIDER_LABELS } = require('../utils/vtuConstants');
+const { NON_DATA_SERVICES, PROVIDER_LABELS } = require('../utils/vtuConstants');
 const { normalizeProvider } = require('../utils/migrateVtuSettings');
 const { tagWithVtuProvider } = require('../utils/resolveProviderFields');
+const { buildDataPlanSyncUpdate } = require('../utils/dataPlanFields');
 
 const DATA_NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
 const TV_PROVIDERS = ['dstv', 'gotv', 'startimes'];
@@ -21,7 +22,7 @@ const listProviders = async (_req, res, next) => {
   }
 };
 
-const updateProviderEnabled = async (req, res, next) => {
+const updateDataProviderEnabled = async (req, res, next) => {
   try {
     const providerId = normalizeProvider(req.params.providerId);
     const { enabled } = req.body;
@@ -36,19 +37,17 @@ const updateProviderEnabled = async (req, res, next) => {
     }
 
     const settings = await SystemSettings.getSettings();
-    settings.providerEnabled[providerId] = enabled;
+    settings.dataProviderEnabled[providerId] = enabled;
     await settings.save();
     routing.invalidateRoutingCache();
-
-    await VtuProviderConfig.findOneAndUpdate(
-      { providerId },
-      { $set: { enabled } },
-      { upsert: true }
-    );
-
     await bumpCatalogVersion();
+
     const snapshot = await routing.getRoutingSnapshot();
-    res.json({ success: true, data: snapshot, message: `${PROVIDER_LABELS[providerId]} ${enabled ? 'enabled' : 'disabled'}` });
+    res.json({
+      success: true,
+      data: snapshot,
+      message: `${PROVIDER_LABELS[providerId]} data ${enabled ? 'enabled' : 'disabled'}`,
+    });
   } catch (error) {
     next(error);
   }
@@ -62,7 +61,7 @@ const updateServiceRouting = async (req, res, next) => {
     }
 
     const settings = await SystemSettings.getSettings();
-    for (const service of VTU_SERVICES) {
+    for (const service of NON_DATA_SERVICES) {
       if (serviceRouting[service] !== undefined) {
         const provider = normalizeProvider(serviceRouting[service]);
         if (!routing.isProviderConfigured(provider)) {
@@ -71,24 +70,17 @@ const updateServiceRouting = async (req, res, next) => {
             message: `${PROVIDER_LABELS[provider]} is not configured for ${service}`,
           });
         }
-        if (settings.providerEnabled[provider] === false) {
-          return res.status(400).json({
-            success: false,
-            message: `${PROVIDER_LABELS[provider]} is disabled`,
-          });
-        }
         settings.serviceRouting[service] = provider;
       }
     }
 
-    settings.vtuProvider = settings.serviceRouting.data;
     await settings.save();
     routing.invalidateRoutingCache();
     vtuProvider.invalidateProviderCache();
     await bumpCatalogVersion();
 
     const snapshot = await routing.getRoutingSnapshot();
-    res.json({ success: true, data: snapshot, message: 'Service routing updated' });
+    res.json({ success: true, data: snapshot, message: 'Preferred providers updated' });
   } catch (error) {
     next(error);
   }
@@ -181,34 +173,9 @@ const syncDataPlansForProvider = async (providerId, networkFilter) => {
 
     for (const plan of variations) {
       if (!plan.variation_code) continue;
-      const code = plan.variation_code;
-      const planName = plan.name || code;
-      const common = {
-        network,
-        name: planName,
-        dataSize: plan.name || planName,
-        validity: plan.validity || '30 days',
-        amount: parseFloat(plan.variation_amount) || 0,
-        enabled: true,
-        vtuProvider: source,
-      };
-
-      const update = source === 'vtpass'
-        ? {
-          ...common,
-          variationCode: code,
-          vtpassVariationCode: code,
-          planCode: '',
-        }
-        : {
-          ...common,
-          variationCode: code,
-          planCode: code,
-          vtpassVariationCode: '',
-        };
-
+      const update = buildDataPlanSyncUpdate(source, network, plan);
       await DataPlan.findOneAndUpdate(
-        { network, vtuProvider: source, variationCode: code },
+        { vtuProvider: source, providerPlanCode: plan.variation_code },
         { $set: update },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
@@ -267,12 +234,6 @@ const syncTvPlansForProvider = async (providerId, providerFilter) => {
     }
   }
 
-  await VtuProviderConfig.findOneAndUpdate(
-    { providerId: source },
-    { $set: { lastSyncAt: new Date() } },
-    { upsert: true }
-  );
-
   return { synced, providers, source };
 };
 
@@ -306,7 +267,7 @@ const syncProviderTvPlans = async (req, res, next) => {
   }
 };
 
-const syncAllProviders = async (req, res, next) => {
+const syncAllDataProviders = async (_req, res, next) => {
   try {
     const results = {};
     for (const providerId of ['clubkonnect', 'vtpass']) {
@@ -314,9 +275,11 @@ const syncAllProviders = async (req, res, next) => {
         results[providerId] = { skipped: true, reason: 'not configured' };
         continue;
       }
-      const data = await syncDataPlansForProvider(providerId);
-      const tv = await syncTvPlansForProvider(providerId);
-      results[providerId] = { data, tv };
+      if (!routing.isDataProviderEnabled(providerId, await routing.loadSettings())) {
+        results[providerId] = { skipped: true, reason: 'data provider disabled' };
+        continue;
+      }
+      results[providerId] = await syncDataPlansForProvider(providerId);
     }
     await bumpCatalogVersion();
     res.json({ success: true, data: results });
@@ -327,11 +290,11 @@ const syncAllProviders = async (req, res, next) => {
 
 module.exports = {
   listProviders,
-  updateProviderEnabled,
+  updateDataProviderEnabled,
   updateServiceRouting,
   updateFailover,
   testProviderConnection,
   syncProviderDataPlans,
   syncProviderTvPlans,
-  syncAllProviders,
+  syncAllDataProviders,
 };

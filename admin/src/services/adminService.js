@@ -141,13 +141,13 @@ export const settingsApi = {
 
 export const providersApi = {
   get: () => api.get('/admin/providers'),
-  setEnabled: (providerId, enabled) => api.patch(`/admin/providers/${providerId}`, { enabled }),
+  setDataEnabled: (providerId, enabled) => api.patch(`/admin/providers/${providerId}/data-enabled`, { enabled }),
   updateRouting: (serviceRouting) => api.patch('/admin/providers/routing', { serviceRouting }),
   updateFailover: (data) => api.patch('/admin/providers/failover', data),
   test: (providerId) => api.post(`/admin/providers/${providerId}/test`),
   syncData: (providerId, params) => api.post(`/admin/providers/${providerId}/sync/data`, null, { params }),
   syncTv: (providerId, params) => api.post(`/admin/providers/${providerId}/sync/tv`, null, { params }),
-  syncAll: () => api.post('/admin/providers/sync-all'),
+  syncAllData: () => api.post('/admin/providers/sync-all-data'),
 };
 
 export const getErrorMessage = (error, fallback = 'Something went wrong') =>

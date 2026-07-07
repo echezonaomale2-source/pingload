@@ -79,17 +79,21 @@ const DataPlansPage = () => {
 
   const handleSave = async () => {
     const payload = {
-      ...form,
       amount: Number(form.amount),
       commissionPercent: Number(form.commissionPercent || 0),
       order: Number(form.order),
-      vtuProvider: form.vtuProvider || selected,
+      name: form.name,
+      dataSize: form.dataSize,
+      validity: form.validity,
+      validityCategory: form.validityCategory,
+      category: form.category,
+      enabled: form.enabled,
     };
-    if (showBoth && form.altVariationCode) {
-      if (payload.vtuProvider === 'vtpass') payload.clubkonnectPlanCode = form.altVariationCode;
-      else payload.vtpassVariationCode = form.altVariationCode;
+    if (modal === 'create') {
+      payload.network = form.network;
+      payload.vtuProvider = form.vtuProvider || selected;
+      payload.variationCode = form.variationCode;
     }
-    delete payload.altVariationCode;
     try {
       if (modal === 'create') await dataPlansApi.create(payload);
       else await dataPlansApi.update(modal, payload);
@@ -145,7 +149,7 @@ const DataPlansPage = () => {
   };
 
   const columns = [
-    { key: 'vtuProvider', label: 'Provider', render: (r) => <span className="font-semibold capitalize">{r.vtuProvider || 'clubkonnect'}</span> },
+    { key: 'vtuProvider', label: 'Provider', render: (r) => <span className="font-semibold">{r.vtuProvider === 'vtpass' ? 'VTpass' : 'Clubkonnect'}</span> },
     { key: 'network', label: 'Network', render: (r) => <span className="uppercase font-bold">{r.network}</span> },
     { key: 'name', label: 'Plan' },
     { key: 'dataSize', label: 'Data' },
@@ -153,11 +157,11 @@ const DataPlansPage = () => {
     { key: 'validityCategory', label: 'Group', render: (r) => r.validityCategory || 'other' },
     { key: 'category', label: 'Category' },
     {
-      key: 'variationCode',
-      label: 'Code',
+      key: 'providerPlanCode',
+      label: 'Plan Code',
       render: (r) => (
         <span className="font-mono text-xs">
-          {planCodeForProvider(r)}
+          {r.providerPlanCode || planCodeForProvider(r)}
         </span>
       ),
     },
@@ -241,11 +245,19 @@ const DataPlansPage = () => {
         }
       >
         <div className="space-y-2">
-          <select value={form.vtuProvider} onChange={(e) => setForm({ ...form, vtuProvider: e.target.value, variationCode: '' })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-            {(activeProviders.length ? activeProviders : ['clubkonnect', 'vtpass']).map((p) => (
-              <option key={p} value={p}>{p === 'vtpass' ? 'VTpass' : 'Clubkonnect'}</option>
-            ))}
-          </select>
+          {modal !== 'create' && (
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Provider: <strong>{form.vtuProvider === 'vtpass' ? 'VTpass' : 'Clubkonnect'}</strong>
+              {' · '}Plan code: <strong className="font-mono">{form.variationCode}</strong>
+            </div>
+          )}
+          {modal === 'create' && (
+            <select value={form.vtuProvider} onChange={(e) => setForm({ ...form, vtuProvider: e.target.value, variationCode: '' })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+              {(activeProviders.length ? activeProviders : ['clubkonnect', 'vtpass']).map((p) => (
+                <option key={p} value={p}>{p === 'vtpass' ? 'VTpass' : 'Clubkonnect'}</option>
+              ))}
+            </select>
+          )}
           <select value={form.network} onChange={(e) => setForm({ ...form, network: e.target.value })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
             {NETWORKS.map((n) => <option key={n} value={n}>{n.toUpperCase()}</option>)}
           </select>
@@ -256,10 +268,9 @@ const DataPlansPage = () => {
             {VALIDITY_CATEGORIES.map((v) => <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>)}
           </select>
           <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category (optional)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder={variationCodeLabel} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          {showBoth && (
-            <input value={form.altVariationCode} onChange={(e) => setForm({ ...form, altVariationCode: e.target.value })} placeholder={`${otherLabel} plan code (optional)`} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          )}
+          {modal === 'create' ? (
+            <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder={variationCodeLabel} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          ) : null}
           <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Price (₦)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <input type="number" value={form.commissionPercent} onChange={(e) => setForm({ ...form, commissionPercent: e.target.value })} placeholder="Commission %" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="Display order" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />

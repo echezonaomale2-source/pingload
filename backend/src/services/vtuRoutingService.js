@@ -1,7 +1,7 @@
 const SystemSettings = require('../models/SystemSettings');
 const VtuProviderConfig = require('../models/VtuProviderConfig');
 const serviceConfig = require('../config/serviceConfig');
-const { VTU_PROVIDERS, VTU_SERVICES } = require('../utils/vtuConstants');
+const { VTU_PROVIDERS, VTU_SERVICES, NON_DATA_SERVICES, PREFERRED_SERVICE_LABELS } = require('../utils/vtuConstants');
 const { normalizeProvider } = require('../utils/migrateVtuSettings');
 
 let settingsCache = null;
@@ -23,10 +23,15 @@ const isProviderConfigured = (name) => (
   name === 'vtpass' ? serviceConfig.vtpass.configured : serviceConfig.clubkonnect.configured
 );
 
-const isProviderEnabled = (name, settings) => {
+const isDataProviderEnabled = (name, settings) => {
   const normalized = normalizeProvider(name);
-  if (!settings?.providerEnabled) return true;
-  return settings.providerEnabled[normalized] !== false;
+  if (settings?.dataProviderEnabled) {
+    return settings.dataProviderEnabled[normalized] !== false;
+  }
+  if (settings?.providerEnabled) {
+    return settings.providerEnabled[normalized] !== false;
+  }
+  return true;
 };
 
 const getAlternateProvider = (name) => (
@@ -35,42 +40,38 @@ const getAlternateProvider = (name) => (
 
 const resolveUsableProvider = (preferred, settings) => {
   const choice = normalizeProvider(preferred);
-  if (isProviderEnabled(choice, settings) && isProviderConfigured(choice)) {
-    return choice;
-  }
+  if (isProviderConfigured(choice)) return choice;
   const fallback = getAlternateProvider(choice);
-  if (isProviderEnabled(fallback, settings) && isProviderConfigured(fallback)) {
-    return fallback;
-  }
+  if (isProviderConfigured(fallback)) return fallback;
   return choice;
 };
 
-/** Provider routed for a specific service purchase. */
+/** Preferred provider for non-data services (airtime, electricity, tv, betting, education). */
 const getRoutedProviderName = async (serviceId) => {
   const settings = await loadSettings();
   const routed = normalizeProvider(settings.serviceRouting?.[serviceId] || settings.vtuProvider);
   return resolveUsableProvider(routed, settings);
 };
 
-/** All providers whose catalogs should be shown for a service. */
-const getCatalogProviders = async (serviceId) => {
+/** Data is the only service that supports multiple active providers. */
+const getDataCatalogProviders = async () => {
   const settings = await loadSettings();
-  const routed = normalizeProvider(settings.serviceRouting?.[serviceId] || settings.vtuProvider);
-  const providers = VTU_PROVIDERS.filter(
-    (name) => isProviderEnabled(name, settings) && isProviderConfigured(name)
+  const enabled = VTU_PROVIDERS.filter(
+    (name) => isDataProviderEnabled(name, settings) && isProviderConfigured(name)
   );
-
-  if (providers.length === 0) {
-    return [resolveUsableProvider(routed, settings)];
-  }
-
-  return providers;
+  if (enabled.length > 0) return enabled;
+  const fallback = resolveUsableProvider(settings.serviceRouting?.data || settings.vtuProvider, settings);
+  return [fallback];
 };
 
-/** Legacy global active provider — uses data service routing. */
+/** Catalog providers for a service — multi only for data. */
+const getCatalogProviders = async (serviceId) => {
+  if (serviceId === 'data') return getDataCatalogProviders();
+  return [await getRoutedProviderName(serviceId)];
+};
+
 const getActiveProviderName = async () => getRoutedProviderName('data');
 
-/** Admin default for plan forms — uses data routing without fallback display. */
 const getSelectedProviderName = async () => {
   const settings = await loadSettings();
   return normalizeProvider(settings.serviceRouting?.data || settings.vtuProvider);
@@ -91,7 +92,7 @@ const getRoutingSnapshot = async () => {
     return {
       providerId,
       displayName: config.displayName || (providerId === 'vtpass' ? 'VTpass' : 'Clubkonnect'),
-      enabled: isProviderEnabled(providerId, settings),
+      dataEnabled: isDataProviderEnabled(providerId, settings),
       configured: isProviderConfigured(providerId),
       credentialsSource: 'environment',
       lastSyncAt: config.lastSyncAt || null,
@@ -104,12 +105,19 @@ const getRoutingSnapshot = async () => {
     };
   });
 
+  const serviceRouting = NON_DATA_SERVICES.reduce((acc, service) => {
+    acc[service] = normalizeProvider(settings.serviceRouting?.[service] || settings.vtuProvider);
+    return acc;
+  }, {});
+
   return {
     providers,
-    serviceRouting: VTU_SERVICES.reduce((acc, service) => {
-      acc[service] = normalizeProvider(settings.serviceRouting?.[service] || settings.vtuProvider);
-      return acc;
-    }, {}),
+    dataProviderEnabled: {
+      clubkonnect: isDataProviderEnabled('clubkonnect', settings),
+      vtpass: isDataProviderEnabled('vtpass', settings),
+    },
+    serviceRouting,
+    preferredServiceLabels: PREFERRED_SERVICE_LABELS,
     enableProviderFailover: Boolean(settings.enableProviderFailover),
     catalogVersion: settings.catalogVersion || 1,
     vtuProvider: normalizeProvider(settings.vtuProvider),
@@ -119,11 +127,13 @@ const getRoutingSnapshot = async () => {
 module.exports = {
   VTU_PROVIDERS,
   VTU_SERVICES,
+  NON_DATA_SERVICES,
   invalidateRoutingCache,
   isProviderConfigured,
-  isProviderEnabled,
+  isDataProviderEnabled,
   getAlternateProvider,
   getRoutedProviderName,
+  getDataCatalogProviders,
   getCatalogProviders,
   getActiveProviderName,
   getSelectedProviderName,

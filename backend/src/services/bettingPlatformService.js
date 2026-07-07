@@ -63,11 +63,9 @@ const getProviderServiceId = (platform, activeProvider) => {
 
 const listEnabledPlatforms = async () => {
   await BettingPlatform.ensureDefaults();
-  const catalogProviders = await vtuProvider.getCatalogProviders('betting');
+  const active = await vtuProvider.getRoutedProviderName('betting');
   const platforms = await BettingPlatform.find({ enabled: true }).sort({ order: 1, name: 1 });
-  return platforms.filter((platform) =>
-    catalogProviders.some((provider) => Boolean(getProviderServiceId(platform, provider)))
-  );
+  return platforms.filter((platform) => Boolean(getProviderServiceId(platform, active)));
 };
 
 const getPlatformById = async (platformId) => {

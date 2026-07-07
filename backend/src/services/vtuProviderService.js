@@ -60,29 +60,29 @@ const generateRequestId = () => clubkonnect.generateRequestId();
 
 const getProviderStatus = async () => {
   const snapshot = await routing.getRoutingSnapshot();
-  const active = await routing.getRoutedProviderName('data');
-  const preferred = snapshot.serviceRouting.data;
+  const active = await routing.getRoutedProviderName('airtime');
+  const preferred = snapshot.serviceRouting.airtime;
   return {
     preferred,
     active,
     usingFallback: preferred !== active,
-    providerEnabled: snapshot.providers.reduce((acc, item) => {
-      acc[item.providerId] = item.enabled;
-      return acc;
-    }, {}),
+    dataProviderEnabled: snapshot.dataProviderEnabled,
+    providerEnabled: snapshot.dataProviderEnabled,
     serviceRouting: snapshot.serviceRouting,
     enableProviderFailover: snapshot.enableProviderFailover,
     catalogVersion: snapshot.catalogVersion,
     clubkonnect: {
       configured: serviceConfig.clubkonnect.configured,
       baseUrl: serviceConfig.clubkonnect.baseUrl,
-      enabled: snapshot.providers.find((p) => p.providerId === 'clubkonnect')?.enabled !== false,
+      enabled: snapshot.dataProviderEnabled?.clubkonnect !== false,
+      dataEnabled: snapshot.dataProviderEnabled?.clubkonnect !== false,
     },
     vtpass: {
       configured: serviceConfig.vtpass.configured,
       mode: serviceConfig.vtpass.mode,
       baseUrl: serviceConfig.vtpass.baseUrl,
-      enabled: snapshot.providers.find((p) => p.providerId === 'vtpass')?.enabled !== false,
+      enabled: snapshot.dataProviderEnabled?.vtpass !== false,
+      dataEnabled: snapshot.dataProviderEnabled?.vtpass !== false,
     },
   };
 };
@@ -211,7 +211,9 @@ module.exports = {
   getActiveProviderName: routing.getActiveProviderName,
   getSelectedProviderName: routing.getSelectedProviderName,
   getRoutedProviderName: routing.getRoutedProviderName,
+  getDataCatalogProviders: routing.getDataCatalogProviders,
   getCatalogProviders: routing.getCatalogProviders,
+  isDataProviderEnabled: routing.isDataProviderEnabled,
   invalidateProviderCache: routing.invalidateRoutingCache,
   isProviderConfigured: routing.isProviderConfigured,
   assertActiveProviderConfigured,

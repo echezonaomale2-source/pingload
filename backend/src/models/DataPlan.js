@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { normalizeDataPlanRecord } = require('../utils/dataPlanFields');
 
 const dataPlanSchema = new mongoose.Schema(
   {
@@ -13,14 +14,18 @@ const dataPlanSchema = new mongoose.Schema(
       index: true,
     },
     category: { type: String, trim: true, default: '' },
-    variationCode: { type: String, required: true, trim: true },
-    /** Clubkonnect plan code — mirrors variationCode for legacy compatibility */
+    providerPlanCode: { type: String, required: true, trim: true },
+    providerVariationCode: { type: String, trim: true, default: '' },
+    providerProductCode: { type: String, trim: true, default: '' },
+    /** @deprecated Legacy fields kept for backward compatibility */
+    variationCode: { type: String, trim: true, default: '' },
     planCode: { type: String, trim: true, default: '' },
     vtpassVariationCode: { type: String, trim: true, default: '' },
     amount: { type: Number, required: true, min: 0 },
     commissionPercent: { type: Number, default: 0, min: 0, max: 100 },
     enabled: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
+    lastSyncedAt: { type: Date, default: null },
     vtuProvider: {
       type: String,
       enum: ['clubkonnect', 'vtpass'],
@@ -31,6 +36,16 @@ const dataPlanSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-dataPlanSchema.index({ network: 1, vtuProvider: 1, variationCode: 1 }, { unique: true });
+dataPlanSchema.index({ vtuProvider: 1, providerPlanCode: 1 }, { unique: true });
+dataPlanSchema.index({ network: 1, vtuProvider: 1, enabled: 1 });
+
+dataPlanSchema.pre('validate', function preValidate(next) {
+  const normalized = normalizeDataPlanRecord(this.toObject(), this.vtuProvider);
+  Object.assign(this, normalized);
+  if (!this.providerPlanCode) {
+    this.invalidate('providerPlanCode', 'Provider plan code is required');
+  }
+  next();
+});
 
 module.exports = mongoose.model('DataPlan', dataPlanSchema);
