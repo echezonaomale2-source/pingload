@@ -1,5 +1,6 @@
-const { VTU_PROVIDERS, VTU_SERVICES } = require('./vtuConstants');
-const { normalizeProvider } = require('./migrateVtuSettings');
+const { VTU_SERVICES } = require('./vtuConstants');
+
+const normalizeProvider = (value) => (value === 'vtpass' ? 'vtpass' : 'clubkonnect');
 
 const defaultServiceRouting = (provider = 'clubkonnect') => VTU_SERVICES.reduce((acc, service) => {
   acc[service] = provider;
