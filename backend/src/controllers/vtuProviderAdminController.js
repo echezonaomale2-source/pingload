@@ -9,6 +9,7 @@ const { NON_DATA_SERVICES, PROVIDER_LABELS } = require('../utils/vtuConstants');
 const { normalizeProvider } = require('../utils/migrateVtuSettings');
 const { tagWithVtuProvider } = require('../utils/resolveProviderFields');
 const { buildDataPlanSyncUpdate } = require('../utils/dataPlanFields');
+const { persistProviderHealth } = require('../utils/providerHealth');
 
 const DATA_NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
 const TV_PROVIDERS = ['dstv', 'gotv', 'startimes'];
@@ -118,27 +119,8 @@ const testProviderConnection = async (req, res, next) => {
       ? vtuProvider.verifyVtpassConnectivity
       : vtuProvider.verifyClubkonnectConnectivity;
 
-    let healthStatus = 'healthy';
-    let message = 'Connection successful';
-    try {
-      await testFn();
-    } catch (err) {
-      healthStatus = 'down';
-      message = err.message || 'Connection failed';
-    }
-
-    const now = new Date();
-    await VtuProviderConfig.findOneAndUpdate(
-      { providerId },
-      {
-        $set: {
-          lastHealthCheckAt: now,
-          healthStatus,
-          lastHealthMessage: message,
-        },
-      },
-      { upsert: true }
-    );
+    const result = await testFn();
+    const { healthStatus, message, lastHealthCheckAt } = await persistProviderHealth(providerId, result);
 
     res.json({
       success: healthStatus === 'healthy',
@@ -146,7 +128,9 @@ const testProviderConnection = async (req, res, next) => {
         providerId,
         healthStatus,
         message,
-        lastHealthCheckAt: now,
+        lastHealthCheckAt,
+        serverIp: result.serverIp || null,
+        purchasesEnabled: result.purchasesEnabled ?? null,
       },
     });
   } catch (error) {

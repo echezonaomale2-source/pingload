@@ -33,6 +33,7 @@ const { syncBettingPlatforms } = require('./src/services/bettingPlatformService'
 const { startClubkonnectReconciliationWorker } = require('./src/services/clubkonnectReconciliationWorker');
 const { startVtpassReconciliationWorker } = require('./src/services/vtpassReconciliationWorker');
 const SystemSettings = require('./src/models/SystemSettings');
+const { persistProviderHealth } = require('./src/utils/providerHealth');
 
 const app = express();
 
@@ -131,6 +132,9 @@ const startServer = async () => {
       console.error(`[Clubkonnect] Whitelist this outbound IP: ${clubkonnectStatus.serverIp}`);
     }
   }
+  if (clubkonnectStatus.configured) {
+    await persistProviderHealth('clubkonnect', clubkonnectStatus);
+  }
 
   const vtpassStatus = await verifyVtpassConnectivity();
   if (!vtpassStatus.configured) {
@@ -142,6 +146,9 @@ const startServer = async () => {
     if (vtpassStatus.serverIp) {
       console.error(`[VTpass] Whitelist this outbound IP: ${vtpassStatus.serverIp}`);
     }
+  }
+  if (vtpassStatus.configured) {
+    await persistProviderHealth('vtpass', vtpassStatus);
   }
 
   const settings = await SystemSettings.getSettings();
