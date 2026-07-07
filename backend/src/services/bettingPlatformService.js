@@ -1,10 +1,11 @@
 const BettingPlatform = require('../models/BettingPlatform');
-const SystemSettings = require('../models/SystemSettings');
 const catalog = require('../config/bettingPlatformCatalog');
 const { resolveBettingCompanyCode } = require('../config/clubkonnectMappings');
+const vtuProvider = require('./vtuProviderService');
 const vtpass = require('./vtpassService');
-const { logClubkonnect, logVtpass } = require('../utils/logger');
 const serviceConfig = require('../config/serviceConfig');
+const { logClubkonnect, logVtpass } = require('../utils/logger');
+const { resolveServiceId } = require('../utils/resolveProviderFields');
 
 const normalizeText = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]+/g, '');
 
@@ -54,18 +55,26 @@ const mapPublicPlatform = (platform) => ({
   order: platform.order,
 });
 
-const getProviderServiceId = (platform) =>
-  platform?.providerServiceId || platform?.vtpassServiceId || resolveBettingCompanyCode(platform?.platformId);
+const getProviderServiceId = (platform, activeProvider) => {
+  const resolved = resolveServiceId(platform, activeProvider);
+  if (resolved) return resolved;
+  return activeProvider === 'vtpass' ? null : resolveBettingCompanyCode(platform?.platformId);
+};
 
 const listEnabledPlatforms = async () => {
   await BettingPlatform.ensureDefaults();
+  const catalogProviders = await vtuProvider.getCatalogProviders('betting');
   const platforms = await BettingPlatform.find({ enabled: true }).sort({ order: 1, name: 1 });
-  return platforms.filter((platform) => Boolean(getProviderServiceId(platform)));
+  return platforms.filter((platform) =>
+    catalogProviders.some((provider) => Boolean(getProviderServiceId(platform, provider)))
+  );
 };
 
 const getPlatformById = async (platformId) => {
   await BettingPlatform.ensureDefaults();
-  return BettingPlatform.findOne({ platformId: String(platformId || '').toLowerCase() });
+  return BettingPlatform.findOne({
+    platformId: String(platformId || '').toLowerCase(),
+  }).select('+vtpassServiceId');
 };
 
 const syncBettingPlatformsFromClubkonnect = async () => {
@@ -231,8 +240,8 @@ const syncBettingPlatformsFromVtpass = async () => {
 };
 
 const syncBettingPlatforms = async () => {
-  const settings = await SystemSettings.getSettings();
-  if (settings.vtuProvider === 'vtpass') return syncBettingPlatformsFromVtpass();
+  const active = await vtuProvider.getSelectedProviderName();
+  if (active === 'vtpass') return syncBettingPlatformsFromVtpass();
   return syncBettingPlatformsFromClubkonnect();
 };
 
@@ -240,6 +249,7 @@ module.exports = {
   listEnabledPlatforms,
   getPlatformById,
   mapPublicPlatform,
+  getProviderServiceId,
   syncBettingPlatformsFromClubkonnect,
   syncBettingPlatformsFromVtpass,
   syncBettingPlatforms,

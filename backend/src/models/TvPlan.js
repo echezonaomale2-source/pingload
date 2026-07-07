@@ -16,14 +16,21 @@ const tvPlanSchema = new mongoose.Schema(
       index: true,
     },
     variationCode: { type: String, required: true, trim: true },
+    vtpassVariationCode: { type: String, trim: true, default: '' },
     amount: { type: Number, required: true, min: 0 },
     enabled: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
+    vtuProvider: {
+      type: String,
+      enum: ['clubkonnect', 'vtpass'],
+      default: 'clubkonnect',
+      index: true,
+    },
   },
   { timestamps: true }
 );
 
-tvPlanSchema.index({ provider: 1, variationCode: 1 }, { unique: true });
+tvPlanSchema.index({ provider: 1, vtuProvider: 1, variationCode: 1 }, { unique: true });
 
 tvPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
   const count = await this.countDocuments();

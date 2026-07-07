@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { TV_PROVIDERS } from '../../utils/constants';
@@ -57,6 +58,12 @@ const TVScreen = ({ navigation }) => {
       setLoadingPackages(false);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (provider) loadPackages(provider);
+    }, [provider])
+  );
 
   const handleVerifySmartcard = async () => {
     if (!provider || !smartcard) {

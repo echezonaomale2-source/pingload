@@ -4,18 +4,22 @@ import { PageHeader, DataTable, Modal, PageLoader, ErrorAlert } from '../compone
 import { dataPlansApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency } from '../utils/formatters';
 import { useDialog } from '../hooks/useDialog';
+import { useVtuProvider } from '../hooks/useVtuProvider';
 
 const NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
 const VALIDITY_CATEGORIES = ['daily', 'weekly', 'monthly', 'yearly', 'other'];
 const emptyForm = {
   network: 'mtn', name: '', dataSize: '', validity: '', validityCategory: 'other', category: '',
-  variationCode: '', amount: '', commissionPercent: 0, enabled: true, order: 0,
+  variationCode: '', altVariationCode: '', amount: '', commissionPercent: 0, enabled: true, order: 0,
+  vtuProvider: 'clubkonnect',
 };
 
 const DataPlansPage = () => {
   const dialog = useDialog();
+  const { selected, label, otherLabel, showBoth, codeLabelForProvider, activeProviders, refresh } = useVtuProvider();
   const [plans, setPlans] = useState([]);
   const [network, setNetwork] = useState('');
+  const [providerFilter, setProviderFilter] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,18 +29,36 @@ const DataPlansPage = () => {
 
   const fetchPlans = useCallback(() => {
     setLoading(true);
-    dataPlansApi.list(network ? { network } : {})
+    const params = {};
+    if (network) params.network = network;
+    if (providerFilter) params.provider = providerFilter;
+    dataPlansApi.list(params)
       .then((res) => setPlans(res.data.data))
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
-  }, [network]);
+  }, [network, providerFilter]);
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
-  useEffect(() => { setPage(1); }, [network]);
+  useEffect(() => { setPage(1); }, [network, providerFilter]);
 
-  const openCreate = () => { setForm({ ...emptyForm, network: network || 'mtn' }); setModal('create'); };
-  const openEdit = (plan) => {
+  const formProvider = form.vtuProvider || selected;
+  const variationCodeLabel = codeLabelForProvider(formProvider);
+
+  const openCreate = async () => {
+    await refresh();
+    setForm({ ...emptyForm, network: network || 'mtn', vtuProvider: providerFilter || selected });
+    setModal('create');
+  };
+  const planCodeForProvider = (plan, providerId = plan.vtuProvider || selected) => (
+    providerId === 'vtpass'
+      ? (plan.vtpassVariationCode || plan.variationCode || '')
+      : (plan.planCode || plan.variationCode || plan.vtpassVariationCode || '')
+  );
+
+  const openEdit = async (plan) => {
+    await refresh();
+    const planProvider = plan.vtuProvider || selected;
     setForm({
       network: plan.network,
       name: plan.name,
@@ -44,11 +66,13 @@ const DataPlansPage = () => {
       validity: plan.validity,
       validityCategory: plan.validityCategory || 'other',
       category: plan.category || '',
-      variationCode: plan.variationCode,
+      variationCode: planCodeForProvider(plan, planProvider),
+      altVariationCode: planProvider === 'vtpass' ? (plan.planCode || plan.variationCode || '') : (plan.vtpassVariationCode || ''),
       amount: plan.amount,
       commissionPercent: plan.commissionPercent ?? 0,
       enabled: plan.enabled,
       order: plan.order,
+      vtuProvider: planProvider,
     });
     setModal(plan._id);
   };
@@ -59,7 +83,13 @@ const DataPlansPage = () => {
       amount: Number(form.amount),
       commissionPercent: Number(form.commissionPercent || 0),
       order: Number(form.order),
+      vtuProvider: form.vtuProvider || selected,
     };
+    if (showBoth && form.altVariationCode) {
+      if (payload.vtuProvider === 'vtpass') payload.clubkonnectPlanCode = form.altVariationCode;
+      else payload.vtpassVariationCode = form.altVariationCode;
+    }
+    delete payload.altVariationCode;
     try {
       if (modal === 'create') await dataPlansApi.create(payload);
       else await dataPlansApi.update(modal, payload);
@@ -100,8 +130,12 @@ const DataPlansPage = () => {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const res = await dataPlansApi.sync();
-      dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} data plan(s)`);
+      const params = {};
+      if (network) params.network = network;
+      if (providerFilter) params.source = providerFilter;
+      const res = await dataPlansApi.sync(params);
+      const source = res.data.data?.source ? ` from ${res.data.data.source}` : '';
+      dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} data plan(s)${source}`);
       fetchPlans();
     } catch (err) {
       dialog.notifyError(getErrorMessage(err));
@@ -111,12 +145,22 @@ const DataPlansPage = () => {
   };
 
   const columns = [
+    { key: 'vtuProvider', label: 'Provider', render: (r) => <span className="font-semibold capitalize">{r.vtuProvider || 'clubkonnect'}</span> },
     { key: 'network', label: 'Network', render: (r) => <span className="uppercase font-bold">{r.network}</span> },
     { key: 'name', label: 'Plan' },
     { key: 'dataSize', label: 'Data' },
     { key: 'validity', label: 'Validity' },
     { key: 'validityCategory', label: 'Group', render: (r) => r.validityCategory || 'other' },
     { key: 'category', label: 'Category' },
+    {
+      key: 'variationCode',
+      label: 'Code',
+      render: (r) => (
+        <span className="font-mono text-xs">
+          {planCodeForProvider(r)}
+        </span>
+      ),
+    },
     { key: 'amount', label: 'Price', render: (r) => formatCurrency(r.amount) },
     { key: 'commissionPercent', label: 'Commission', render: (r) => `${r.commissionPercent || 0}%` },
     { key: 'order', label: 'Order' },
@@ -147,7 +191,7 @@ const DataPlansPage = () => {
     <div>
       <PageHeader
         title="Data Plans"
-        subtitle={`${plans.length} plan${plans.length === 1 ? '' : 's'}${network ? ` · ${network.toUpperCase()}` : ''}`}
+        subtitle={`${plans.length} plan${plans.length === 1 ? '' : 's'}${network ? ` · ${network.toUpperCase()}` : ''}${providerFilter ? ` · ${providerFilter}` : showBoth ? ' · all providers' : ` · ${label}`}`}
         action={(
           <div className="flex gap-2">
             <button type="button" onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-60">
@@ -159,6 +203,13 @@ const DataPlansPage = () => {
           </div>
         )}
       />
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button type="button" onClick={() => setProviderFilter('')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${!providerFilter ? 'bg-secondary text-white' : 'bg-slate-100'}`}>All Providers</button>
+        {(activeProviders.length ? activeProviders : ['clubkonnect', 'vtpass']).map((p) => (
+          <button key={p} type="button" onClick={() => setProviderFilter(p)} className={`rounded-lg px-3 py-1.5 text-xs font-bold capitalize ${providerFilter === p ? 'bg-secondary text-white' : 'bg-slate-100'}`}>{p}</button>
+        ))}
+      </div>
 
       <div className="mb-4 flex gap-2">
         <button type="button" onClick={() => setNetwork('')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${!network ? 'bg-primary text-white' : 'bg-slate-100'}`}>All</button>
@@ -190,6 +241,11 @@ const DataPlansPage = () => {
         }
       >
         <div className="space-y-2">
+          <select value={form.vtuProvider} onChange={(e) => setForm({ ...form, vtuProvider: e.target.value, variationCode: '' })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            {(activeProviders.length ? activeProviders : ['clubkonnect', 'vtpass']).map((p) => (
+              <option key={p} value={p}>{p === 'vtpass' ? 'VTpass' : 'Clubkonnect'}</option>
+            ))}
+          </select>
           <select value={form.network} onChange={(e) => setForm({ ...form, network: e.target.value })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
             {NETWORKS.map((n) => <option key={n} value={n}>{n.toUpperCase()}</option>)}
           </select>
@@ -200,7 +256,10 @@ const DataPlansPage = () => {
             {VALIDITY_CATEGORIES.map((v) => <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>)}
           </select>
           <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Category (optional)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder="Clubkonnect plan code" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder={variationCodeLabel} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          {showBoth && (
+            <input value={form.altVariationCode} onChange={(e) => setForm({ ...form, altVariationCode: e.target.value })} placeholder={`${otherLabel} plan code (optional)`} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          )}
           <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Price (₦)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <input type="number" value={form.commissionPercent} onChange={(e) => setForm({ ...form, commissionPercent: e.target.value })} placeholder="Commission %" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="Display order" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />

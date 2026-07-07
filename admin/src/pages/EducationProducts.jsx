@@ -4,6 +4,7 @@ import { PageHeader, DataTable, Modal, PageLoader, ErrorAlert } from '../compone
 import { educationProductsApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency } from '../utils/formatters';
 import { useDialog } from '../hooks/useDialog';
+import { useVtuProvider } from '../hooks/useVtuProvider';
 
 const EXAM_TYPES = ['waec', 'neco', 'jamb'];
 const emptyForm = {
@@ -11,6 +12,7 @@ const emptyForm = {
   productCode: '',
   name: '',
   providerServiceId: '',
+  altServiceId: '',
   amount: '',
   enabled: true,
   order: 0,
@@ -18,6 +20,7 @@ const emptyForm = {
 
 const EducationProductsPage = () => {
   const dialog = useDialog();
+  const { selected, label, otherLabel, showBoth, serviceIdLabel, refresh } = useVtuProvider();
   const [products, setProducts] = useState([]);
   const [examType, setExamType] = useState('');
   const [loading, setLoading] = useState(true);
@@ -35,17 +38,26 @@ const EducationProductsPage = () => {
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
-  const openCreate = () => {
+  const openCreate = async () => {
+    await refresh();
     setForm({ ...emptyForm, examType: examType || 'waec' });
     setModal('create');
   };
 
-  const openEdit = (product) => {
+  const serviceIdForActive = (product) => (
+    selected === 'vtpass'
+      ? (product.vtpassServiceId || product.providerServiceId || '')
+      : (product.providerServiceId || product.vtpassServiceId || '')
+  );
+
+  const openEdit = async (product) => {
+    await refresh();
     setForm({
       examType: product.examType,
       productCode: product.productCode,
       name: product.name,
-      providerServiceId: product.providerServiceId,
+      providerServiceId: serviceIdForActive(product),
+      altServiceId: selected === 'vtpass' ? (product.providerServiceId || '') : (product.vtpassServiceId || ''),
       amount: product.amount,
       enabled: product.enabled,
       order: product.order ?? 0,
@@ -59,6 +71,11 @@ const EducationProductsPage = () => {
       amount: Number(form.amount),
       order: Number(form.order || 0),
     };
+    if (showBoth && form.altServiceId) {
+      if (selected === 'vtpass') payload.clubkonnectServiceId = form.altServiceId;
+      else payload.vtpassServiceId = form.altServiceId;
+    }
+    delete payload.altServiceId;
     try {
       if (modal === 'create') await educationProductsApi.create(payload);
       else await educationProductsApi.update(modal, payload);
@@ -91,7 +108,7 @@ const EducationProductsPage = () => {
     { key: 'examType', label: 'Exam', render: (r) => r.examType?.toUpperCase() },
     { key: 'name', label: 'Name' },
     { key: 'productCode', label: 'Code' },
-    { key: 'providerServiceId', label: 'Clubkonnect ID' },
+    { key: 'providerServiceId', label: 'Service ID', render: (r) => serviceIdForActive(r) || '—' },
     { key: 'amount', label: 'Amount', render: (r) => formatCurrency(r.amount) },
     { key: 'enabled', label: 'Status', render: (r) => (r.enabled ? 'Enabled' : 'Disabled') },
     {
@@ -112,7 +129,7 @@ const EducationProductsPage = () => {
     <div>
       <PageHeader
         title="Education Products"
-        subtitle="Manage WAEC, NECO, and JAMB pin products"
+        subtitle={`Manage WAEC, NECO, and JAMB pin products · selected provider: ${label}`}
         action={(
           <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
             <Plus size={18} /> Add Product
@@ -134,9 +151,13 @@ const EducationProductsPage = () => {
           <select value={form.examType} onChange={(e) => setForm({ ...form, examType: e.target.value })} className="w-full rounded-xl border px-4 py-2.5 text-sm">
             {EXAM_TYPES.map((type) => <option key={type} value={type}>{type.toUpperCase()}</option>)}
           </select>
-          {['productCode', 'name', 'providerServiceId', 'amount', 'order'].map((field) => (
-            <input key={field} value={form[field]} onChange={(e) => setForm({ ...form, [field]: e.target.value })} placeholder={field === 'providerServiceId' ? 'Clubkonnect service ID' : field} className="w-full rounded-xl border px-4 py-2.5 text-sm" />
+          {['productCode', 'name', 'amount', 'order'].map((field) => (
+            <input key={field} value={form[field]} onChange={(e) => setForm({ ...form, [field]: e.target.value })} placeholder={field} className="w-full rounded-xl border px-4 py-2.5 text-sm" />
           ))}
+          <input value={form.providerServiceId} onChange={(e) => setForm({ ...form, providerServiceId: e.target.value })} placeholder={serviceIdLabel} className="w-full rounded-xl border px-4 py-2.5 text-sm" />
+          {showBoth && (
+            <input value={form.altServiceId} onChange={(e) => setForm({ ...form, altServiceId: e.target.value })} placeholder={`${otherLabel} service ID (optional)`} className="w-full rounded-xl border px-4 py-2.5 text-sm" />
+          )}
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
             Enabled

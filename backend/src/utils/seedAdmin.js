@@ -27,6 +27,8 @@ const seedAdmin = async () => {
   }
 
   await SystemSettings.getSettings();
+  const VtuProviderConfig = require('../models/VtuProviderConfig');
+  await VtuProviderConfig.ensureDefaults();
   await ServicePrice.ensureDefaults();
   await EducationProduct.ensureDefaults();
   await ElectricityPlan.ensureDefaults();

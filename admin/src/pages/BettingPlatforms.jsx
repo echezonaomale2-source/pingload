@@ -4,9 +4,11 @@ import { PageHeader, DataTable, PageLoader, ErrorAlert } from '../components';
 import { bettingPlatformsApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { useDialog } from '../hooks/useDialog';
+import { useVtuProvider } from '../hooks/useVtuProvider';
 
 const BettingPlatformsPage = () => {
   const dialog = useDialog();
+  const { selected, label } = useVtuProvider();
   const [platforms, setPlatforms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -44,10 +46,16 @@ const BettingPlatformsPage = () => {
     }
   };
 
+  const serviceIdForActive = (platform) => (
+    selected === 'vtpass'
+      ? (platform.vtpassServiceId || platform.providerServiceId || '—')
+      : (platform.providerServiceId || platform.vtpassServiceId || '—')
+  );
+
   const columns = [
     { key: 'platformId', label: 'ID' },
     { key: 'name', label: 'Name' },
-    { key: 'providerServiceId', label: 'Clubkonnect ID', render: (r) => r.providerServiceId || '—' },
+    { key: 'providerServiceId', label: `${label} ID`, render: (r) => serviceIdForActive(r) },
     {
       key: 'limits',
       label: 'Limits',
@@ -75,7 +83,7 @@ const BettingPlatformsPage = () => {
     <div>
       <PageHeader
         title="Betting Platforms"
-        subtitle="Betting wallet funding platforms (syncs from active VTU provider)"
+        subtitle={`Betting wallet funding platforms · syncs from ${label}`}
         action={(
           <button type="button" onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">
             <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> Sync Platforms

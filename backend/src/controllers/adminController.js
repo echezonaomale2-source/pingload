@@ -15,6 +15,7 @@ const adjustWallet = require('../utils/adjustWallet');
 const { buildSafeRegex, parsePagination } = require('../utils/safeQuery');
 const vtuProvider = require('../services/vtuProviderService');
 const serviceConfig = require('../config/serviceConfig');
+const { VTU_SERVICES } = require('../utils/vtuConstants');
 
 // POST /admin/auth/login
 const login = async (req, res, next) => {
@@ -832,6 +833,10 @@ const getSettings = async (req, res, next) => {
         referralBonus: settings.referralBonus,
         supportEmail: settings.supportEmail,
         vtuProvider: settings.vtuProvider,
+        providerEnabled: settings.providerEnabled,
+        serviceRouting: settings.serviceRouting,
+        enableProviderFailover: settings.enableProviderFailover,
+        catalogVersion: settings.catalogVersion,
         providerStatus,
       },
     });
@@ -844,7 +849,10 @@ const getSettings = async (req, res, next) => {
 const updateSettings = async (req, res, next) => {
   try {
     const settings = await SystemSettings.getSettings();
-    const allowed = ['maintenanceMode', 'otpRequired', 'minWalletFund', 'maxWalletFund', 'referralBonus', 'supportEmail', 'vtuProvider'];
+    const allowed = [
+      'maintenanceMode', 'otpRequired', 'minWalletFund', 'maxWalletFund',
+      'referralBonus', 'supportEmail', 'vtuProvider', 'enableProviderFailover',
+    ];
     allowed.forEach((key) => {
       if (req.body[key] !== undefined) settings[key] = req.body[key];
     });
@@ -861,6 +869,9 @@ const updateSettings = async (req, res, next) => {
         return res.status(400).json({ success: false, message: 'Clubkonnect credentials are not configured on the server' });
       }
       settings.vtuProvider = provider;
+      VTU_SERVICES.forEach((service) => {
+        settings.serviceRouting[service] = provider;
+      });
       vtuProvider.invalidateProviderCache();
     }
 

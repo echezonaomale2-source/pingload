@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, ArrowLeftRight, Wallet, Settings2,
   Bell, Gift, Headphones, Settings, LogOut, X, ShieldCheck, HelpCircle, Tag, Database, RotateCcw,
-  Zap, Tv, DollarSign, ShieldAlert, GraduationCap, Trophy, ImageIcon,
+  Zap, Tv, DollarSign, ShieldAlert, GraduationCap, Trophy, ImageIcon, Server,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../hooks/useDialog';
@@ -21,6 +21,7 @@ const NAV = [
   { to: '/tv-plans', icon: Tv, label: 'TV Plans' },
   { to: '/education-products', icon: GraduationCap, label: 'Education' },
   { to: '/betting-platforms', icon: Trophy, label: 'Betting' },
+  { to: '/providers', icon: Server, label: 'Providers' },
   { to: '/provider-logos', icon: ImageIcon, label: 'Provider Logos' },
   { to: '/revenue', icon: DollarSign, label: 'Revenue' },
   { to: '/security-events', icon: ShieldAlert, label: 'Security Events' },

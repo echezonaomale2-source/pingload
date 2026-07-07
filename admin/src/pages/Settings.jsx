@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Save, Lock, Server } from 'lucide-react';
 import { PageHeader, PageLoader, ErrorAlert } from '../components';
 import { settingsApi, getErrorMessage } from '../services/adminService';
@@ -29,7 +30,19 @@ const SettingsPage = () => {
   const handleSaveSettings = async () => {
     setSubmitting(true);
     try {
-      await settingsApi.update(settings);
+      const res = await settingsApi.update({
+        maintenanceMode: settings.maintenanceMode,
+        otpRequired: settings.otpRequired,
+        minWalletFund: settings.minWalletFund,
+        maxWalletFund: settings.maxWalletFund,
+        referralBonus: settings.referralBonus,
+        supportEmail: settings.supportEmail,
+      });
+      setSettings((prev) => ({
+        ...prev,
+        ...res.data.data,
+        providerStatus: res.data.data.providerStatus,
+      }));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       dialog.notifySuccess('Settings saved');
@@ -122,32 +135,14 @@ const SettingsPage = () => {
             <div className="rounded-xl border border-slate-200 p-4">
               <div className="mb-3 flex items-center gap-2">
                 <Server size={16} className="text-primary" />
-                <p className="text-sm font-semibold text-slate-800">VTU Provider</p>
+                <p className="text-sm font-semibold text-slate-800">VTU Providers</p>
               </div>
-              <p className="mb-3 text-xs text-slate-500">Choose which provider fulfills airtime, data, bills, and betting purchases.</p>
-              <div className="space-y-2">
-                {[
-                  { id: 'clubkonnect', label: 'Clubkonnect' },
-                  { id: 'vtpass', label: 'VTpass' },
-                ].map((option) => {
-                  const configured = settings.providerStatus?.[option.id]?.configured;
-                  const active = settings.vtuProvider === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      disabled={!configured}
-                      onClick={() => updateSetting('vtuProvider', option.id)}
-                      className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition ${active ? 'border-primary bg-primary/5' : 'border-slate-200'} ${!configured ? 'cursor-not-allowed opacity-50' : 'hover:border-primary/40'}`}
-                    >
-                      <span className="font-semibold text-slate-800">{option.label}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${configured ? (active ? 'bg-primary text-white' : 'bg-emerald-100 text-emerald-700') : 'bg-slate-100 text-slate-500'}`}>
-                        {configured ? (active ? 'Active' : 'Available') : 'Not configured'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              <p className="mb-3 text-xs text-slate-500">
+                Provider activation, per-service routing, sync, and failover are managed on the Providers page.
+              </p>
+              <Link to="/providers" className="inline-flex rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white hover:bg-primary-dark">
+                Open Providers
+              </Link>
             </div>
 
             <div>

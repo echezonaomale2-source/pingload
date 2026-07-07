@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../context/ThemeContext';
@@ -36,7 +37,8 @@ const EducationScreen = ({ navigation, route }) => {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [showPin, setShowPin] = useState(false);
 
-  useEffect(() => {
+  const loadProducts = useCallback(() => {
+    setLoadingProducts(true);
     vtuService.getEducationProducts()
       .then((res) => {
         const list = res.data.data || [];
@@ -45,17 +47,23 @@ const EducationScreen = ({ navigation, route }) => {
         setExams(examList);
         const preselect = route.params?.productCode
           ? list.find((p) => p.productCode === route.params.productCode)
-          : list.find((p) => p.examType === (route.params?.exam || 'waec'));
+          : list.find((p) => p.examType === (route.params?.exam || selectedExam));
         if (preselect) {
           setSelectedProduct(preselect);
           setSelectedExam(preselect.examType);
+        } else {
+          setSelectedProduct(null);
         }
       })
       .catch(() => {
         dialog.alertError('Error', 'Could not load education products.');
       })
       .finally(() => setLoadingProducts(false));
-  }, [route.params?.exam, route.params?.productCode]);
+  }, [dialog, route.params?.exam, route.params?.productCode, selectedExam]);
+
+  useFocusEffect(useCallback(() => {
+    loadProducts();
+  }, [loadProducts]));
 
   const filteredProducts = useMemo(
     () => products.filter((product) => product.examType === selectedExam),

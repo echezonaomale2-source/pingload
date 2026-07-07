@@ -4,11 +4,13 @@ import { PageHeader, DataTable, Modal, PageLoader, ErrorAlert } from '../compone
 import { electricityPlansApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency } from '../utils/formatters';
 import { useDialog } from '../hooks/useDialog';
+import { useVtuProvider } from '../hooks/useVtuProvider';
 
 const emptyForm = {
   providerId: '',
   name: '',
   providerServiceId: '',
+  altServiceId: '',
   minAmount: 500,
   maxAmount: 500000,
   enabled: true,
@@ -17,6 +19,7 @@ const emptyForm = {
 
 const ElectricityPlansPage = () => {
   const dialog = useDialog();
+  const { selected, label, otherLabel, showBoth, serviceIdLabel, refresh } = useVtuProvider();
   const [plans, setPlans] = useState([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -34,12 +37,25 @@ const ElectricityPlansPage = () => {
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
-  const openCreate = () => { setForm(emptyForm); setModal('create'); };
-  const openEdit = (plan) => {
+  const openCreate = async () => {
+    await refresh();
+    setForm(emptyForm);
+    setModal('create');
+  };
+
+  const serviceIdForActive = (plan) => (
+    selected === 'vtpass'
+      ? (plan.vtpassServiceId || plan.providerServiceId || '')
+      : (plan.providerServiceId || plan.vtpassServiceId || '')
+  );
+
+  const openEdit = async (plan) => {
+    await refresh();
     setForm({
       providerId: plan.providerId,
       name: plan.name,
-      providerServiceId: plan.providerServiceId,
+      providerServiceId: serviceIdForActive(plan),
+      altServiceId: selected === 'vtpass' ? (plan.providerServiceId || '') : (plan.vtpassServiceId || ''),
       minAmount: plan.minAmount,
       maxAmount: plan.maxAmount,
       enabled: plan.enabled,
@@ -56,6 +72,11 @@ const ElectricityPlansPage = () => {
       maxAmount: Number(form.maxAmount),
       order: Number(form.order),
     };
+    if (showBoth && form.altServiceId) {
+      if (selected === 'vtpass') payload.clubkonnectServiceId = form.altServiceId;
+      else payload.vtpassServiceId = form.altServiceId;
+    }
+    delete payload.altServiceId;
     try {
       if (modal === 'create') await electricityPlansApi.create(payload);
       else await electricityPlansApi.update(modal, payload);
@@ -96,7 +117,7 @@ const ElectricityPlansPage = () => {
   const columns = [
     { key: 'providerId', label: 'ID', render: (r) => <span className="font-mono text-xs">{r.providerId}</span> },
     { key: 'name', label: 'Provider' },
-    { key: 'providerServiceId', label: 'Clubkonnect ID', render: (r) => <span className="font-mono text-xs">{r.providerServiceId}</span> },
+    { key: 'providerServiceId', label: 'Service ID', render: (r) => <span className="font-mono text-xs">{serviceIdForActive(r)}</span> },
     {
       key: 'range',
       label: 'Amount Range',
@@ -130,7 +151,7 @@ const ElectricityPlansPage = () => {
     <div>
       <PageHeader
         title="Electricity Plans"
-        subtitle="Manage electricity providers shown in the user app"
+        subtitle={`Manage electricity providers · selected provider: ${label}`}
         action={
           <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
             <Plus size={18} /> Add Provider
@@ -152,7 +173,10 @@ const ElectricityPlansPage = () => {
         <div className="space-y-3">
           <input value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })} placeholder="Provider ID (e.g. ikeja)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Display name" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          <input value={form.providerServiceId} onChange={(e) => setForm({ ...form, providerServiceId: e.target.value })} placeholder="Clubkonnect disco code (e.g. 02 for Ikeja)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
+          <input value={form.providerServiceId} onChange={(e) => setForm({ ...form, providerServiceId: e.target.value })} placeholder={serviceIdLabel} className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
+          {showBoth && (
+            <input value={form.altServiceId} onChange={(e) => setForm({ ...form, altServiceId: e.target.value })} placeholder={`${otherLabel} service ID (optional)`} className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <input type="number" value={form.minAmount} onChange={(e) => setForm({ ...form, minAmount: e.target.value })} placeholder="Min amount" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
             <input type="number" value={form.maxAmount} onChange={(e) => setForm({ ...form, maxAmount: e.target.value })} placeholder="Max amount" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />

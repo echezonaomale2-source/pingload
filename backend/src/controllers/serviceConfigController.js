@@ -13,6 +13,19 @@ const {
 } = require('../services/bettingPlatformService');
 const vtuProvider = require('../services/vtuProviderService');
 const serviceConfig = require('../config/serviceConfig');
+const {
+  resolveVariationCode,
+  assignVariationCodeForProvider,
+  assignServiceIdForProvider,
+  buildProviderCatalogQuery,
+  buildMultiProviderCatalogQuery,
+  tagWithVtuProvider,
+} = require('../utils/resolveProviderFields');
+const { bumpCatalogVersion } = require('../utils/catalogInvalidation');
+const { normalizeProvider } = require('../utils/migrateVtuSettings');
+
+const DATA_NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
+const TV_PROVIDERS = ['dstv', 'gotv', 'startimes'];
 
 const isDuplicateKeyError = (error) => error?.code === 11000;
 
@@ -83,7 +96,18 @@ const getPublicServiceStatus = async (_req, res, next) => {
 const getAppConfig = async (_req, res, next) => {
   try {
     const serviceConfig = require('../config/serviceConfig');
-    res.json({ success: true, data: serviceConfig.getAppConfig() });
+    const settings = await SystemSettings.getSettings();
+    const providerStatus = await vtuProvider.getProviderStatus();
+    res.json({
+      success: true,
+      data: {
+        ...serviceConfig.getAppConfig(),
+        vtuProvider: providerStatus.active,
+        serviceRouting: providerStatus.serviceRouting,
+        catalogVersion: settings.catalogVersion || 1,
+        providerStatus,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -123,28 +147,39 @@ const adminUpdatePrice = async (req, res, next) => {
   }
 };
 
-const mapDataPlan = (p) => ({
-  variation_code: p.variationCode,
-  name: p.name,
-  variation_amount: String(p.amount),
-  dataSize: p.dataSize,
-  validity: p.validity,
-  validityCategory: p.validityCategory || inferValidityCategory(p.validity),
-  category: p.category || '',
-  commissionPercent: p.commissionPercent || 0,
-  order: p.order || 0,
-});
+const mapDataPlan = (p) => {
+  const provider = p.vtuProvider || 'clubkonnect';
+  return {
+    variation_code: resolveVariationCode(p, provider),
+    name: p.name,
+    variation_amount: String(p.amount),
+    dataSize: p.dataSize,
+    validity: p.validity,
+    validityCategory: p.validityCategory || inferValidityCategory(p.validity),
+    category: p.category || '',
+    commissionPercent: p.commissionPercent || 0,
+    order: p.order || 0,
+    vtuProvider: provider,
+    planId: String(p._id),
+  };
+};
 
 // GET /services/data-plans/:network — public enabled plans
 const getDataPlans = async (req, res, next) => {
   try {
     const { network } = req.params;
-    const plans = await DataPlan.find({ network, enabled: true }).sort({ order: 1, amount: 1 });
+    const catalogProviders = await vtuProvider.getCatalogProviders('data');
+    const plans = await DataPlan.find(
+      buildMultiProviderCatalogQuery({ network, enabled: true }, catalogProviders)
+    ).sort({ order: 1, amount: 1 });
     const mapped = plans.map(mapDataPlan);
+    const settings = await SystemSettings.getSettings();
     res.json({
       success: true,
       data: mapped,
       groups: groupByValidityCategory(mapped, (p) => p.validity),
+      catalogProviders,
+      catalogVersion: settings.catalogVersion || 1,
     });
   } catch (error) {
     next(error);
@@ -155,7 +190,11 @@ const getDataPlans = async (req, res, next) => {
 const getElectricityPlans = async (_req, res, next) => {
   try {
     await ElectricityPlan.ensureDefaults();
-    const plans = await ElectricityPlan.find({ enabled: true }).sort({ order: 1, name: 1 });
+    const catalogProviders = await vtuProvider.getCatalogProviders('electricity');
+    const plans = await ElectricityPlan.find(
+      buildMultiProviderCatalogQuery({ enabled: true }, catalogProviders)
+    ).sort({ order: 1, name: 1 });
+    const settings = await SystemSettings.getSettings();
     res.json({
       success: true,
       data: plans.map((p) => ({
@@ -164,7 +203,10 @@ const getElectricityPlans = async (_req, res, next) => {
         minAmount: p.minAmount,
         maxAmount: p.maxAmount,
         order: p.order,
+        vtuProvider: p.vtuProvider || 'clubkonnect',
       })),
+      catalogProviders,
+      catalogVersion: settings.catalogVersion || 1,
     });
   } catch (error) {
     next(error);
@@ -189,31 +231,56 @@ const getTvPlans = async (req, res, next) => {
   try {
     await TvPlan.ensureDefaults();
     const { provider } = req.params;
-    const plans = await TvPlan.find({ provider, enabled: true }).sort({ order: 1, amount: 1 });
-    const mapped = plans.map((p) => ({
-      code: p.variationCode,
-      name: p.name,
-      amount: p.amount,
-      category: p.category || 'standard',
-      order: p.order,
-    }));
+    const catalogProviders = await vtuProvider.getCatalogProviders('tv');
+    const plans = await TvPlan.find(
+      buildMultiProviderCatalogQuery({ provider, enabled: true }, catalogProviders)
+    ).sort({ order: 1, amount: 1 });
+    const mapped = plans.map((p) => {
+      const planProvider = p.vtuProvider || 'clubkonnect';
+      return {
+        code: resolveVariationCode(p, planProvider),
+        name: p.name,
+        amount: p.amount,
+        category: p.category || 'standard',
+        order: p.order,
+        vtuProvider: planProvider,
+        planId: String(p._id),
+      };
+    });
+    const settings = await SystemSettings.getSettings();
     res.json({
       success: true,
       data: mapped,
       groups: groupTvPlans(mapped),
+      catalogProviders,
+      catalogVersion: settings.catalogVersion || 1,
     });
   } catch (error) {
     next(error);
   }
 };
 
-// GET /services/data-plans/admin
+const resolveAdminProviderFilter = async (req) => {
+  const requested = req.query.provider || req.body?.vtuProvider;
+  if (requested) return normalizeProvider(requested);
+  return null;
+};
+
+const buildAdminCatalogQuery = async (baseFilter, providerFilter, serviceId) => {
+  if (providerFilter) return buildProviderCatalogQuery(baseFilter, providerFilter);
+  const catalogProviders = await vtuProvider.getCatalogProviders(serviceId);
+  return buildMultiProviderCatalogQuery(baseFilter, catalogProviders);
+};
+
 const adminListDataPlans = async (req, res, next) => {
   try {
     const { network } = req.query;
-    const filter = network ? { network } : {};
-    const plans = await DataPlan.find(filter).sort({ network: 1, order: 1, amount: 1 });
-    res.json({ success: true, data: plans });
+    const providerFilter = await resolveAdminProviderFilter(req);
+    const baseFilter = network ? { network } : {};
+    const plans = await DataPlan.find(
+      await buildAdminCatalogQuery(baseFilter, providerFilter, 'data')
+    ).sort({ network: 1, vtuProvider: 1, order: 1, amount: 1 });
+    res.json({ success: true, data: plans, providerFilter });
   } catch (error) {
     next(error);
   }
@@ -222,11 +289,15 @@ const adminListDataPlans = async (req, res, next) => {
 // POST /services/data-plans/admin
 const adminCreateDataPlan = async (req, res, next) => {
   try {
-    const payload = {
+    const selectedProvider = normalizeProvider(
+      req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
+    );
+    const payload = tagWithVtuProvider(assignVariationCodeForProvider({
       ...req.body,
       validityCategory: req.body.validityCategory || inferValidityCategory(req.body.validity),
-    };
+    }, selectedProvider), selectedProvider);
     const plan = await DataPlan.create(payload);
+    await bumpCatalogVersion();
     res.status(201).json({ success: true, data: plan });
   } catch (error) {
     if (isDuplicateKeyError(error)) {
@@ -239,8 +310,13 @@ const adminCreateDataPlan = async (req, res, next) => {
 // PATCH /services/data-plans/admin/:id
 const adminUpdateDataPlan = async (req, res, next) => {
   try {
-    const plan = await DataPlan.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const selectedProvider = normalizeProvider(
+      req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
+    );
+    const payload = tagWithVtuProvider(assignVariationCodeForProvider(req.body, selectedProvider), selectedProvider);
+    const plan = await DataPlan.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
     if (!plan) return res.status(404).json({ success: false, message: 'Data plan not found' });
+    await bumpCatalogVersion();
     res.json({ success: true, data: plan });
   } catch (error) {
     if (isDuplicateKeyError(error)) {
@@ -255,17 +331,21 @@ const adminDeleteDataPlan = async (req, res, next) => {
   try {
     const plan = await DataPlan.findByIdAndDelete(req.params.id);
     if (!plan) return res.status(404).json({ success: false, message: 'Data plan not found' });
+    await bumpCatalogVersion();
     res.json({ success: true, message: 'Data plan deleted' });
   } catch (error) {
     next(error);
   }
 };
 
-const adminListElectricityPlans = async (_req, res, next) => {
+const adminListElectricityPlans = async (req, res, next) => {
   try {
     await ElectricityPlan.ensureDefaults();
-    const plans = await ElectricityPlan.find().sort({ order: 1, name: 1 });
-    res.json({ success: true, data: plans });
+    const providerFilter = await resolveAdminProviderFilter(req);
+    const plans = await ElectricityPlan.find(
+      await buildAdminCatalogQuery({}, providerFilter, 'electricity')
+    ).select('+vtpassServiceId').sort({ order: 1, name: 1 });
+    res.json({ success: true, data: plans, providerFilter });
   } catch (error) {
     next(error);
   }
@@ -273,11 +353,15 @@ const adminListElectricityPlans = async (_req, res, next) => {
 
 const adminCreateElectricityPlan = async (req, res, next) => {
   try {
-    const payload = {
+    const selectedProvider = normalizeProvider(
+      req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
+    );
+    const payload = tagWithVtuProvider(assignServiceIdForProvider({
       ...req.body,
       providerId: String(req.body.providerId).toLowerCase().trim(),
-    };
+    }, selectedProvider), selectedProvider);
     const plan = await ElectricityPlan.create(payload);
+    await bumpCatalogVersion();
     res.status(201).json({ success: true, data: plan });
   } catch (error) {
     if (isDuplicateKeyError(error)) {
@@ -289,15 +373,19 @@ const adminCreateElectricityPlan = async (req, res, next) => {
 
 const adminUpdateElectricityPlan = async (req, res, next) => {
   try {
-    const updates = { ...req.body };
+    const selectedProvider = normalizeProvider(
+      req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
+    );
+    const updates = tagWithVtuProvider(assignServiceIdForProvider({ ...req.body }, selectedProvider), selectedProvider);
     if (updates.providerId) {
       updates.providerId = String(updates.providerId).toLowerCase().trim();
     }
     const plan = await ElectricityPlan.findByIdAndUpdate(req.params.id, updates, {
       new: true,
       runValidators: true,
-    });
+    }).select('+vtpassServiceId');
     if (!plan) return res.status(404).json({ success: false, message: 'Electricity plan not found' });
+    await bumpCatalogVersion();
     res.json({ success: true, data: plan });
   } catch (error) {
     if (isDuplicateKeyError(error)) {
@@ -311,6 +399,7 @@ const adminDeleteElectricityPlan = async (req, res, next) => {
   try {
     const plan = await ElectricityPlan.findByIdAndDelete(req.params.id);
     if (!plan) return res.status(404).json({ success: false, message: 'Electricity plan not found' });
+    await bumpCatalogVersion();
     res.json({ success: true, message: 'Electricity plan deleted' });
   } catch (error) {
     next(error);
@@ -321,9 +410,12 @@ const adminListTvPlans = async (req, res, next) => {
   try {
     await TvPlan.ensureDefaults();
     const { provider } = req.query;
-    const filter = provider ? { provider } : {};
-    const plans = await TvPlan.find(filter).sort({ provider: 1, order: 1, amount: 1 });
-    res.json({ success: true, data: plans });
+    const providerFilter = await resolveAdminProviderFilter(req);
+    const baseFilter = provider ? { provider } : {};
+    const plans = await TvPlan.find(
+      await buildAdminCatalogQuery(baseFilter, providerFilter, 'tv')
+    ).sort({ provider: 1, vtuProvider: 1, order: 1, amount: 1 });
+    res.json({ success: true, data: plans, providerFilter });
   } catch (error) {
     next(error);
   }
@@ -331,7 +423,12 @@ const adminListTvPlans = async (req, res, next) => {
 
 const adminCreateTvPlan = async (req, res, next) => {
   try {
-    const plan = await TvPlan.create(req.body);
+    const selectedProvider = normalizeProvider(
+      req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
+    );
+    const payload = tagWithVtuProvider(assignVariationCodeForProvider(req.body, selectedProvider), selectedProvider);
+    const plan = await TvPlan.create(payload);
+    await bumpCatalogVersion();
     res.status(201).json({ success: true, data: plan });
   } catch (error) {
     if (isDuplicateKeyError(error)) {
@@ -343,8 +440,13 @@ const adminCreateTvPlan = async (req, res, next) => {
 
 const adminUpdateTvPlan = async (req, res, next) => {
   try {
-    const plan = await TvPlan.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const selectedProvider = normalizeProvider(
+      req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
+    );
+    const payload = tagWithVtuProvider(assignVariationCodeForProvider(req.body, selectedProvider), selectedProvider);
+    const plan = await TvPlan.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
     if (!plan) return res.status(404).json({ success: false, message: 'TV plan not found' });
+    await bumpCatalogVersion();
     res.json({ success: true, data: plan });
   } catch (error) {
     if (isDuplicateKeyError(error)) {
@@ -358,6 +460,7 @@ const adminDeleteTvPlan = async (req, res, next) => {
   try {
     const plan = await TvPlan.findByIdAndDelete(req.params.id);
     if (!plan) return res.status(404).json({ success: false, message: 'TV plan not found' });
+    await bumpCatalogVersion();
     res.json({ success: true, message: 'TV plan deleted' });
   } catch (error) {
     next(error);
@@ -368,9 +471,12 @@ const adminListEducationProducts = async (req, res, next) => {
   try {
     await EducationProduct.ensureDefaults();
     const { examType } = req.query;
+    const providerFilter = await resolveAdminProviderFilter(req);
     const filter = examType ? { examType } : {};
-    const products = await EducationProduct.find(filter).sort({ order: 1, amount: 1 });
-    res.json({ success: true, data: products });
+    const products = await EducationProduct.find(
+      await buildAdminCatalogQuery(filter, providerFilter, 'education')
+    ).select('+vtpassServiceId').sort({ order: 1, amount: 1 });
+    res.json({ success: true, data: products, providerFilter });
   } catch (error) {
     next(error);
   }
@@ -378,7 +484,12 @@ const adminListEducationProducts = async (req, res, next) => {
 
 const adminCreateEducationProduct = async (req, res, next) => {
   try {
-    const product = await EducationProduct.create(req.body);
+    const selectedProvider = normalizeProvider(
+      req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
+    );
+    const payload = tagWithVtuProvider(assignServiceIdForProvider(req.body, selectedProvider), selectedProvider);
+    const product = await EducationProduct.create(payload);
+    await bumpCatalogVersion();
     res.status(201).json({ success: true, data: product });
   } catch (error) {
     next(error);
@@ -387,11 +498,16 @@ const adminCreateEducationProduct = async (req, res, next) => {
 
 const adminUpdateEducationProduct = async (req, res, next) => {
   try {
-    const product = await EducationProduct.findByIdAndUpdate(req.params.id, req.body, {
+    const selectedProvider = normalizeProvider(
+      req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
+    );
+    const payload = tagWithVtuProvider(assignServiceIdForProvider(req.body, selectedProvider), selectedProvider);
+    const product = await EducationProduct.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,
-    });
+    }).select('+vtpassServiceId');
     if (!product) return res.status(404).json({ success: false, message: 'Education product not found' });
+    await bumpCatalogVersion();
     res.json({ success: true, data: product });
   } catch (error) {
     next(error);
@@ -402,6 +518,7 @@ const adminDeleteEducationProduct = async (req, res, next) => {
   try {
     const product = await EducationProduct.findByIdAndDelete(req.params.id);
     if (!product) return res.status(404).json({ success: false, message: 'Education product not found' });
+    await bumpCatalogVersion();
     res.json({ success: true, message: 'Education product deleted' });
   } catch (error) {
     next(error);
@@ -462,34 +579,53 @@ const adminEducationPurchases = async (req, res, next) => {
 
 const adminSyncDataPlansFromClubkonnect = async (req, res, next) => {
   try {
-    const source = await vtuProvider.getActiveProviderName();
-    await vtuProvider.assertActiveProviderConfigured();
-    const network = String(req.query.network || 'mtn').toLowerCase();
-    const result = await vtuProvider.getDataPlans(network);
-    const variations = result.content?.variations || [];
+    const source = normalizeProvider(
+      req.query.source || req.body?.source || await vtuProvider.getSelectedProviderName()
+    );
+    if (!vtuProvider.isProviderConfigured(source)) {
+      return res.status(400).json({
+        success: false,
+        message: `${source === 'vtpass' ? 'VTpass' : 'Clubkonnect'} is not configured on the server`,
+      });
+    }
+    const requestedNetwork = String(req.query.network || '').toLowerCase();
+    const networks = requestedNetwork && DATA_NETWORKS.includes(requestedNetwork)
+      ? [requestedNetwork]
+      : DATA_NETWORKS;
     let synced = 0;
 
-    for (const plan of variations) {
-      if (!plan.variation_code) continue;
-      await DataPlan.findOneAndUpdate(
-        { network, variationCode: plan.variation_code },
-        {
-          $set: {
-            network,
-            name: plan.name || plan.variation_code,
-            dataSize: plan.name || plan.variation_code,
-            validity: plan.validity || '30 days',
-            variationCode: plan.variation_code,
-            amount: parseFloat(plan.variation_amount) || 0,
-            enabled: true,
-          },
-        },
-        { upsert: true, new: true }
-      );
-      synced += 1;
+    for (const network of networks) {
+      const result = await vtuProvider.getDataPlans(network, source);
+      const variations = result.content?.variations || [];
+
+      for (const plan of variations) {
+        if (!plan.variation_code) continue;
+        const code = plan.variation_code;
+        const planName = plan.name || code;
+        const common = {
+          network,
+          name: planName,
+          dataSize: plan.name || planName,
+          validity: plan.validity || '30 days',
+          amount: parseFloat(plan.variation_amount) || 0,
+          enabled: true,
+          vtuProvider: source,
+        };
+        const update = source === 'vtpass'
+          ? { ...common, variationCode: code, vtpassVariationCode: code, planCode: '' }
+          : { ...common, variationCode: code, planCode: code, vtpassVariationCode: '' };
+
+        await DataPlan.findOneAndUpdate(
+          { network, vtuProvider: source, variationCode: code },
+          { $set: update },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        synced += 1;
+      }
     }
 
-    res.json({ success: true, data: { synced, network, source } });
+    await bumpCatalogVersion();
+    res.json({ success: true, data: { synced, networks, source } });
   } catch (error) {
     next(error);
   }
@@ -497,32 +633,51 @@ const adminSyncDataPlansFromClubkonnect = async (req, res, next) => {
 
 const adminSyncTvPlansFromClubkonnect = async (req, res, next) => {
   try {
-    const source = await vtuProvider.getActiveProviderName();
-    await vtuProvider.assertActiveProviderConfigured();
-    const provider = String(req.query.provider || 'dstv').toLowerCase();
-    const result = await vtuProvider.getTVPackages(provider);
-    const variations = result.content?.variations || [];
+    const source = normalizeProvider(
+      req.query.source || req.body?.source || await vtuProvider.getSelectedProviderName()
+    );
+    if (!vtuProvider.isProviderConfigured(source)) {
+      return res.status(400).json({
+        success: false,
+        message: `${source === 'vtpass' ? 'VTpass' : 'Clubkonnect'} is not configured on the server`,
+      });
+    }
+    const requestedProvider = String(req.query.provider || '').toLowerCase();
+    const providers = requestedProvider && TV_PROVIDERS.includes(requestedProvider)
+      ? [requestedProvider]
+      : TV_PROVIDERS;
     let synced = 0;
 
-    for (const pkg of variations) {
-      if (!pkg.variation_code) continue;
-      await TvPlan.findOneAndUpdate(
-        { provider, variationCode: pkg.variation_code },
-        {
-          $set: {
-            provider,
-            name: pkg.name || pkg.variation_code,
-            variationCode: pkg.variation_code,
-            amount: parseFloat(pkg.variation_amount) || 0,
-            enabled: true,
-          },
-        },
-        { upsert: true, new: true }
-      );
-      synced += 1;
+    for (const provider of providers) {
+      const result = await vtuProvider.getTVPackages(provider, source);
+      const variations = result.content?.variations || [];
+
+      for (const pkg of variations) {
+        if (!pkg.variation_code) continue;
+        const code = pkg.variation_code;
+        const planName = pkg.name || code;
+        const common = {
+          provider,
+          name: planName,
+          amount: parseFloat(pkg.variation_amount) || 0,
+          enabled: true,
+          vtuProvider: source,
+        };
+        const update = source === 'vtpass'
+          ? { ...common, variationCode: code, vtpassVariationCode: code }
+          : { ...common, variationCode: code, vtpassVariationCode: '' };
+
+        await TvPlan.findOneAndUpdate(
+          { provider, vtuProvider: source, variationCode: code },
+          { $set: tagWithVtuProvider(update, source) },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        synced += 1;
+      }
     }
 
-    res.json({ success: true, data: { synced, provider, source } });
+    await bumpCatalogVersion();
+    res.json({ success: true, data: { synced, providers, source } });
   } catch (error) {
     next(error);
   }

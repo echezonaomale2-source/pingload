@@ -4,6 +4,7 @@ const Transaction = require('../models/Transaction');
 const { deliverUserNotification } = require('./notificationDeliveryService');
 const { getPurchasePushMeta } = require('../utils/purchaseNotification');
 const vtuProvider = require('./vtuProviderService');
+const { executeProviderCallWithFailover } = require('./vtuFailoverService');
 const { processRefund, buildRefundReason } = require('./refundService');
 const { createDebitWithAtomicWallet } = require('./walletTransactionService');
 const generateReference = require('../utils/generateReference');
@@ -28,9 +29,12 @@ const logProviderError = (providerName, level, message, meta = {}) => {
   else logClubkonnect(level, message, meta);
 };
 
-const buildPurchaseFailureMessage = async (description, metadata = {}) => {
+const buildPurchaseFailureMessage = (description, metadata = {}) => {
   const label = description.split(':')[0];
-  const reason = await vtuProvider.extractProviderFailureReason(metadata.providerResponse || metadata.vtpassResponse)
+  const reason = vtuProvider.extractProviderFailureReason(
+    metadata.providerResponse || metadata.vtpassResponse,
+    metadata.vtuProvider
+  )
     || metadata.error
     || buildRefundReason(metadata);
   if (reason && reason !== 'Purchase failed at service provider') {
@@ -177,11 +181,12 @@ const executeVtuPurchase = async ({
   description,
   metadata = {},
   providerCall,
+  providerName: explicitProvider,
   applyPricing = true,
   pricingServiceId = service,
 }) => {
-  await vtuProvider.assertActiveProviderConfigured();
-  const providerName = await vtuProvider.getActiveProviderName();
+  const providerName = explicitProvider || metadata.vtuProvider || await vtuProvider.getRoutedProviderName(service);
+  vtuProvider.assertProviderConfigured(providerName);
 
   const chargedAmount = applyPricing
     ? await applyServicePricing(pricingServiceId, amount)
@@ -198,16 +203,23 @@ const executeVtuPurchase = async ({
   });
 
   try {
-    const result = await providerCall(providerRequestId);
-    const outcome = await vtuProvider.resolvePurchaseOutcome(result);
-    const purchaseDetails = await vtuProvider.extractPurchaseDetails(result, service);
+    const { result, providerName: usedProvider, failovered } = await executeProviderCallWithFailover({
+      service,
+      primaryProvider: providerName,
+      transactionReference: transaction.reference,
+      providerCall: (name) => providerCall(providerRequestId, name),
+    });
+
+    const outcome = vtuProvider.resolvePurchaseOutcome(result, usedProvider);
+    const purchaseDetails = vtuProvider.extractPurchaseDetails(result, service, usedProvider);
     const finalizeMetadata = {
       providerResponse: result,
-      vtuProvider: providerName,
+      vtuProvider: usedProvider,
       providerOrderId: purchaseDetails.providerOrderId,
       purchaseDetails,
+      ...(failovered ? { providerFailover: true, primaryProvider: providerName } : {}),
     };
-    if (providerName === 'vtpass') {
+    if (usedProvider === 'vtpass') {
       finalizeMetadata.vtpassResponse = result;
     }
 
@@ -227,7 +239,7 @@ const executeVtuPurchase = async ({
     const success = outcome.outcome === 'success';
 
     if (!success) {
-      logProviderError(providerName, 'error', 'VTU provider purchase returned failure', {
+      logProviderError(usedProvider, 'error', 'VTU provider purchase returned failure', {
         service,
         response: result,
         requestId: providerRequestId,
@@ -253,7 +265,7 @@ const executeVtuPurchase = async ({
 
     const failureMessage = success
       ? `${description.split(':')[0]} completed successfully`
-      : await buildPurchaseFailureMessage(description, finalizeMetadata);
+      : buildPurchaseFailureMessage(description, finalizeMetadata);
 
     return {
       success,
@@ -284,7 +296,7 @@ const executeVtuPurchase = async ({
       false,
       finalizeMetadata,
     );
-    const error = new Error(await buildPurchaseFailureMessage(description, finalizeMetadata));
+    const error = new Error(buildPurchaseFailureMessage(description, finalizeMetadata));
     error.statusCode = providerError.statusCode === 502 ? 502 : 400;
     error.data = formatTransactionPayload(updatedTx, {
       refunded: true,

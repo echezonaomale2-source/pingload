@@ -8,7 +8,7 @@ const educationProductSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    productCode: { type: String, required: true, unique: true, trim: true },
+    productCode: { type: String, required: true, trim: true },
     name: { type: String, required: true, trim: true },
     description: { type: String, default: '', trim: true },
     providerServiceId: { type: String, required: true, trim: true },
@@ -20,9 +20,17 @@ const educationProductSchema = new mongoose.Schema(
     maxQuantity: { type: Number, default: 1, min: 1, max: 10 },
     enabled: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
+    vtuProvider: {
+      type: String,
+      enum: ['clubkonnect', 'vtpass'],
+      default: 'clubkonnect',
+      index: true,
+    },
   },
   { timestamps: true }
 );
+
+educationProductSchema.index({ productCode: 1, vtuProvider: 1 }, { unique: true });
 
 educationProductSchema.statics.getDefaults = () => [
   {

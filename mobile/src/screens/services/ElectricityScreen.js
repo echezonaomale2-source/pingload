@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { ELECTRICITY_PROVIDERS } from '../../utils/constants';
@@ -58,10 +59,11 @@ const ElectricityScreen = ({ navigation }) => {
     }
   }, [dialog]);
 
-  useEffect(() => {
-    loadProviders(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadProviders(false);
+    }, [loadProviders])
+  );
 
   const handleVerifyMeter = async () => {
     if (!provider || !meterNumber) {

@@ -16,7 +16,32 @@ const { normalizeNigerianPhone, isValidNigerianPhone } = require('../utils/phone
 const verifyTransactionPin = require('../utils/verifyTransactionPin');
 const {
   getPlatformById,
+  getProviderServiceId,
 } = require('../services/bettingPlatformService');
+const {
+  resolveVariationCode,
+  resolveServiceId,
+  variationCodeQuery,
+  buildProviderCatalogQuery,
+  buildMultiProviderCatalogQuery,
+} = require('../utils/resolveProviderFields');
+
+const mapDataPlanForApi = (plan) => {
+  const provider = plan.vtuProvider || 'clubkonnect';
+  return {
+    variation_code: resolveVariationCode(plan, provider),
+    name: plan.name,
+    variation_amount: String(plan.amount),
+    dataSize: plan.dataSize,
+    validity: plan.validity,
+    validityCategory: plan.validityCategory || inferValidityCategory(plan.validity),
+    category: plan.category || '',
+    commissionPercent: plan.commissionPercent || 0,
+    order: plan.order || 0,
+    vtuProvider: provider,
+    planId: String(plan._id),
+  };
+};
 
 /** Clubkonnect sometimes returns duplicate plan codes — keep first of each. */
 const dedupeByCode = (items, codeKey) => {
@@ -53,7 +78,11 @@ const buyAirtime = async (req, res, next) => {
       amount,
       description: `Airtime purchase: ₦${amount} for ${phone} (${network})`,
       metadata: { network, phone },
-      providerCall: (requestId) => vtuProvider.purchaseAirtime({ network, phone, amount, requestId }),
+      providerName: await vtuProvider.getRoutedProviderName('airtime'),
+      providerCall: (requestId, providerName) => vtuProvider.purchaseAirtime(
+        { network, phone, amount, requestId },
+        providerName
+      ),
     });
 
     sendPurchaseResponse(res, result);
@@ -72,45 +101,42 @@ const buyAirtime = async (req, res, next) => {
 const fetchDataPlans = async (req, res, next) => {
   try {
     const { network } = req.params;
+    const catalogProviders = await vtuProvider.getCatalogProviders('data');
 
-    // Always prefer admin-managed plans so price/commission changes apply immediately.
-    const localPlans = await DataPlan.find({ network, enabled: true }).sort({ order: 1, amount: 1 });
+    const localPlans = await DataPlan.find(
+      buildMultiProviderCatalogQuery({ network, enabled: true }, catalogProviders)
+    ).sort({ order: 1, amount: 1 });
 
     if (localPlans.length > 0) {
-      const mapped = localPlans.map((p) => ({
-        variation_code: p.variationCode,
-        name: p.name,
-        variation_amount: String(p.amount),
-        dataSize: p.dataSize,
-        validity: p.validity,
-        validityCategory: p.validityCategory || inferValidityCategory(p.validity),
-        category: p.category || '',
-        commissionPercent: p.commissionPercent || 0,
-        order: p.order || 0,
-      }));
+      const mapped = localPlans.map(mapDataPlanForApi);
       return res.json({
         success: true,
         data: mapped,
         groups: groupByValidityCategory(mapped, (p) => p.validity),
         source: 'local',
+        catalogProviders,
       });
     }
 
-    // Fallback to Clubkonnect catalogue when no local plans are configured.
-    const activeProvider = await vtuProvider.getActiveProviderName();
-    if (vtuProvider.isProviderConfigured(activeProvider)) {
+    for (const activeProvider of catalogProviders) {
+      if (!vtuProvider.isProviderConfigured(activeProvider)) continue;
       try {
-        const result = await vtuProvider.getDataPlans(network);
+        const result = await vtuProvider.getDataPlans(network, activeProvider);
         const variations = dedupeByCode(result.content?.variations || [], 'variation_code');
         if (variations.length > 0) {
-          return res.json({ success: true, data: variations, source: activeProvider });
+          return res.json({
+            success: true,
+            data: variations,
+            source: activeProvider,
+            catalogProviders,
+          });
         }
       } catch {
-        // fall through
+        // try next provider
       }
     }
 
-    res.json({ success: true, data: [], source: 'local' });
+    res.json({ success: true, data: [], source: 'local', catalogProviders });
   } catch (error) {
     next(error);
   }
@@ -118,32 +144,60 @@ const fetchDataPlans = async (req, res, next) => {
 
 const amountsMatch = (a, b) => Math.abs(Number(a) - Number(b)) < 0.01;
 
+const findDataPlan = async ({ network, variationCode }) => {
+  const catalogProviders = await vtuProvider.getCatalogProviders('data');
+  return DataPlan.findOne(
+    buildMultiProviderCatalogQuery({
+      network: String(network).toLowerCase(),
+      enabled: true,
+      ...variationCodeQuery(variationCode),
+    }, catalogProviders)
+  );
+};
+
 const resolveDataPlanAmount = async ({ network, variationCode, amount }) => {
-  const plan = await DataPlan.findOne({
-    network: String(network).toLowerCase(),
-    variationCode,
-    enabled: true,
-  });
+  const plan = await findDataPlan({ network, variationCode });
   if (plan && !amountsMatch(amount, plan.amount)) {
     const error = new Error(`Invalid plan amount. Expected ₦${plan.amount}`);
     error.statusCode = 400;
     throw error;
   }
-  return plan?.amount ?? amount;
+  return { amount: plan?.amount ?? amount, plan };
+};
+
+const resolveDataProviderCode = async ({ network, variationCode, plan }) => {
+  const resolvedPlan = plan || await findDataPlan({ network, variationCode });
+  if (!resolvedPlan) return variationCode;
+  const provider = resolvedPlan.vtuProvider || 'clubkonnect';
+  return resolveVariationCode(resolvedPlan, provider) || variationCode;
+};
+
+const findTvPlan = async ({ provider, variationCode }) => {
+  const catalogProviders = await vtuProvider.getCatalogProviders('tv');
+  return TvPlan.findOne(
+    buildMultiProviderCatalogQuery({
+      provider: String(provider).toLowerCase(),
+      enabled: true,
+      ...variationCodeQuery(variationCode),
+    }, catalogProviders)
+  );
 };
 
 const resolveTvPlanAmount = async ({ provider, variationCode, amount }) => {
-  const plan = await TvPlan.findOne({
-    provider: String(provider).toLowerCase(),
-    variationCode,
-    enabled: true,
-  });
+  const plan = await findTvPlan({ provider, variationCode });
   if (plan && !amountsMatch(amount, plan.amount)) {
     const error = new Error(`Invalid package amount. Expected ₦${plan.amount}`);
     error.statusCode = 400;
     throw error;
   }
-  return plan?.amount ?? amount;
+  return { amount: plan?.amount ?? amount, plan };
+};
+
+const resolveTvProviderCode = async ({ provider, variationCode, plan }) => {
+  const resolvedPlan = plan || await findTvPlan({ provider, variationCode });
+  if (!resolvedPlan) return variationCode;
+  const planProvider = resolvedPlan.vtuProvider || 'clubkonnect';
+  return resolveVariationCode(resolvedPlan, planProvider) || variationCode;
 };
 
 const buyData = async (req, res, next) => {
@@ -152,15 +206,20 @@ const buyData = async (req, res, next) => {
     const { network, phone, variationCode, amount, pin } = req.body;
     await verifyTransactionPin(req.user._id, pin, req);
 
-    const validatedAmount = await resolveDataPlanAmount({ network, variationCode, amount });
+    const { amount: validatedAmount, plan: dataPlan } = await resolveDataPlanAmount({ network, variationCode, amount });
+    const providerCode = await resolveDataProviderCode({ network, variationCode, plan: dataPlan });
+    const purchaseProvider = dataPlan?.vtuProvider || await vtuProvider.getRoutedProviderName('data');
 
     const result = await executeVtuPurchase({
       userId: req.user._id,
       service: 'data',
       amount: validatedAmount,
       description: `Data purchase for ${phone} (${network})`,
-      metadata: { network, phone, variationCode },
-      providerCall: (requestId) => vtuProvider.purchaseData({ network, phone, variationCode, requestId }),
+      metadata: { network, phone, variationCode, vtuProvider: purchaseProvider },
+      providerName: purchaseProvider,
+      providerCall: (requestId, providerName) => vtuProvider.purchaseData({
+        network, phone, variationCode: providerCode, requestId,
+      }, providerName),
     });
 
     sendPurchaseResponse(res, result);
@@ -178,16 +237,24 @@ const buyData = async (req, res, next) => {
 
 const resolveElectricityProvider = async (providerId) => {
   await ElectricityPlan.ensureDefaults();
-  const plan = await ElectricityPlan.findOne({
-    providerId: String(providerId).toLowerCase(),
-    enabled: true,
-  });
+  const catalogProviders = await vtuProvider.getCatalogProviders('electricity');
+  const plan = await ElectricityPlan.findOne(
+    buildMultiProviderCatalogQuery({
+      providerId: String(providerId).toLowerCase(),
+      enabled: true,
+    }, catalogProviders)
+  ).select('+vtpassServiceId');
   if (!plan) {
     const error = new Error('Electricity provider is unavailable');
     error.statusCode = 400;
     throw error;
   }
   return plan;
+};
+
+const resolveElectricityServiceId = async (plan) => {
+  const provider = plan.vtuProvider || await vtuProvider.getRoutedProviderName('electricity');
+  return resolveServiceId(plan, provider);
 };
 
 const payElectricity = async (req, res, next) => {
@@ -204,6 +271,9 @@ const payElectricity = async (req, res, next) => {
       });
     }
 
+    const serviceId = await resolveElectricityServiceId(plan);
+    const purchaseProvider = plan.vtuProvider || await vtuProvider.getRoutedProviderName('electricity');
+
     const result = await executeVtuPurchase({
       userId: req.user._id,
       service: 'electricity',
@@ -215,17 +285,19 @@ const payElectricity = async (req, res, next) => {
         meterNumber,
         meterType,
         phone,
-        providerServiceId: plan.providerServiceId || plan.vtpassServiceId,
+        providerServiceId: serviceId,
+        vtuProvider: purchaseProvider,
       },
-      providerCall: (requestId) => vtuProvider.payElectricity({
+      providerName: purchaseProvider,
+      providerCall: (requestId, providerName) => vtuProvider.payElectricity({
         provider: plan.providerId,
-        serviceId: plan.providerServiceId || plan.vtpassServiceId,
+        serviceId,
         meterNumber,
         meterType,
         amount,
         phone,
         requestId,
-      }),
+      }, providerName),
     });
 
     sendPurchaseResponse(res, result);
@@ -246,15 +318,17 @@ const payElectricity = async (req, res, next) => {
 
 const verifyElectricityMeter = async (req, res, next) => {
   try {
-    await vtuProvider.assertActiveProviderConfigured();
+    await vtuProvider.assertActiveProviderConfigured('electricity');
     const { provider, meterNumber, meterType } = req.body;
     const plan = await resolveElectricityProvider(provider);
+    const serviceId = await resolveElectricityServiceId(plan);
+    const verifyProvider = plan.vtuProvider || await vtuProvider.getRoutedProviderName('electricity');
     const result = await vtuProvider.verifyElectricityMeter({
       provider: plan.providerId,
-      serviceId: plan.providerServiceId || plan.vtpassServiceId,
+      serviceId,
       meterNumber,
       meterType,
-    });
+    }, verifyProvider);
 
     res.json({
       success: true,
@@ -279,46 +353,56 @@ const verifyElectricityMeter = async (req, res, next) => {
 const fetchTVPackages = async (req, res, next) => {
   try {
     const { provider } = req.params;
+    const catalogProviders = await vtuProvider.getCatalogProviders('tv');
     await TvPlan.ensureDefaults();
 
-    const localPlans = await TvPlan.find({ provider, enabled: true }).sort({ order: 1, amount: 1 });
+    const localPlans = await TvPlan.find(
+      buildMultiProviderCatalogQuery({ provider, enabled: true }, catalogProviders)
+    ).sort({ order: 1, amount: 1 });
     if (localPlans.length > 0) {
-      const mapped = localPlans.map((p) => ({
-        code: p.variationCode,
-        name: p.name,
-        amount: p.amount,
-        category: p.category || 'standard',
-        order: p.order,
-      }));
+      const mapped = localPlans.map((p) => {
+        const planProvider = p.vtuProvider || 'clubkonnect';
+        return {
+          code: resolveVariationCode(p, planProvider),
+          name: p.name,
+          amount: p.amount,
+          category: p.category || 'standard',
+          order: p.order,
+          vtuProvider: planProvider,
+          planId: String(p._id),
+        };
+      });
       return res.json({
         success: true,
         data: mapped,
         groups: groupTvPlans(mapped),
         source: 'local',
+        catalogProviders,
       });
     }
 
-    const activeProvider = await vtuProvider.getActiveProviderName();
-    if (vtuProvider.isProviderConfigured(activeProvider)) {
+    for (const activeProvider of catalogProviders) {
+      if (!vtuProvider.isProviderConfigured(activeProvider)) continue;
       try {
-        const result = await vtuProvider.getTVPackages(provider);
+        const result = await vtuProvider.getTVPackages(provider, activeProvider);
         const packages = dedupeByCode(
           (result.content?.variations || []).map((pkg) => ({
             code: pkg.variation_code,
             name: pkg.name,
             amount: parseFloat(pkg.variation_amount),
+            vtuProvider: activeProvider,
           })),
           'code'
         );
         if (packages.length > 0) {
-          return res.json({ success: true, data: packages, source: activeProvider });
+          return res.json({ success: true, data: packages, source: activeProvider, catalogProviders });
         }
       } catch {
-        // fall through
+        // try next provider
       }
     }
 
-    res.json({ success: true, data: [], source: 'local' });
+    res.json({ success: true, data: [], source: 'local', catalogProviders });
   } catch (error) {
     next(error);
   }
@@ -326,9 +410,10 @@ const fetchTVPackages = async (req, res, next) => {
 
 const verifyTVSmartcard = async (req, res, next) => {
   try {
-    await vtuProvider.assertActiveProviderConfigured();
+    await vtuProvider.assertActiveProviderConfigured('tv');
     const { provider, smartcardNumber } = req.body;
-    const result = await vtuProvider.verifyTVSmartcard({ provider, smartcardNumber });
+    const verifyProvider = await vtuProvider.getRoutedProviderName('tv');
+    const result = await vtuProvider.verifyTVSmartcard({ provider, smartcardNumber }, verifyProvider);
 
     res.json({
       success: true,
@@ -351,17 +436,20 @@ const payTV = async (req, res, next) => {
     const { provider, smartcardNumber, variationCode, amount, phone, pin } = req.body;
     await verifyTransactionPin(req.user._id, pin, req);
 
-    const validatedAmount = await resolveTvPlanAmount({ provider, variationCode, amount });
+    const { amount: validatedAmount, plan: tvPlan } = await resolveTvPlanAmount({ provider, variationCode, amount });
+    const providerCode = await resolveTvProviderCode({ provider, variationCode, plan: tvPlan });
+    const purchaseProvider = tvPlan?.vtuProvider || await vtuProvider.getRoutedProviderName('tv');
 
     const result = await executeVtuPurchase({
       userId: req.user._id,
       service: 'tv',
       amount: validatedAmount,
       description: `TV subscription: ${provider} for ${smartcardNumber}`,
-      metadata: { provider, smartcardNumber, variationCode, phone },
-      providerCall: (requestId) => vtuProvider.payTV({
-        provider, smartcardNumber, variationCode, phone, requestId,
-      }),
+      metadata: { provider, smartcardNumber, variationCode, phone, vtuProvider: purchaseProvider },
+      providerName: purchaseProvider,
+      providerCall: (requestId, providerName) => vtuProvider.payTV({
+        provider, smartcardNumber, variationCode: providerCode, phone, requestId,
+      }, providerName),
     });
 
     sendPurchaseResponse(res, result);
@@ -385,7 +473,10 @@ const buyEducationPin = async (req, res, next) => {
     await verifyTransactionPin(req.user._id, pin, req);
 
     const productFilter = productId ? { _id: productId } : { productCode };
-    const product = await EducationProduct.findOne({ ...productFilter, enabled: true });
+    const catalogProviders = await vtuProvider.getCatalogProviders('education');
+    const product = await EducationProduct.findOne(
+      buildMultiProviderCatalogQuery({ ...productFilter, enabled: true }, catalogProviders)
+    ).select('+vtpassServiceId');
     if (!product) {
       return res.status(404).json({ success: false, message: 'Education product not found or disabled' });
     }
@@ -410,6 +501,9 @@ const buyEducationPin = async (req, res, next) => {
       });
     }
 
+    const productProvider = product.vtuProvider || await vtuProvider.getRoutedProviderName('education');
+    const serviceId = resolveServiceId(product, productProvider);
+
     const result = await executeVtuPurchase({
       userId: req.user._id,
       service: 'education',
@@ -423,18 +517,20 @@ const buyEducationPin = async (req, res, next) => {
         quantity: qty,
         phone,
         billersCode: billersCode?.trim() || null,
+        vtuProvider: productProvider,
       },
       applyPricing: true,
       pricingServiceId: 'education',
-      providerCall: (requestId) => vtuProvider.purchaseEducationPin({
-        serviceId: product.providerServiceId || product.vtpassServiceId,
+      providerName: productProvider,
+      providerCall: (requestId, providerName) => vtuProvider.purchaseEducationPin({
+        serviceId,
         variationCode: product.variationCode,
         quantity: qty,
         phone,
         billersCode: billersCode?.trim(),
         requestId,
         examType: product.examType,
-      }),
+      }, providerName),
     });
 
     sendPurchaseResponse(res, result);
@@ -455,17 +551,11 @@ const fetchEducationProducts = async (req, res, next) => {
     await assertServiceEnabled('education');
     await EducationProduct.ensureDefaults();
 
-    const allProducts = await EducationProduct.find().sort({ order: 1, amount: 1 });
-    let enabledProducts = allProducts.filter((product) => product.enabled);
-
-    const syncProduct = async (product) => product.toObject();
-
-    if (vtuProvider.isProviderConfigured(await vtuProvider.getActiveProviderName())) {
-      const synced = await Promise.all(allProducts.map(syncProduct));
-      enabledProducts = synced.filter((product) => product.enabled);
-    } else {
-      enabledProducts = allProducts.filter((product) => product.enabled);
-    }
+    const catalogProviders = await vtuProvider.getCatalogProviders('education');
+    const allProducts = await EducationProduct.find(
+      buildMultiProviderCatalogQuery({}, catalogProviders)
+    ).sort({ order: 1, amount: 1 });
+    const enabledProducts = allProducts.filter((product) => product.enabled);
 
     const exams = ['waec', 'neco', 'jamb'].map((examType) => {
       const examProducts = enabledProducts.filter((product) => product.examType === examType);
@@ -481,7 +571,7 @@ const fetchEducationProducts = async (req, res, next) => {
       };
     });
 
-    res.json({ success: true, data: enabledProducts, exams });
+    res.json({ success: true, data: enabledProducts, exams, catalogProviders });
   } catch (error) {
     next(error);
   }
@@ -489,10 +579,11 @@ const fetchEducationProducts = async (req, res, next) => {
 
 const verifyBettingCustomer = async (req, res, next) => {
   try {
-    await vtuProvider.assertActiveProviderConfigured();
+    await vtuProvider.assertActiveProviderConfigured('betting');
     const { platform, customerId } = req.body;
     const bettingPlatform = await getPlatformById(platform);
-    const providerServiceId = bettingPlatform?.providerServiceId || bettingPlatform?.vtpassServiceId;
+    const routedProvider = await vtuProvider.getRoutedProviderName('betting');
+    const providerServiceId = getProviderServiceId(bettingPlatform, routedProvider);
     if (!providerServiceId) {
       return res.status(400).json({ success: false, message: 'This betting platform is not available' });
     }
@@ -501,7 +592,7 @@ const verifyBettingCustomer = async (req, res, next) => {
       providerServiceId,
       platformId: bettingPlatform.platformId,
       customerId,
-    });
+    }, routedProvider);
 
     res.json({
       success: true,
@@ -533,7 +624,8 @@ const fundBetting = async (req, res, next) => {
     }
 
     const bettingPlatform = await getPlatformById(platform);
-    const providerServiceId = bettingPlatform?.providerServiceId || bettingPlatform?.vtpassServiceId;
+    const routedProvider = await vtuProvider.getRoutedProviderName('betting');
+    const providerServiceId = getProviderServiceId(bettingPlatform, routedProvider);
     if (!bettingPlatform?.enabled || !providerServiceId) {
       return res.status(400).json({
         success: false,
@@ -561,16 +653,18 @@ const fundBetting = async (req, res, next) => {
         providerServiceId,
         customerId,
         phone,
+        vtuProvider: routedProvider,
       },
       applyPricing: false,
-      providerCall: (requestId) => vtuProvider.fundBettingWallet({
+      providerName: routedProvider,
+      providerCall: (requestId, providerName) => vtuProvider.fundBettingWallet({
         providerServiceId,
         platformId: bettingPlatform.platformId,
         customerId,
         amount,
         phone,
         requestId,
-      }),
+      }, providerName),
     });
 
     sendPurchaseResponse(res, result);

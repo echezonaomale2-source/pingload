@@ -145,7 +145,12 @@ const startServer = async () => {
   }
 
   const settings = await SystemSettings.getSettings();
-  console.log(`[VTU] Active provider: ${settings.vtuProvider}`);
+  const vtuProvider = require('./src/services/vtuProviderService');
+  const effectiveProvider = await vtuProvider.getActiveProviderName();
+  console.log(`[VTU] Preferred provider: ${settings.vtuProvider}, effective: ${effectiveProvider}`);
+  if (settings.vtuProvider === 'clubkonnect' && !serviceConfig.clubkonnect.configured) {
+    console.warn('[VTU] Clubkonnect is not configured — add CLUBKONNECT_USER_ID and CLUBKONNECT_API_KEY on Render, or switch to VTpass in Admin → Settings.');
+  }
 
   if (serviceConfig.clubkonnect.configured || serviceConfig.vtpass.configured) {
     const bettingSync = await syncBettingPlatforms();

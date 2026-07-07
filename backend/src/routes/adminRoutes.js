@@ -85,6 +85,16 @@ const {
   adminUpdateBettingPlatform,
   adminSyncBettingPlatforms,
 } = require('../controllers/bettingPlatformAdminController');
+const {
+  listProviders,
+  updateProviderEnabled,
+  updateServiceRouting,
+  updateFailover,
+  testProviderConnection,
+  syncProviderDataPlans,
+  syncProviderTvPlans,
+  syncAllProviders,
+} = require('../controllers/vtuProviderAdminController');
 const { protectAdmin } = require('../middleware/adminAuth');
 const { adminAuthLimiter } = require('../middleware/rateLimiter');
 const validate = require('../middleware/validate');
@@ -196,5 +206,14 @@ router.patch('/support/tickets/:id/close', protectAdmin, closeTicket);
 router.get('/settings', protectAdmin, getSettings);
 router.patch('/settings', protectAdmin, updateSettings);
 router.patch('/settings/password', protectAdmin, changePassword);
+
+router.get('/providers', protectAdmin, listProviders);
+router.patch('/providers/routing', protectAdmin, updateServiceRouting);
+router.patch('/providers/failover', protectAdmin, updateFailover);
+router.post('/providers/sync-all', protectAdmin, syncAllProviders);
+router.patch('/providers/:providerId', protectAdmin, updateProviderEnabled);
+router.post('/providers/:providerId/test', protectAdmin, testProviderConnection);
+router.post('/providers/:providerId/sync/data', protectAdmin, syncProviderDataPlans);
+router.post('/providers/:providerId/sync/tv', protectAdmin, syncProviderTvPlans);
 
 module.exports = router;

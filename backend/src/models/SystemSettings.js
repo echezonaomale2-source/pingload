@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const { defaultServiceRouting } = require('../utils/vtuConstants');
+const { migrateVtuSettings } = require('../utils/migrateVtuSettings');
 
 const serviceToggleSchema = new mongoose.Schema(
   {
@@ -6,6 +8,26 @@ const serviceToggleSchema = new mongoose.Schema(
     name: String,
     enabled: { type: Boolean, default: true },
     description: String,
+  },
+  { _id: false }
+);
+
+const providerEnabledSchema = new mongoose.Schema(
+  {
+    clubkonnect: { type: Boolean, default: true },
+    vtpass: { type: Boolean, default: true },
+  },
+  { _id: false }
+);
+
+const serviceRoutingSchema = new mongoose.Schema(
+  {
+    airtime: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
+    data: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
+    electricity: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
+    tv: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
+    betting: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
+    education: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
   },
   { _id: false }
 );
@@ -19,11 +41,22 @@ const systemSettingsSchema = new mongoose.Schema(
     maxWalletFund: { type: Number, default: 500000 },
     referralBonus: { type: Number, default: 100 },
     supportEmail: { type: String, default: 'support@pingload.top' },
+    /** @deprecated Use serviceRouting — kept for backward compatibility */
     vtuProvider: {
       type: String,
       enum: ['clubkonnect', 'vtpass'],
       default: 'clubkonnect',
     },
+    providerEnabled: {
+      type: providerEnabledSchema,
+      default: () => ({ clubkonnect: true, vtpass: true }),
+    },
+    serviceRouting: {
+      type: serviceRoutingSchema,
+      default: () => defaultServiceRouting('clubkonnect'),
+    },
+    enableProviderFailover: { type: Boolean, default: false },
+    catalogVersion: { type: Number, default: 1 },
     services: {
       type: [serviceToggleSchema],
       default: [
@@ -44,6 +77,7 @@ systemSettingsSchema.statics.getSettings = async function () {
   if (!settings) {
     settings = await this.create({ key: 'global' });
   }
+  await migrateVtuSettings(settings);
   return settings;
 };
 

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { NETWORKS } from '../../utils/constants';
@@ -79,6 +80,12 @@ const DataScreen = ({ navigation }) => {
       setLoadingPlans(false);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (network) fetchPlans(network);
+    }, [network])
+  );
 
   const handlePhoneChange = useCallback((value) => {
     const normalized = normalizePhone(value);

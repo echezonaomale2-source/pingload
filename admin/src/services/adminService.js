@@ -66,7 +66,7 @@ export const dataPlansApi = {
   create: (data) => api.post('/admin/data-plans', data),
   update: (id, data) => api.patch(`/admin/data-plans/${id}`, data),
   delete: (id) => api.delete(`/admin/data-plans/${id}`),
-  sync: () => api.post('/admin/data-plans/sync'),
+  sync: (params) => api.post('/admin/data-plans/sync', null, { params }),
 };
 export const electricityPlansApi = {
   list: () => api.get('/admin/electricity-plans'),
@@ -80,7 +80,7 @@ export const tvPlansApi = {
   create: (data) => api.post('/admin/tv-plans', data),
   update: (id, data) => api.patch(`/admin/tv-plans/${id}`, data),
   delete: (id) => api.delete(`/admin/tv-plans/${id}`),
-  sync: () => api.post('/admin/tv-plans/sync'),
+  sync: (params) => api.post('/admin/tv-plans/sync', null, { params }),
 };
 
 export const educationProductsApi = {
@@ -137,6 +137,17 @@ export const settingsApi = {
   get: () => api.get('/admin/settings'),
   update: (data) => api.patch('/admin/settings', data),
   changePassword: (data) => api.patch('/admin/settings/password', data),
+};
+
+export const providersApi = {
+  get: () => api.get('/admin/providers'),
+  setEnabled: (providerId, enabled) => api.patch(`/admin/providers/${providerId}`, { enabled }),
+  updateRouting: (serviceRouting) => api.patch('/admin/providers/routing', { serviceRouting }),
+  updateFailover: (data) => api.patch('/admin/providers/failover', data),
+  test: (providerId) => api.post(`/admin/providers/${providerId}/test`),
+  syncData: (providerId, params) => api.post(`/admin/providers/${providerId}/sync/data`, null, { params }),
+  syncTv: (providerId, params) => api.post(`/admin/providers/${providerId}/sync/tv`, null, { params }),
+  syncAll: () => api.post('/admin/providers/sync-all'),
 };
 
 export const getErrorMessage = (error, fallback = 'Something went wrong') =>

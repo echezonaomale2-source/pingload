@@ -1,39 +1,31 @@
 const clubkonnect = require('./clubkonnectService');
 const vtpass = require('./vtpassService');
-const SystemSettings = require('../models/SystemSettings');
 const serviceConfig = require('../config/serviceConfig');
+const routing = require('./vtuRoutingService');
+const { normalizeProvider } = require('../utils/migrateVtuSettings');
 
-let cachedName = null;
-let cacheExpiry = 0;
+const resolveProvider = (name) => normalizeProvider(name);
 
-const invalidateProviderCache = () => {
-  cachedName = null;
-  cacheExpiry = 0;
-};
-
-const getActiveProviderName = async () => {
-  if (cachedName && Date.now() < cacheExpiry) return cachedName;
-  const settings = await SystemSettings.getSettings();
-  cachedName = settings.vtuProvider === 'vtpass' ? 'vtpass' : 'clubkonnect';
-  cacheExpiry = Date.now() + 5000;
-  return cachedName;
-};
-
-const isProviderConfigured = (name) => (
-  name === 'vtpass' ? serviceConfig.vtpass.configured : serviceConfig.clubkonnect.configured
-);
-
-const assertActiveProviderConfigured = async () => {
-  const name = await getActiveProviderName();
-  if (name === 'vtpass') {
-    vtpass.assertVtpassConfigured();
-    return;
+const assertProviderConfigured = (name) => {
+  const provider = resolveProvider(name);
+  if (!routing.isProviderConfigured(provider)) {
+    const error = new Error(
+      `${provider === 'vtpass' ? 'VTpass' : 'Clubkonnect'} is not configured on the server`
+    );
+    error.statusCode = 503;
+    throw error;
   }
-  clubkonnect.assertClubkonnectConfigured();
+  if (provider === 'vtpass') vtpass.assertVtpassConfigured();
+  else clubkonnect.assertClubkonnectConfigured();
 };
 
-const resolvePurchaseOutcome = async (result) => {
-  const name = await getActiveProviderName();
+const assertActiveProviderConfigured = async (serviceId = 'data') => {
+  const name = await routing.getRoutedProviderName(serviceId);
+  assertProviderConfigured(name);
+};
+
+const resolvePurchaseOutcome = (result, providerName) => {
+  const name = resolveProvider(providerName);
   if (name === 'vtpass') {
     if (vtpass.isVtpassSuccess(result)) return { outcome: 'success', pending: false };
     const txStatus = result?.content?.transactions?.status;
@@ -45,14 +37,14 @@ const resolvePurchaseOutcome = async (result) => {
   return clubkonnect.resolvePurchaseOutcome(result);
 };
 
-const extractProviderFailureReason = async (result) => {
-  const name = await getActiveProviderName();
+const extractProviderFailureReason = (result, providerName) => {
+  const name = resolveProvider(providerName);
   if (name === 'vtpass') return vtpass.extractVtpassFailureReason(result);
   return clubkonnect.extractProviderFailureReason(result);
 };
 
-const extractPurchaseDetails = async (result, service) => {
-  const name = await getActiveProviderName();
+const extractPurchaseDetails = (result, service, providerName) => {
+  const name = resolveProvider(providerName);
   if (name === 'vtpass') {
     const details = vtpass.extractPurchaseDetails(result, service);
     return {
@@ -66,77 +58,93 @@ const extractPurchaseDetails = async (result, service) => {
 
 const generateRequestId = () => clubkonnect.generateRequestId();
 
-const getProviderStatus = async () => ({
-  active: await getActiveProviderName(),
-  clubkonnect: {
-    configured: serviceConfig.clubkonnect.configured,
-    baseUrl: serviceConfig.clubkonnect.baseUrl,
-  },
-  vtpass: {
-    configured: serviceConfig.vtpass.configured,
-    mode: serviceConfig.vtpass.mode,
-    baseUrl: serviceConfig.vtpass.baseUrl,
-  },
-});
+const getProviderStatus = async () => {
+  const snapshot = await routing.getRoutingSnapshot();
+  const active = await routing.getRoutedProviderName('data');
+  const preferred = snapshot.serviceRouting.data;
+  return {
+    preferred,
+    active,
+    usingFallback: preferred !== active,
+    providerEnabled: snapshot.providers.reduce((acc, item) => {
+      acc[item.providerId] = item.enabled;
+      return acc;
+    }, {}),
+    serviceRouting: snapshot.serviceRouting,
+    enableProviderFailover: snapshot.enableProviderFailover,
+    catalogVersion: snapshot.catalogVersion,
+    clubkonnect: {
+      configured: serviceConfig.clubkonnect.configured,
+      baseUrl: serviceConfig.clubkonnect.baseUrl,
+      enabled: snapshot.providers.find((p) => p.providerId === 'clubkonnect')?.enabled !== false,
+    },
+    vtpass: {
+      configured: serviceConfig.vtpass.configured,
+      mode: serviceConfig.vtpass.mode,
+      baseUrl: serviceConfig.vtpass.baseUrl,
+      enabled: snapshot.providers.find((p) => p.providerId === 'vtpass')?.enabled !== false,
+    },
+  };
+};
 
-const purchaseAirtime = async (params) => {
-  const name = await getActiveProviderName();
+const purchaseAirtime = async (params, providerName) => {
+  const name = resolveProvider(providerName || params.providerName);
   return name === 'vtpass'
     ? vtpass.purchaseAirtime(params)
     : clubkonnect.purchaseAirtime(params);
 };
 
-const getDataPlans = async (network) => {
-  const name = await getActiveProviderName();
+const getDataPlans = async (network, providerName) => {
+  const name = resolveProvider(providerName);
   return name === 'vtpass'
     ? vtpass.getDataPlans(network)
     : clubkonnect.getDataPlans(network);
 };
 
-const purchaseData = async (params) => {
-  const name = await getActiveProviderName();
+const purchaseData = async (params, providerName) => {
+  const name = resolveProvider(providerName || params.providerName);
   return name === 'vtpass'
     ? vtpass.purchaseData(params)
     : clubkonnect.purchaseData(params);
 };
 
-const payElectricity = async (params) => {
-  const name = await getActiveProviderName();
+const payElectricity = async (params, providerName) => {
+  const name = resolveProvider(providerName || params.providerName);
   return name === 'vtpass'
     ? vtpass.payElectricity(params)
     : clubkonnect.payElectricity(params);
 };
 
-const verifyElectricityMeter = async (params) => {
-  const name = await getActiveProviderName();
+const verifyElectricityMeter = async (params, providerName) => {
+  const name = resolveProvider(providerName || params.providerName);
   return name === 'vtpass'
     ? vtpass.verifyElectricityMeter(params)
     : clubkonnect.verifyElectricityMeter(params);
 };
 
-const getTVPackages = async (provider) => {
-  const name = await getActiveProviderName();
+const getTVPackages = async (provider, providerName) => {
+  const name = resolveProvider(providerName);
   return name === 'vtpass'
     ? vtpass.getTVPackages(provider)
     : clubkonnect.getTVPackages(provider);
 };
 
-const verifyTVSmartcard = async (params) => {
-  const name = await getActiveProviderName();
+const verifyTVSmartcard = async (params, providerName) => {
+  const name = resolveProvider(providerName || params.providerName);
   return name === 'vtpass'
     ? vtpass.verifyTVSmartcard(params)
     : clubkonnect.verifyTVSmartcard(params);
 };
 
-const payTV = async (params) => {
-  const name = await getActiveProviderName();
+const payTV = async (params, providerName) => {
+  const name = resolveProvider(providerName || params.providerName);
   return name === 'vtpass'
     ? vtpass.payTV(params)
     : clubkonnect.payTV(params);
 };
 
-const purchaseEducationPin = async (params) => {
-  const name = await getActiveProviderName();
+const purchaseEducationPin = async (params, providerName) => {
+  const name = resolveProvider(providerName || params.providerName);
   if (name === 'vtpass') {
     return vtpass.purchaseEducationPin({
       vtpassServiceId: params.serviceId || params.vtpassServiceId || params.providerServiceId,
@@ -150,15 +158,15 @@ const purchaseEducationPin = async (params) => {
   return clubkonnect.purchaseEducationPin(params);
 };
 
-const getEducationVariations = async (serviceId) => {
-  const name = await getActiveProviderName();
+const getEducationVariations = async (serviceId, providerName) => {
+  const name = resolveProvider(providerName);
   return name === 'vtpass'
     ? vtpass.getEducationVariations(serviceId)
     : null;
 };
 
-const verifyBettingCustomer = async (params) => {
-  const name = await getActiveProviderName();
+const verifyBettingCustomer = async (params, providerName) => {
+  const name = resolveProvider(providerName || params.providerName);
   const serviceId = params.serviceId || params.providerServiceId || params.vtpassServiceId;
   if (name === 'vtpass') {
     return vtpass.verifyBettingCustomer({ vtpassServiceId: serviceId, customerId: params.customerId });
@@ -170,8 +178,8 @@ const verifyBettingCustomer = async (params) => {
   });
 };
 
-const fundBettingWallet = async (params) => {
-  const name = await getActiveProviderName();
+const fundBettingWallet = async (params, providerName) => {
+  const name = resolveProvider(providerName || params.providerName);
   const serviceId = params.serviceId || params.providerServiceId || params.vtpassServiceId;
   if (name === 'vtpass') {
     return vtpass.fundBettingWallet({
@@ -192,18 +200,22 @@ const fundBettingWallet = async (params) => {
   });
 };
 
-const requeryTransaction = async (requestId) => {
-  const name = await getActiveProviderName();
+const requeryTransaction = async (requestId, providerName) => {
+  const name = resolveProvider(providerName);
   return name === 'vtpass'
     ? vtpass.requeryTransaction(requestId)
     : clubkonnect.queryTransaction(requestId);
 };
 
 module.exports = {
-  getActiveProviderName,
-  invalidateProviderCache,
-  isProviderConfigured,
+  getActiveProviderName: routing.getActiveProviderName,
+  getSelectedProviderName: routing.getSelectedProviderName,
+  getRoutedProviderName: routing.getRoutedProviderName,
+  getCatalogProviders: routing.getCatalogProviders,
+  invalidateProviderCache: routing.invalidateRoutingCache,
+  isProviderConfigured: routing.isProviderConfigured,
   assertActiveProviderConfigured,
+  assertProviderConfigured,
   resolvePurchaseOutcome,
   extractProviderFailureReason,
   extractPurchaseDetails,

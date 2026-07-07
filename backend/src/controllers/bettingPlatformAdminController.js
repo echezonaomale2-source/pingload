@@ -4,7 +4,7 @@ const { syncBettingPlatforms } = require('../services/bettingPlatformService');
 const adminListBettingPlatforms = async (req, res, next) => {
   try {
     await BettingPlatform.ensureDefaults();
-    const platforms = await BettingPlatform.find().sort({ order: 1, name: 1 });
+    const platforms = await BettingPlatform.find().select('+vtpassServiceId').sort({ order: 1, name: 1 });
     res.json({ success: true, data: platforms });
   } catch (error) {
     next(error);
