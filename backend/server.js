@@ -25,10 +25,13 @@ const serviceRoutes = require('./src/routes/serviceRoutes');
 const devTestRoutes = require('./src/routes/devTestRoutes');
 const legalRoutes = require('./src/routes/legalRoutes');
 const seedAdmin = require('./src/utils/seedAdmin');
+const { migrateDataPlanIndexes } = require('./src/utils/migrateDataPlanIndexes');
 const serviceConfig = require('./src/config/serviceConfig');
 const { initializeFcm } = require('./src/services/fcmService');
 const { verifyVtpassConnectivity } = require('./src/services/vtpassService');
 const { syncBettingPlatforms } = require('./src/services/bettingPlatformService');
+const { syncAllVtpassDataPlans } = require('./src/services/vtpassDataPlanSyncService');
+const DataPlan = require('./src/models/DataPlan');
 const { startVtpassReconciliationWorker } = require('./src/services/vtpassReconciliationWorker');
 const SystemSettings = require('./src/models/SystemSettings');
 const { persistProviderHealth } = require('./src/utils/providerHealth');
@@ -103,6 +106,21 @@ app.use(errorHandler);
 const startServer = async () => {
   await connectDB();
   await seedAdmin();
+  const indexResult = await migrateDataPlanIndexes();
+
+  if (serviceConfig.vtpass.configured) {
+    const vtpassPlanCount = await DataPlan.countDocuments({ vtuProvider: 'vtpass' });
+    const needsSync = vtpassPlanCount === 0 || indexResult.dropped.length > 0;
+    if (needsSync) {
+      console.log('[VTU] Running VTpass data plan sync...');
+      try {
+        const syncResult = await syncAllVtpassDataPlans();
+        console.log(`[VTU] VTpass data plan sync complete — ${syncResult.total} plan(s) saved.`);
+      } catch (syncError) {
+        console.error(`[VTU] VTpass data plan sync failed: ${syncError.message}`);
+      }
+    }
+  }
 
   const fcmStatus = initializeFcm();
   if (!fcmStatus.configured) {

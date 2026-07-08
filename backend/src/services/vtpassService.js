@@ -429,11 +429,12 @@ const getWalletBalance = async () => {
   assertVtpassConfigured();
   try {
     const response = await vtpassGetClient.get('/balance');
-    const content = response.data?.content;
-    const balance = content?.balance ?? content?.wallet_balance ?? content?.amount ?? null;
+    const data = response.data || {};
+    const content = data.content || data.contents || {};
+    const balance = content.balance ?? content.wallet_balance ?? content.amount ?? null;
     return {
       balance: balance != null ? parseFloat(balance) : null,
-      raw: response.data,
+      raw: data,
     };
   } catch (error) {
     handleVtpassError(error);

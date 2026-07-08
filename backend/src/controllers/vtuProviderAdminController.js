@@ -1,15 +1,12 @@
 const SystemSettings = require('../models/SystemSettings');
 const VtuProviderConfig = require('../models/VtuProviderConfig');
-const DataPlan = require('../models/DataPlan');
 const TvPlan = require('../models/TvPlan');
 const vtuProvider = require('../services/vtuProviderService');
 const routing = require('../services/vtuRoutingService');
 const { bumpCatalogVersion } = require('../utils/catalogInvalidation');
 const { tagWithVtuProvider } = require('../utils/resolveProviderFields');
-const { buildDataPlanSyncUpdate } = require('../utils/dataPlanFields');
 const { persistProviderHealth } = require('../utils/providerHealth');
-
-const DATA_NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
+const { syncAllVtpassDataPlans, DATA_NETWORKS } = require('../services/vtpassDataPlanSyncService');
 const TV_PROVIDERS = ['dstv', 'gotv', 'startimes'];
 
 const listProviders = async (_req, res, next) => {
@@ -115,34 +112,29 @@ const syncDataPlansForProvider = async (networkFilter) => {
     throw error;
   }
 
-  const networks = networkFilter && DATA_NETWORKS.includes(networkFilter)
-    ? [networkFilter]
-    : DATA_NETWORKS;
-  let synced = 0;
-
-  for (const network of networks) {
-    const result = await vtuProvider.getDataPlans(network);
-    const variations = result.content?.variations || [];
-
-    for (const plan of variations) {
-      if (!plan.variation_code) continue;
-      const update = buildDataPlanSyncUpdate('vtpass', network, plan);
-      await DataPlan.findOneAndUpdate(
-        { vtuProvider: 'vtpass', providerPlanCode: plan.variation_code },
-        { $set: update },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
-      synced += 1;
-    }
+  if (!networkFilter) {
+    const result = await syncAllVtpassDataPlans();
+    return { synced: result.total, networks: result.networks, source: 'vtpass', details: result.results };
   }
 
+  if (!DATA_NETWORKS.includes(networkFilter)) {
+    const error = new Error(`Invalid network: ${networkFilter}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const { syncDataPlansForNetwork } = require('../services/vtpassDataPlanSyncService');
+  const networkResult = await syncDataPlansForNetwork(networkFilter);
   await VtuProviderConfig.findOneAndUpdate(
     { providerId: 'vtpass' },
     { $set: { lastSyncAt: new Date() } },
     { upsert: true }
   );
-
-  return { synced, networks, source: 'vtpass' };
+  return {
+    synced: networkResult.synced,
+    networks: [networkFilter],
+    source: 'vtpass',
+  };
 };
 
 const syncTvPlansForProvider = async (providerFilter) => {
@@ -236,9 +228,8 @@ const syncAllDataProviders = async (_req, res, next) => {
     if (!routing.isDataProviderEnabled('vtpass', settings)) {
       return res.status(400).json({ success: false, message: 'VTpass data provider is disabled' });
     }
-    const result = await syncDataPlansForProvider();
-    await bumpCatalogVersion();
-    res.json({ success: true, data: { vtpass: result } });
+    const result = await syncAllVtpassDataPlans();
+    res.json({ success: true, data: { vtpass: { synced: result.total, networks: result.networks, source: 'vtpass', details: result.results } } });
   } catch (error) {
     next(error);
   }

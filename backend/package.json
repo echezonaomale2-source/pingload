@@ -12,6 +12,9 @@
     "verify:paystack-webhook": "node scripts/verify-paystack-webhook.js",
     "verify:paystack-webhook:live": "node scripts/verify-paystack-webhook.js --live http://localhost:5003",
     "verify:fcm": "node scripts/verify-fcm.js",
+    "verify:vtpass": "node scripts/verify-vtpass.js",
+    "fix:dataplan-indexes": "node scripts/fix-dataplan-indexes.js",
+    "sync:vtpass-data": "node scripts/sync-vtpass-data-plans.js",
     "test:security-remediation": "node scripts/security-remediation-check.js"
   },
   "dependencies": {
