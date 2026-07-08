@@ -1,8 +1,8 @@
-const DataPlan = require('../models/DataPlan');
 const VtuProviderConfig = require('../models/VtuProviderConfig');
 const vtuProvider = require('./vtuProviderService');
 const routing = require('./vtuRoutingService');
 const { buildDataPlanSyncUpdate } = require('../utils/dataPlanFields');
+const { upsertDataPlanFromSync } = require('../utils/dataPlanUpsert');
 const { bumpCatalogVersion } = require('../utils/catalogInvalidation');
 
 const DATA_NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
@@ -16,11 +16,7 @@ const syncDataPlansForNetwork = async (network) => {
     if (!plan.variation_code) continue;
     const update = buildDataPlanSyncUpdate('vtpass', network, plan);
     if (!update) continue;
-    await DataPlan.findOneAndUpdate(
-      { vtuProvider: 'vtpass', providerPlanCode: plan.variation_code },
-      { $set: update },
-      { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
-    );
+    await upsertDataPlanFromSync(update);
     synced += 1;
   }
 

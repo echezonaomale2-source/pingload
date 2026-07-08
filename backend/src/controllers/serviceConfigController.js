@@ -27,7 +27,7 @@ const {
   pickEditableDataPlanFields,
   normalizeDataPlanRecord,
 } = require('../utils/dataPlanFields');
-const { bumpCatalogVersion } = require('../utils/catalogInvalidation');
+const { upsertDataPlanFromSync } = require('../utils/dataPlanUpsert');
 const { normalizeProvider } = require('../utils/migrateVtuSettings');
 
 const DATA_NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
@@ -591,11 +591,7 @@ const adminSyncDataPlansFromVtpass = async (req, res, next) => {
         if (!plan.variation_code) continue;
         const update = buildDataPlanSyncUpdate('vtpass', network, plan);
         if (!update) continue;
-        await DataPlan.findOneAndUpdate(
-          { vtuProvider: 'vtpass', providerPlanCode: plan.variation_code },
-          { $set: update },
-          { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
-        );
+        await upsertDataPlanFromSync(update);
         synced += 1;
       }
     }
