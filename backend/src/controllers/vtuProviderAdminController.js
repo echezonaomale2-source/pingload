@@ -86,12 +86,13 @@ const testProviderConnection = async (_req, res, next) => {
 
     const result = await vtuProvider.verifyVtpassConnectivity();
     let balance = result.balance ?? null;
+    let balanceError = result.balanceError || null;
     if (balance == null) {
       try {
         const balanceResult = await vtuProvider.getWalletBalance();
         balance = balanceResult?.balance ?? null;
-      } catch {
-        // Balance is optional for health test.
+      } catch (err) {
+        balanceError = err.message || 'Balance probe failed';
       }
     }
     const { healthStatus, message, lastHealthCheckAt } = await persistProviderHealth('vtpass', { ...result, balance });
@@ -104,9 +105,11 @@ const testProviderConnection = async (_req, res, next) => {
         message,
         lastHealthCheckAt,
         balance: balance ?? null,
+        balanceError,
         serverIp: result.serverIp || null,
         purchasesEnabled: result.purchasesEnabled ?? null,
         baseUrl: result.baseUrl || null,
+        publicKeyConfigured: result.publicKeyConfigured ?? null,
       },
     });
   } catch (error) {

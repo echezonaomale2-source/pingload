@@ -437,21 +437,33 @@ const parseBalanceFromResponse = (data) => {
 
 const getWalletBalance = async () => {
   assertVtpassConfigured();
-  const client = createVtpassGetClient();
-  try {
-    const response = await client.get('/balance');
-    const balance = parseBalanceFromResponse(response.data);
-    return { balance, raw: response.data };
-  } catch (error) {
-    const data = error.response?.data;
-    logVtpass('error', 'VTpass balance request failed', {
-      message: error.message,
-      status: error.response?.status,
-      code: data?.code,
-      response: data,
-    });
-    handleVtpassError(error);
+
+  const attempts = [
+    { label: 'public-key', client: createVtpassGetClient() },
+    { label: 'secret-key', client: createVtpassPostClient() },
+  ];
+
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const response = await attempt.client.get('/balance');
+      const balance = parseBalanceFromResponse(response.data);
+      if (balance != null) {
+        return { balance, raw: response.data, authMode: attempt.label };
+      }
+      lastError = new Error(`VTpass balance response missing amount (${attempt.label})`);
+      lastError.vtpassResponse = response.data;
+    } catch (error) {
+      lastError = error;
+      logVtpass('warn', `VTpass balance GET failed (${attempt.label})`, {
+        message: error.message,
+        status: error.response?.status,
+        response: error.response?.data,
+      });
+    }
   }
+
+  handleVtpassError(lastError || new Error('VTpass balance request failed'));
 };
 
 const assertVtpassConfigured = () => {
@@ -522,11 +534,13 @@ const verifyVtpassConnectivity = async () => {
 
     if (isVtpassSuccess(data)) {
       let balance = null;
+      let balanceError = null;
       try {
         const balanceResult = await getWalletBalance();
         balance = balanceResult?.balance ?? null;
-      } catch {
-        // Balance probe is optional — connectivity already confirmed.
+      } catch (balanceErr) {
+        // Balance probe is optional — connectivity already confirmed via POST.
+        balanceError = balanceErr.message || 'Balance probe failed';
       }
 
       return {
@@ -536,7 +550,9 @@ const verifyVtpassConnectivity = async () => {
         baseUrl: serviceConfig.vtpass.baseUrl,
         serverIp,
         balance,
+        balanceError,
         purchasesEnabled: true,
+        publicKeyConfigured: Boolean(serviceConfig.vtpass.publicKey),
       };
     }
 
