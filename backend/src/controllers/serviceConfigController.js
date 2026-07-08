@@ -32,6 +32,12 @@ const {
   syncDataPlansForNetwork,
   syncAllVtpassDataPlans,
 } = require('../services/vtpassDataPlanSyncService');
+const {
+  pickDataPlanCreateFields,
+  pickElectricityPlanFields,
+  pickTvPlanFields,
+  pickEducationProductFields,
+} = require('../utils/catalogFieldPickers');
 
 const DATA_NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
 const TV_PROVIDERS = ['dstv', 'gotv', 'startimes'];
@@ -289,7 +295,7 @@ const adminCreateDataPlan = async (req, res, next) => {
   try {
     const selectedProvider = normalizeProvider(req.body.vtuProvider || req.body.provider);
     const payload = normalizeDataPlanRecord(tagWithVtuProvider(assignVariationCodeForProvider({
-      ...req.body,
+      ...pickDataPlanCreateFields(req.body),
       validityCategory: req.body.validityCategory || inferValidityCategory(req.body.validity),
     }, selectedProvider), selectedProvider), selectedProvider);
     const plan = await DataPlan.create(payload);
@@ -352,7 +358,7 @@ const adminCreateElectricityPlan = async (req, res, next) => {
       req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
     );
     const payload = tagWithVtuProvider(assignServiceIdForProvider({
-      ...req.body,
+      ...pickElectricityPlanFields(req.body),
       providerId: String(req.body.providerId).toLowerCase().trim(),
     }, selectedProvider), selectedProvider);
     const plan = await ElectricityPlan.create(payload);
@@ -371,7 +377,10 @@ const adminUpdateElectricityPlan = async (req, res, next) => {
     const selectedProvider = normalizeProvider(
       req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
     );
-    const updates = tagWithVtuProvider(assignServiceIdForProvider({ ...req.body }, selectedProvider), selectedProvider);
+    const updates = tagWithVtuProvider(
+      assignServiceIdForProvider(pickElectricityPlanFields(req.body), selectedProvider),
+      selectedProvider
+    );
     if (updates.providerId) {
       updates.providerId = String(updates.providerId).toLowerCase().trim();
     }
@@ -421,7 +430,10 @@ const adminCreateTvPlan = async (req, res, next) => {
     const selectedProvider = normalizeProvider(
       req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
     );
-    const payload = tagWithVtuProvider(assignVariationCodeForProvider(req.body, selectedProvider), selectedProvider);
+    const payload = tagWithVtuProvider(
+      assignVariationCodeForProvider(pickTvPlanFields(req.body), selectedProvider),
+      selectedProvider
+    );
     const plan = await TvPlan.create(payload);
     await bumpCatalogVersion();
     res.status(201).json({ success: true, data: plan });
@@ -438,7 +450,10 @@ const adminUpdateTvPlan = async (req, res, next) => {
     const selectedProvider = normalizeProvider(
       req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
     );
-    const payload = tagWithVtuProvider(assignVariationCodeForProvider(req.body, selectedProvider), selectedProvider);
+    const payload = tagWithVtuProvider(
+      assignVariationCodeForProvider(pickTvPlanFields(req.body), selectedProvider),
+      selectedProvider
+    );
     const plan = await TvPlan.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
     if (!plan) return res.status(404).json({ success: false, message: 'TV plan not found' });
     await bumpCatalogVersion();
@@ -482,7 +497,10 @@ const adminCreateEducationProduct = async (req, res, next) => {
     const selectedProvider = normalizeProvider(
       req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
     );
-    const payload = tagWithVtuProvider(assignServiceIdForProvider(req.body, selectedProvider), selectedProvider);
+    const payload = tagWithVtuProvider(
+      assignServiceIdForProvider(pickEducationProductFields(req.body), selectedProvider),
+      selectedProvider
+    );
     const product = await EducationProduct.create(payload);
     await bumpCatalogVersion();
     res.status(201).json({ success: true, data: product });
@@ -496,7 +514,10 @@ const adminUpdateEducationProduct = async (req, res, next) => {
     const selectedProvider = normalizeProvider(
       req.body.vtuProvider || await vtuProvider.getSelectedProviderName()
     );
-    const payload = tagWithVtuProvider(assignServiceIdForProvider(req.body, selectedProvider), selectedProvider);
+    const payload = tagWithVtuProvider(
+      assignServiceIdForProvider(pickEducationProductFields(req.body), selectedProvider),
+      selectedProvider
+    );
     const product = await EducationProduct.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,

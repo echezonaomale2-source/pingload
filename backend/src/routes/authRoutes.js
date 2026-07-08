@@ -14,11 +14,13 @@ const {
   updateSettings,
   updateAvatar,
   removeAvatar,
+  deleteAccount,
   sendOtpValidation,
   verifyOtpValidation,
   registerValidation,
   loginValidation,
   resetPasswordValidation,
+  deleteAccountValidation,
 } = require('../controllers/authController');
 const {
   getLoginPinStatus,
@@ -48,6 +50,7 @@ router.put('/change-password', protect, changePassword);
 router.put('/settings', protect, updateSettings);
 router.put('/avatar', protect, updateAvatar);
 router.delete('/avatar', protect, removeAvatar);
+router.delete('/account', protect, authLimiter, deleteAccountValidation, validate, deleteAccount);
 
 router.get('/login-pin/status', protect, getLoginPinStatus);
 router.post('/login-pin/setup', protect, authLimiter, loginPinValidation, validate, setupLoginPin);

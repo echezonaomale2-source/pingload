@@ -383,7 +383,11 @@ const processPaystackWebhook = async ({ event, data }) => {
     }
 
     const tx = await Transaction.findOneAndUpdate(
-      { reference, status: 'pending' },
+      {
+        reference,
+        status: 'pending',
+        service: { $nin: ['wallet_transfer', 'wallet_funding', 'airtime', 'data', 'electricity', 'tv', 'education', 'betting'] },
+      },
       {
         $set: {
           status: 'successful',
@@ -413,7 +417,11 @@ const processPaystackWebhook = async ({ event, data }) => {
     }
 
     await Transaction.findOneAndUpdate(
-      { reference, status: 'pending' },
+      {
+        reference,
+        status: 'pending',
+        service: { $nin: ['wallet_transfer', 'wallet_funding', 'airtime', 'data', 'electricity', 'tv', 'education', 'betting'] },
+      },
       {
         $set: {
           status: 'failed',

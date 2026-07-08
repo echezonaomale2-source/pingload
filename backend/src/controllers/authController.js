@@ -2,6 +2,9 @@ const { body } = require('express-validator');
 const User = require('../models/User');
 const Wallet = require('../models/Wallet');
 const Referral = require('../models/Referral');
+const Notification = require('../models/Notification');
+const KycDocument = require('../models/KycDocument');
+const Transaction = require('../models/Transaction');
 const {
   sendOTP,
   verifyOTP,
@@ -43,6 +46,10 @@ const resetPasswordValidation = [
   body('email').isEmail().withMessage('Valid email is required'),
   body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('otp').optional().isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
+];
+
+const deleteAccountValidation = [
+  body('password').notEmpty().withMessage('Password is required to delete your account'),
 ];
 
 const getAuthConfig = (_req, res) => {
@@ -408,6 +415,60 @@ const removeAvatar = async (req, res, next) => {
   }
 };
 
+const deleteAccount = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id).select('+passwordHash');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const passwordValid = await user.comparePassword(req.body.password);
+    if (!passwordValid) {
+      return res.status(401).json({ success: false, message: 'Incorrect password' });
+    }
+
+    const wallet = await Wallet.findOne({ userId: user._id });
+    const balance = wallet?.balance ?? user.walletBalance ?? 0;
+    if (balance > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please spend or transfer your wallet balance before deleting your account.',
+        code: 'WALLET_BALANCE_REMAINING',
+      });
+    }
+
+    const token = req.headers.authorization?.startsWith('Bearer')
+      ? req.headers.authorization.split(' ')[1]
+      : null;
+    if (token) {
+      try {
+        const decoded = verifyToken(token);
+        await revokeToken(token, decoded);
+      } catch {
+        // Token may already be invalid.
+      }
+    }
+
+    await Promise.all([
+      Wallet.deleteOne({ userId: user._id }),
+      Notification.deleteMany({ userId: user._id }),
+      KycDocument.deleteMany({ userId: user._id }),
+      Referral.deleteMany({ $or: [{ referrerId: user._id }, { referredUserId: user._id }] }),
+    ]);
+
+    await Transaction.updateMany(
+      { userId: user._id },
+      { $set: { 'metadata.accountDeleted': true, 'metadata.accountDeletedAt': new Date() } }
+    );
+
+    await User.findByIdAndDelete(user._id);
+
+    res.json({ success: true, message: 'Your account has been permanently deleted.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const logout = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.startsWith('Bearer')
@@ -445,9 +506,11 @@ module.exports = {
   updateSettings,
   updateAvatar,
   removeAvatar,
+  deleteAccount,
   sendOtpValidation,
   verifyOtpValidation,
   registerValidation,
   loginValidation,
   resetPasswordValidation,
+  deleteAccountValidation,
 };

@@ -52,13 +52,15 @@ const getTransactionById = async (req, res, next) => {
     let originalTransaction = null;
 
     if (transaction.transactionType === 'refund' && transaction.originalTransactionId) {
-      originalTransaction = await Transaction.findById(transaction.originalTransactionId).select(
-        'reference service amount status description createdAt'
-      );
+      originalTransaction = await Transaction.findOne({
+        _id: transaction.originalTransactionId,
+        userId: req.user._id,
+      }).select('reference service amount status description createdAt');
     } else if (transaction.metadata?.refundTransactionId) {
-      linkedRefund = await Transaction.findById(transaction.metadata.refundTransactionId).select(
-        'reference amount refundReason refundedAt status description createdAt'
-      );
+      linkedRefund = await Transaction.findOne({
+        _id: transaction.metadata.refundTransactionId,
+        userId: req.user._id,
+      }).select('reference amount refundReason refundedAt status description createdAt');
     }
 
     res.json({

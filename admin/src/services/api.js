@@ -19,7 +19,6 @@ const shouldShowGlobalLoader = (config) => {
 };
 
 const TOKEN_KEY = 'pingload_admin_token';
-const USER_KEY = 'pingload_admin_user';
 
 const storage = typeof sessionStorage !== 'undefined' ? sessionStorage : localStorage;
 
@@ -44,7 +43,6 @@ api.interceptors.response.use(
     if (error.config && shouldShowGlobalLoader(error.config)) hideGlobalLoader();
     if (error.response?.status === 401 && !error.config?.skipAuthLogout) {
       storage.removeItem(TOKEN_KEY);
-      storage.removeItem(USER_KEY);
       window.location.href = '/login';
     }
     return Promise.reject(error);

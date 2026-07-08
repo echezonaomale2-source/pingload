@@ -13,6 +13,7 @@ import ProviderSelector from '../../components/ProviderSelector';
 import { TransactionPinModal } from '../../components/modals';
 import { vtuService } from '../../services/vtuService';
 import { useAuth } from '../../context/AuthContext';
+import { useDialog } from '../../hooks/useDialog';
 import { navigateToForgotTransactionPin } from '../../utils/forgotPinNavigation';
 
 const MIN_AMOUNT = 100;

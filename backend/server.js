@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
 const morgan = require('morgan');
 const connectDB = require('./src/config/db');
 const { port, nodeEnv, corsOrigins } = require('./src/config/env');
@@ -64,6 +65,7 @@ app.use(morgan(nodeEnv === 'development' ? 'dev' : 'combined'));
 // Avatar uploads are base64 data URIs (~350KB). Default express.json limit is 100kb.
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(mongoSanitize());
 app.use('/api', (req, res, next) => {
   if (req.path.startsWith('/webhooks/')) return next();
   return apiLimiter(req, res, next);

@@ -48,6 +48,7 @@ export const authService = {
     throw lastError;
   },
   removeAvatar: () => api.delete('/auth/avatar', { skipGlobalLoader: true }),
+  deleteAccount: (password) => api.delete('/auth/account', { data: { password } }),
   getLoginPinStatus: () => api.get('/auth/login-pin/status', { skipGlobalLoader: true }),
   setupLoginPin: (pin) => api.post('/auth/login-pin/setup', { pin }, { skipGlobalLoader: true }),
   verifyLoginPin: (data) => api.post('/auth/login-pin/verify', data, { skipGlobalLoader: true }),

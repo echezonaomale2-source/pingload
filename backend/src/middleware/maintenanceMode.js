@@ -3,7 +3,12 @@ const SystemSettings = require('../models/SystemSettings');
 let cachedMaintenance = { value: false, checkedAt: 0 };
 
 const maintenanceMode = async (req, res, next) => {
-  if (req.path.startsWith('/admin') || req.path.startsWith('/auth/login') || req.path === '/health') {
+  if (
+    req.path.startsWith('/admin')
+    || req.path.startsWith('/auth/login')
+    || req.path.startsWith('/webhooks/')
+    || req.path === '/health'
+  ) {
     return next();
   }
 

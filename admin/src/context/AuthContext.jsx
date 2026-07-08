@@ -4,7 +4,6 @@ import { adminAuth } from '../services/adminService';
 const AuthContext = createContext(null);
 
 const TOKEN_KEY = 'pingload_admin_token';
-const USER_KEY = 'pingload_admin_user';
 
 const storage = typeof sessionStorage !== 'undefined' ? sessionStorage : localStorage;
 
@@ -15,7 +14,6 @@ export const AuthProvider = ({ children }) => {
 
   const persistSession = useCallback((authToken, adminUser) => {
     storage.setItem(TOKEN_KEY, authToken);
-    storage.setItem(USER_KEY, JSON.stringify(adminUser));
     setToken(authToken);
     setAdmin(adminUser);
   }, []);
@@ -27,7 +25,6 @@ export const AuthProvider = ({ children }) => {
       // Clear local session even when offline.
     }
     storage.removeItem(TOKEN_KEY);
-    storage.removeItem(USER_KEY);
     setToken(null);
     setAdmin(null);
   }, []);

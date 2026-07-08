@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getErrorMessage } from '../services/adminService';
@@ -13,7 +13,8 @@ const Login = () => {
   const dialog = useDialog();
   const globalLoading = useGlobalLoading();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('admin@pingload.top');
+  const location = useLocation();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,7 +25,8 @@ const Login = () => {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      const from = location.state?.from?.pathname || '/';
+      navigate(from, { replace: true });
     } catch (err) {
       dialog.alertError('Login Failed', getErrorMessage(err, 'Login failed'));
     } finally {

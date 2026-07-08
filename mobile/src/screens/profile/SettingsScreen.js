@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, StyleSheet, Switch, TouchableOpacity, Linking } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, StyleSheet, Switch, TouchableOpacity, Linking, TextInput } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,14 +12,17 @@ import { PRIVACY_POLICY_URL, TERMS_URL } from '../../utils/constants';
 
 const SettingsScreen = ({ navigation }) => {
   const { colors, isDark, setDarkMode } = useTheme();
-  const { user, updateUser, isAuthenticated } = useAuth();
+  const { user, updateUser, isAuthenticated, logout } = useAuth();
   const dialog = useDialog();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [biometric, setBiometric] = React.useState(user?.biometricEnabled || false);
-  const [notifications, setNotifications] = React.useState(
+  const [biometric, setBiometric] = useState(user?.biometricEnabled || false);
+  const [notifications, setNotifications] = useState(
     user?.notificationSettings || { transactions: true, promotions: true, security: true }
   );
+  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   React.useEffect(() => {
     setBiometric(user?.biometricEnabled || false);
@@ -96,6 +99,41 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!showDeleteForm) {
+      setShowDeleteForm(true);
+      return;
+    }
+
+    if (!deletePassword.trim()) {
+      dialog.alertError('Password Required', 'Enter your password to delete your account.');
+      return;
+    }
+
+    const confirmed = await dialog.confirm({
+      title: 'Delete Account',
+      message: 'This permanently deletes your account and personal data. Transaction records may be retained for compliance.',
+      confirmText: 'Delete Account',
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await authService.deleteAccount(deletePassword);
+      await logout();
+      dialog.showSuccess({
+        title: 'Account Deleted',
+        message: 'Your account has been permanently deleted.',
+      });
+    } catch (error) {
+      const message = error?.response?.data?.message || error?.message || 'Could not delete account.';
+      dialog.alertError('Delete Failed', message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const SettingRow = ({ label, value, onValueChange, icon }) => (
     <View style={styles.row}>
       <View style={styles.rowLeft}>
@@ -154,6 +192,44 @@ const SettingsScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Account</Text>
+        {showDeleteForm ? (
+          <View style={styles.deleteForm}>
+            <Text style={styles.deleteHint}>
+              Enter your password to permanently delete your account.
+            </Text>
+            <TextInput
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              placeholder="Account password"
+              secureTextEntry
+              autoCapitalize="none"
+              style={[styles.deleteInput, { borderColor: colors.border, color: colors.text }]}
+              placeholderTextColor={colors.textSecondary}
+            />
+            <TouchableOpacity
+              style={[styles.deleteButton, deleting && styles.deleteButtonDisabled]}
+              onPress={handleDeleteAccount}
+              disabled={deleting}
+            >
+              <Text style={styles.deleteButtonText}>{deleting ? 'Deleting...' : 'Delete Account'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setShowDeleteForm(false); setDeletePassword(''); }}>
+              <Text style={styles.cancelDelete}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.linkRow} onPress={handleDeleteAccount}>
+            <View style={styles.rowLeft}>
+              <Ionicons name="trash-outline" size={22} color={colors.error || '#DC2626'} />
+              <Text style={[styles.rowLabel, styles.dangerLabel]}>Delete Account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Legal</Text>
         <LinkRow label="Terms & Conditions" url={TERMS_URL} icon="document-text-outline" />
         <LinkRow label="Privacy Policy" url={PRIVACY_POLICY_URL} icon="lock-closed-outline" />
@@ -175,6 +251,25 @@ const createStyles = (colors) => StyleSheet.create({
   linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   rowLabel: { fontSize: 15, fontWeight: '600', color: colors.text },
+  dangerLabel: { color: colors.error || '#DC2626' },
+  deleteForm: { padding: 16, gap: 12 },
+  deleteHint: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
+  deleteInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+  },
+  deleteButton: {
+    backgroundColor: colors.error || '#DC2626',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  deleteButtonDisabled: { opacity: 0.6 },
+  deleteButtonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  cancelDelete: { textAlign: 'center', color: colors.textSecondary, fontWeight: '600', fontSize: 14 },
 });
 
 export default SettingsScreen;
