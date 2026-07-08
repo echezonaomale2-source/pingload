@@ -1,92 +1,54 @@
 const vtpass = require('../services/vtpassService');
-const clubkonnect = require('../services/clubkonnectService');
 
-const resolvePlanCode = (record, provider) => {
+const resolvePlanCode = (record) => {
   if (!record) return null;
-  if (provider === 'vtpass') {
-    return record.vtpassVariationCode || record.variationCode || null;
-  }
-  return record.planCode || record.variationCode || record.vtpassVariationCode || null;
+  return record.vtpassVariationCode || record.variationCode || record.providerPlanCode || null;
 };
 
-const resolveVariationCode = (record, provider) => resolvePlanCode(record, provider);
+const resolveVariationCode = (record) => resolvePlanCode(record);
 
-const resolveServiceId = (record, provider) => {
+const resolveServiceId = (record) => {
   if (!record) return null;
-  if (provider === 'vtpass') {
-    return record.vtpassServiceId || record.providerServiceId || null;
-  }
-  return record.providerServiceId || record.vtpassServiceId || null;
+  return record.vtpassServiceId || record.providerServiceId || null;
 };
 
 const variationCodeQuery = (code) => ({
   $or: [
     { providerPlanCode: code },
     { variationCode: code },
-    { planCode: code },
     { vtpassVariationCode: code },
     { providerVariationCode: code },
-    { providerProductCode: code },
   ],
 });
 
-const assignVariationCodeForProvider = (payload, provider) => {
+const assignVariationCodeForProvider = (payload) => {
   const next = { ...payload };
-  const {
-    variationCode,
-    planCode,
-    vtpassVariationCode,
-    clubkonnectVariationCode,
-    clubkonnectPlanCode,
-  } = payload;
+  const { variationCode, vtpassVariationCode } = payload;
 
-  const clubkonnectCode = clubkonnectPlanCode ?? clubkonnectVariationCode;
-  if (clubkonnectCode !== undefined) {
-    next.planCode = clubkonnectCode;
-    next.variationCode = clubkonnectCode;
-  }
-  if (planCode !== undefined && planCode !== '') {
-    next.planCode = planCode;
-    if (provider !== 'vtpass') next.variationCode = planCode;
-  }
   if (vtpassVariationCode !== undefined) {
     next.vtpassVariationCode = vtpassVariationCode;
   }
   if (variationCode !== undefined && variationCode !== '') {
-    if (provider === 'vtpass') {
-      next.vtpassVariationCode = variationCode;
-      if (!next.variationCode) next.variationCode = variationCode;
-    } else {
-      next.planCode = variationCode;
-      next.variationCode = variationCode;
-      if (!next.vtpassVariationCode) next.vtpassVariationCode = variationCode;
-    }
+    next.vtpassVariationCode = variationCode;
+    next.variationCode = variationCode;
   }
 
   delete next.clubkonnectVariationCode;
   delete next.clubkonnectPlanCode;
+  delete next.planCode;
   return next;
 };
 
-const assignServiceIdForProvider = (payload, provider) => {
+const assignServiceIdForProvider = (payload) => {
   const next = { ...payload };
-  const { providerServiceId, vtpassServiceId, clubkonnectServiceId } = payload;
+  const { providerServiceId, vtpassServiceId } = payload;
 
-  if (clubkonnectServiceId !== undefined) {
-    next.providerServiceId = clubkonnectServiceId;
-  }
   if (vtpassServiceId !== undefined) {
     next.vtpassServiceId = vtpassServiceId || null;
   }
   if (providerServiceId !== undefined) {
-    if (provider === 'vtpass') {
-      next.vtpassServiceId = providerServiceId || null;
-      if (!next.providerServiceId && providerServiceId) {
-        next.providerServiceId = providerServiceId;
-      }
-    } else {
-      next.providerServiceId = providerServiceId;
-    }
+    next.vtpassServiceId = providerServiceId || null;
+    next.providerServiceId = providerServiceId;
   }
 
   delete next.clubkonnectServiceId;
@@ -94,44 +56,27 @@ const assignServiceIdForProvider = (payload, provider) => {
 };
 
 const extractAnyProviderFailureReason = (metadata = {}) => {
-  const response = metadata.providerResponse || metadata.vtpassResponse || metadata.clubkonnectResponse;
+  const response = metadata.providerResponse || metadata.vtpassResponse;
   if (!response) return null;
   return vtpass.extractVtpassFailureReason(response)
-    || clubkonnect.extractProviderFailureReason(response)
     || response.description
     || response.response_description
     || null;
 };
 
-const VTU_PROVIDERS = ['clubkonnect', 'vtpass'];
+const VTU_PROVIDERS = ['vtpass'];
 
-const providerClauseFor = (providerName) => (
-  providerName === 'vtpass'
-    ? { vtuProvider: 'vtpass' }
-    : { $or: [{ vtuProvider: 'clubkonnect' }, { vtuProvider: { $exists: false } }, { vtuProvider: null }] }
-);
+const providerClauseFor = () => ({ vtuProvider: 'vtpass' });
 
-/** Legacy plans without vtuProvider are treated as Clubkonnect. */
-const buildProviderCatalogQuery = (baseFilter, providerName) => ({
-  $and: [baseFilter, providerClauseFor(providerName)],
+const buildProviderCatalogQuery = (baseFilter) => ({
+  $and: [baseFilter, providerClauseFor()],
 });
 
-/** Show catalogs from multiple active providers at once. */
-const buildMultiProviderCatalogQuery = (baseFilter, providerNames = []) => {
-  const names = [...new Set((providerNames || []).filter(Boolean))];
-  if (names.length === 0) return { ...baseFilter, _id: null };
-  if (names.length === 1) return buildProviderCatalogQuery(baseFilter, names[0]);
-  return {
-    $and: [
-      baseFilter,
-      { $or: names.map((name) => providerClauseFor(name)) },
-    ],
-  };
-};
+const buildMultiProviderCatalogQuery = (baseFilter) => buildProviderCatalogQuery(baseFilter);
 
-const tagWithVtuProvider = (payload, providerName) => ({
+const tagWithVtuProvider = (payload) => ({
   ...payload,
-  vtuProvider: providerName === 'vtpass' ? 'vtpass' : 'clubkonnect',
+  vtuProvider: 'vtpass',
 });
 
 module.exports = {

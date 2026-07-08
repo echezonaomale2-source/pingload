@@ -141,11 +141,6 @@ assertContains(
   'Admin logout route'
 );
 assertContains(
-  'src/services/clubkonnectReconciliationWorker.js',
-  'startClubkonnectReconciliationWorker',
-  'Clubkonnect reconciliation worker'
-);
-assertContains(
   'src/services/vtpassReconciliationWorker.js',
   'startVtpassReconciliationWorker',
   'VTpass reconciliation worker'

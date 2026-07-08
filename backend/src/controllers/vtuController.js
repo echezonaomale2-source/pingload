@@ -31,7 +31,7 @@ const {
 
 const mapDataPlanForApi = (plan) => mapDataPlanForPublicApi(plan, inferValidityCategory);
 
-/** Clubkonnect sometimes returns duplicate plan codes — keep first of each. */
+/** Deduplicate plan codes — keep first of each. */
 const dedupeByCode = (items, codeKey) => {
   const seen = new Set();
   return items.filter((item) => {
@@ -151,7 +151,7 @@ const findDataPlan = async ({ network, variationCode, planId }) => {
 
 const resolveDataPurchaseCode = (plan) => {
   if (!plan) return null;
-  const provider = plan.vtuProvider || 'clubkonnect';
+  const provider = plan.vtuProvider || 'vtpass';
   if (provider === 'vtpass') {
     return plan.providerVariationCode || plan.providerPlanCode || plan.vtpassVariationCode || plan.variationCode;
   }
@@ -198,7 +198,7 @@ const resolveTvPlanAmount = async ({ provider, variationCode, amount }) => {
 const resolveTvProviderCode = async ({ provider, variationCode, plan }) => {
   const resolvedPlan = plan || await findTvPlan({ provider, variationCode });
   if (!resolvedPlan) return variationCode;
-  const planProvider = resolvedPlan.vtuProvider || 'clubkonnect';
+  const planProvider = resolvedPlan.vtuProvider || 'vtpass';
   return resolveVariationCode(resolvedPlan, planProvider) || variationCode;
 };
 
@@ -370,7 +370,7 @@ const fetchTVPackages = async (req, res, next) => {
     ).sort({ order: 1, amount: 1 });
     if (localPlans.length > 0) {
       const mapped = localPlans.map((p) => {
-        const planProvider = p.vtuProvider || 'clubkonnect';
+        const planProvider = p.vtuProvider || 'vtpass';
         return {
           code: resolveVariationCode(p, planProvider),
           name: p.name,

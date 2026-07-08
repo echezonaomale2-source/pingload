@@ -858,19 +858,15 @@ const updateSettings = async (req, res, next) => {
     });
 
     if (req.body.vtuProvider !== undefined) {
-      const provider = req.body.vtuProvider;
-      if (!['clubkonnect', 'vtpass'].includes(provider)) {
-        return res.status(400).json({ success: false, message: 'Invalid VTU provider' });
+      if (req.body.vtuProvider !== 'vtpass') {
+        return res.status(400).json({ success: false, message: 'Only VTpass is supported as the VTU provider' });
       }
-      if (provider === 'vtpass' && !serviceConfig.vtpass.configured) {
+      if (!serviceConfig.vtpass.configured) {
         return res.status(400).json({ success: false, message: 'VTpass credentials are not configured on the server' });
       }
-      if (provider === 'clubkonnect' && !serviceConfig.clubkonnect.configured) {
-        return res.status(400).json({ success: false, message: 'Clubkonnect credentials are not configured on the server' });
-      }
-      settings.vtuProvider = provider;
+      settings.vtuProvider = 'vtpass';
       VTU_SERVICES.forEach((service) => {
-        settings.serviceRouting[service] = provider;
+        settings.serviceRouting[service] = 'vtpass';
       });
       vtuProvider.invalidateProviderCache();
     }

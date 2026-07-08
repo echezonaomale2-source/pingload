@@ -1,42 +1,49 @@
 const { VTU_SERVICES } = require('./vtuConstants');
 
-const normalizeProvider = (value) => (value === 'vtpass' ? 'vtpass' : 'clubkonnect');
+const normalizeProvider = () => 'vtpass';
 
-const defaultServiceRouting = (provider = 'clubkonnect') => VTU_SERVICES.reduce((acc, service) => {
+const defaultServiceRouting = (provider = 'vtpass') => VTU_SERVICES.reduce((acc, service) => {
   acc[service] = provider;
   return acc;
 }, {});
 
 const migrateVtuSettings = async (settings) => {
   let changed = false;
-  const legacyProvider = normalizeProvider(settings.vtuProvider);
+
+  if (settings.vtuProvider !== 'vtpass') {
+    settings.vtuProvider = 'vtpass';
+    changed = true;
+  }
 
   if (!settings.serviceRouting || !settings.serviceRouting.data) {
-    settings.serviceRouting = defaultServiceRouting(legacyProvider);
+    settings.serviceRouting = defaultServiceRouting('vtpass');
     changed = true;
   } else {
     VTU_SERVICES.forEach((service) => {
-      if (!settings.serviceRouting[service]) {
-        settings.serviceRouting[service] = legacyProvider;
+      if (settings.serviceRouting[service] !== 'vtpass') {
+        settings.serviceRouting[service] = 'vtpass';
         changed = true;
       }
     });
   }
 
   if (!settings.dataProviderEnabled) {
-    settings.dataProviderEnabled = {
-      clubkonnect: settings.providerEnabled?.clubkonnect !== false,
-      vtpass: settings.providerEnabled?.vtpass !== false,
-    };
+    settings.dataProviderEnabled = { vtpass: true };
+    changed = true;
+  } else if (settings.dataProviderEnabled.vtpass !== true) {
+    settings.dataProviderEnabled = { vtpass: true };
     changed = true;
   }
 
   if (!settings.providerEnabled) {
-    settings.providerEnabled = { clubkonnect: true, vtpass: true };
+    settings.providerEnabled = { vtpass: true };
+    changed = true;
+  } else if (settings.providerEnabled.vtpass !== true) {
+    settings.providerEnabled = { vtpass: true };
     changed = true;
   }
 
-  if (settings.enableProviderFailover === undefined) {
+  if (settings.enableProviderFailover) {
     settings.enableProviderFailover = false;
     changed = true;
   }

@@ -1,48 +1,27 @@
-const { normalizeProvider } = require('./migrateVtuSettings');
-
-const providerLabel = (provider) => (provider === 'vtpass' ? 'VTpass' : 'Clubkonnect');
-
 const resolveProviderPlanCode = (record) => {
   if (!record) return null;
   if (record.providerPlanCode) return record.providerPlanCode;
-  const provider = normalizeProvider(record.vtuProvider);
-  if (provider === 'vtpass') {
-    return record.providerVariationCode || record.vtpassVariationCode || record.variationCode || null;
-  }
-  return record.providerProductCode || record.planCode || record.variationCode || null;
+  return record.providerVariationCode || record.vtpassVariationCode || record.variationCode || null;
 };
 
-const normalizeDataPlanRecord = (record = {}, providerName) => {
-  const provider = normalizeProvider(providerName || record.vtuProvider);
-  const providerPlanCode = resolveProviderPlanCode({ ...record, vtuProvider: provider });
-  const providerVariationCode = provider === 'vtpass'
-    ? (record.providerVariationCode || record.vtpassVariationCode || record.variationCode || providerPlanCode || '')
-    : (record.providerVariationCode || '');
-  const providerProductCode = provider === 'clubkonnect'
-    ? (record.providerProductCode || record.planCode || record.variationCode || providerPlanCode || '')
-    : (record.providerProductCode || '');
+const normalizeDataPlanRecord = (record = {}) => {
+  const providerPlanCode = resolveProviderPlanCode(record);
+  const providerVariationCode = record.providerVariationCode || record.vtpassVariationCode || record.variationCode || providerPlanCode || '';
 
   return {
     ...record,
-    vtuProvider: provider,
+    vtuProvider: 'vtpass',
     providerPlanCode: providerPlanCode || '',
     providerVariationCode,
-    providerProductCode,
-    variationCode: provider === 'vtpass'
-      ? (record.variationCode || providerVariationCode || providerPlanCode || '')
-      : (record.variationCode || providerProductCode || providerPlanCode || ''),
-    planCode: provider === 'clubkonnect'
-      ? (record.planCode || providerProductCode || providerPlanCode || '')
-      : (record.planCode || ''),
-    vtpassVariationCode: provider === 'vtpass'
-      ? (record.vtpassVariationCode || providerVariationCode || providerPlanCode || '')
-      : (record.vtpassVariationCode || ''),
+    providerProductCode: '',
+    variationCode: record.variationCode || providerVariationCode || providerPlanCode || '',
+    planCode: '',
+    vtpassVariationCode: record.vtpassVariationCode || providerVariationCode || providerPlanCode || '',
     enabled: record.enabled !== false && record.active !== false,
   };
 };
 
-const buildDataPlanSyncUpdate = (providerName, network, remotePlan) => {
-  const provider = normalizeProvider(providerName);
+const buildDataPlanSyncUpdate = (_providerName, network, remotePlan) => {
   const code = remotePlan.variation_code;
   const planName = remotePlan.name || code;
   const now = new Date();
@@ -53,38 +32,22 @@ const buildDataPlanSyncUpdate = (providerName, network, remotePlan) => {
     validity: remotePlan.validity || '30 days',
     amount: parseFloat(remotePlan.variation_amount) || 0,
     enabled: true,
-    vtuProvider: provider,
+    vtuProvider: 'vtpass',
     providerPlanCode: code,
     lastSyncedAt: now,
   };
 
-  if (provider === 'vtpass') {
-    return normalizeDataPlanRecord({
-      ...base,
-      providerVariationCode: code,
-      providerProductCode: '',
-      variationCode: code,
-      vtpassVariationCode: code,
-      planCode: '',
-    }, provider);
-  }
-
   return normalizeDataPlanRecord({
     ...base,
-    providerProductCode: code,
-    providerVariationCode: '',
+    providerVariationCode: code,
     variationCode: code,
-    planCode: code,
-    vtpassVariationCode: '',
-  }, provider);
+    vtpassVariationCode: code,
+  });
 };
 
 const mapDataPlanForPublicApi = (plan, inferValidityCategory) => {
   const normalized = normalizeDataPlanRecord(plan.toObject ? plan.toObject() : plan);
-  const provider = normalized.vtuProvider;
-  const purchaseCode = provider === 'vtpass'
-    ? normalized.providerVariationCode || normalized.providerPlanCode
-    : normalized.providerProductCode || normalized.providerPlanCode;
+  const purchaseCode = normalized.providerVariationCode || normalized.providerPlanCode;
 
   return {
     variation_code: purchaseCode,
@@ -96,8 +59,8 @@ const mapDataPlanForPublicApi = (plan, inferValidityCategory) => {
     category: normalized.category || '',
     commissionPercent: normalized.commissionPercent || 0,
     order: normalized.order || 0,
-    provider,
-    providerLabel: providerLabel(provider),
+    provider: 'vtpass',
+    providerLabel: 'VTpass',
     providerPlanCode: normalized.providerPlanCode,
     planId: String(plan._id || plan.id || ''),
     active: normalized.enabled,
@@ -121,7 +84,6 @@ const pickEditableDataPlanFields = (body = {}) => {
 };
 
 module.exports = {
-  providerLabel,
   resolveProviderPlanCode,
   normalizeDataPlanRecord,
   buildDataPlanSyncUpdate,

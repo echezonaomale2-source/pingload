@@ -72,10 +72,6 @@ const ElectricityPlansPage = () => {
       maxAmount: Number(form.maxAmount),
       order: Number(form.order),
     };
-    if (showBoth && form.altServiceId) {
-      if (selected === 'vtpass') payload.clubkonnectServiceId = form.altServiceId;
-      else payload.vtpassServiceId = form.altServiceId;
-    }
     delete payload.altServiceId;
     try {
       if (modal === 'create') await electricityPlansApi.create(payload);

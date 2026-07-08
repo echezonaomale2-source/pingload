@@ -14,7 +14,6 @@ const serviceToggleSchema = new mongoose.Schema(
 
 const providerEnabledSchema = new mongoose.Schema(
   {
-    clubkonnect: { type: Boolean, default: true },
     vtpass: { type: Boolean, default: true },
   },
   { _id: false }
@@ -22,7 +21,6 @@ const providerEnabledSchema = new mongoose.Schema(
 
 const dataProviderEnabledSchema = new mongoose.Schema(
   {
-    clubkonnect: { type: Boolean, default: true },
     vtpass: { type: Boolean, default: true },
   },
   { _id: false }
@@ -30,12 +28,12 @@ const dataProviderEnabledSchema = new mongoose.Schema(
 
 const serviceRoutingSchema = new mongoose.Schema(
   {
-    airtime: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
-    data: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
-    electricity: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
-    tv: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
-    betting: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
-    education: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'clubkonnect' },
+    airtime: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
+    data: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
+    electricity: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
+    tv: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
+    betting: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
+    education: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
   },
   { _id: false }
 );
@@ -53,19 +51,19 @@ const systemSettingsSchema = new mongoose.Schema(
     vtuProvider: {
       type: String,
       enum: ['clubkonnect', 'vtpass'],
-      default: 'clubkonnect',
+      default: 'vtpass',
     },
     providerEnabled: {
       type: providerEnabledSchema,
-      default: () => ({ clubkonnect: true, vtpass: true }),
+      default: () => ({ vtpass: true }),
     },
     dataProviderEnabled: {
       type: dataProviderEnabledSchema,
-      default: () => ({ clubkonnect: true, vtpass: true }),
+      default: () => ({ vtpass: true }),
     },
     serviceRouting: {
       type: serviceRoutingSchema,
-      default: () => defaultServiceRouting('clubkonnect'),
+      default: () => defaultServiceRouting('vtpass'),
     },
     enableProviderFailover: { type: Boolean, default: false },
     catalogVersion: { type: Number, default: 1 },

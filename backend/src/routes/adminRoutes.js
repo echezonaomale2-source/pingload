@@ -69,8 +69,8 @@ const {
   electricityPlanValidation,
   tvPlanValidation,
   educationProductValidation,
-  adminSyncDataPlansFromClubkonnect,
-  adminSyncTvPlansFromClubkonnect,
+  adminSyncDataPlansFromVtpass,
+  adminSyncTvPlansFromVtpass,
 } = require('../controllers/serviceConfigController');
 const { getRevenueDashboard } = require('../controllers/revenueController');
 const { listSecurityEvents } = require('../controllers/securityEventController');
@@ -156,7 +156,7 @@ router.patch('/services/:id', protectAdmin, toggleService);
 router.get('/services/prices', protectAdmin, adminGetPrices);
 router.patch('/services/prices/:serviceId', protectAdmin, priceValidation, validate, adminUpdatePrice);
 
-router.post('/data-plans/sync', protectAdmin, adminSyncDataPlansFromClubkonnect);
+router.post('/data-plans/sync', protectAdmin, adminSyncDataPlansFromVtpass);
 router.get('/data-plans', protectAdmin, adminListDataPlans);
 router.post('/data-plans', protectAdmin, planValidation, validate, adminCreateDataPlan);
 router.patch('/data-plans/:id', protectAdmin, adminUpdateDataPlan);
@@ -167,7 +167,7 @@ router.post('/electricity-plans', protectAdmin, electricityPlanValidation, valid
 router.patch('/electricity-plans/:id', protectAdmin, adminUpdateElectricityPlan);
 router.delete('/electricity-plans/:id', protectAdmin, adminDeleteElectricityPlan);
 
-router.post('/tv-plans/sync', protectAdmin, adminSyncTvPlansFromClubkonnect);
+router.post('/tv-plans/sync', protectAdmin, adminSyncTvPlansFromVtpass);
 router.get('/tv-plans', protectAdmin, adminListTvPlans);
 router.post('/tv-plans', protectAdmin, tvPlanValidation, validate, adminCreateTvPlan);
 router.patch('/tv-plans/:id', protectAdmin, adminUpdateTvPlan);

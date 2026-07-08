@@ -22,7 +22,7 @@ import { useDialog } from '../../hooks/useDialog';
 const dedupeDataPlans = (plans) => {
   const seen = new Set();
   return (plans || []).filter((plan) => {
-    const key = plan.planId || `${plan.provider || plan.vtuProvider || 'clubkonnect'}:${plan.variation_code}`;
+    const key = plan.planId || `${plan.provider || plan.vtuProvider || 'vtpass'}:${plan.variation_code}`;
     if (!plan.variation_code || seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -32,7 +32,7 @@ const dedupeDataPlans = (plans) => {
 const providerLabel = (plan) => {
   if (plan.providerLabel) return plan.providerLabel;
   const provider = plan.provider || plan.vtuProvider;
-  return provider === 'vtpass' ? 'VTpass' : 'Clubkonnect';
+  return 'VTpass';
 };
 
 const GROUP_ORDER = ['daily', 'weekly', 'monthly', 'yearly'];

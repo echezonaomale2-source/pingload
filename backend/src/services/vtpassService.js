@@ -425,6 +425,21 @@ const fundBettingWallet = async ({ vtpassServiceId, customerId, amount, phone, r
   }
 };
 
+const getWalletBalance = async () => {
+  assertVtpassConfigured();
+  try {
+    const response = await vtpassGetClient.get('/balance');
+    const content = response.data?.content;
+    const balance = content?.balance ?? content?.wallet_balance ?? content?.amount ?? null;
+    return {
+      balance: balance != null ? parseFloat(balance) : null,
+      raw: response.data,
+    };
+  } catch (error) {
+    handleVtpassError(error);
+  }
+};
+
 const assertVtpassConfigured = () => {
   if (!serviceConfig.vtpass.apiKey || serviceConfig.vtpass.apiKey === 'dev-placeholder') {
     const error = new Error('VTpass is not configured. Please contact support.');
@@ -487,12 +502,21 @@ const verifyVtpassConnectivity = async () => {
     const data = response.data;
 
     if (isVtpassSuccess(data)) {
+      let balance = null;
+      try {
+        const balanceResult = await getWalletBalance();
+        balance = balanceResult?.balance ?? null;
+      } catch {
+        // Balance probe is optional — connectivity already confirmed.
+      }
+
       return {
         ok: true,
         configured: true,
         mode: serviceConfig.vtpass.mode,
         baseUrl: serviceConfig.vtpass.baseUrl,
         serverIp,
+        balance,
         purchasesEnabled: true,
       };
     }
@@ -542,6 +566,7 @@ const verifyVtpassConnectivity = async () => {
 };
 
 module.exports = {
+  getWalletBalance,
   purchaseAirtime,
   getDataPlans,
   getTVPackages,

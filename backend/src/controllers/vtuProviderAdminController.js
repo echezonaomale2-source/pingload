@@ -5,8 +5,6 @@ const TvPlan = require('../models/TvPlan');
 const vtuProvider = require('../services/vtuProviderService');
 const routing = require('../services/vtuRoutingService');
 const { bumpCatalogVersion } = require('../utils/catalogInvalidation');
-const { NON_DATA_SERVICES, PROVIDER_LABELS } = require('../utils/vtuConstants');
-const { normalizeProvider } = require('../utils/migrateVtuSettings');
 const { tagWithVtuProvider } = require('../utils/resolveProviderFields');
 const { buildDataPlanSyncUpdate } = require('../utils/dataPlanFields');
 const { persistProviderHealth } = require('../utils/providerHealth');
@@ -17,7 +15,16 @@ const TV_PROVIDERS = ['dstv', 'gotv', 'startimes'];
 const listProviders = async (_req, res, next) => {
   try {
     const snapshot = await routing.getRoutingSnapshot();
-    res.json({ success: true, data: snapshot });
+    let balance = null;
+    if (routing.isProviderConfigured()) {
+      try {
+        const balanceResult = await vtuProvider.getWalletBalance();
+        balance = balanceResult?.balance ?? null;
+      } catch {
+        // Balance is optional for the dashboard list.
+      }
+    }
+    res.json({ success: true, data: { ...snapshot, vtpassBalance: balance } });
   } catch (error) {
     next(error);
   }
@@ -25,20 +32,19 @@ const listProviders = async (_req, res, next) => {
 
 const updateDataProviderEnabled = async (req, res, next) => {
   try {
-    const providerId = normalizeProvider(req.params.providerId);
     const { enabled } = req.body;
     if (typeof enabled !== 'boolean') {
       return res.status(400).json({ success: false, message: 'enabled must be a boolean' });
     }
-    if (enabled && !routing.isProviderConfigured(providerId)) {
+    if (enabled && !routing.isProviderConfigured()) {
       return res.status(400).json({
         success: false,
-        message: `${PROVIDER_LABELS[providerId]} credentials are not configured on the server`,
+        message: 'VTpass credentials are not configured on the server',
       });
     }
 
     const settings = await SystemSettings.getSettings();
-    settings.dataProviderEnabled[providerId] = enabled;
+    settings.dataProviderEnabled = { vtpass: enabled };
     await settings.save();
     routing.invalidateRoutingCache();
     await bumpCatalogVersion();
@@ -47,57 +53,24 @@ const updateDataProviderEnabled = async (req, res, next) => {
     res.json({
       success: true,
       data: snapshot,
-      message: `${PROVIDER_LABELS[providerId]} data ${enabled ? 'enabled' : 'disabled'}`,
+      message: `VTpass data ${enabled ? 'enabled' : 'disabled'}`,
     });
   } catch (error) {
     next(error);
   }
 };
 
-const updateServiceRouting = async (req, res, next) => {
+const updateServiceRouting = async (_req, res, next) => {
   try {
-    const { serviceRouting } = req.body;
-    if (!serviceRouting || typeof serviceRouting !== 'object') {
-      return res.status(400).json({ success: false, message: 'serviceRouting is required' });
-    }
-
-    const settings = await SystemSettings.getSettings();
-    for (const service of NON_DATA_SERVICES) {
-      if (serviceRouting[service] !== undefined) {
-        const provider = normalizeProvider(serviceRouting[service]);
-        if (!routing.isProviderConfigured(provider)) {
-          return res.status(400).json({
-            success: false,
-            message: `${PROVIDER_LABELS[provider]} is not configured for ${service}`,
-          });
-        }
-        settings.serviceRouting[service] = provider;
-      }
-    }
-
-    await settings.save();
-    routing.invalidateRoutingCache();
-    vtuProvider.invalidateProviderCache();
-    await bumpCatalogVersion();
-
     const snapshot = await routing.getRoutingSnapshot();
-    res.json({ success: true, data: snapshot, message: 'Preferred providers updated' });
+    res.json({ success: true, data: snapshot, message: 'All services use VTpass' });
   } catch (error) {
     next(error);
   }
 };
 
-const updateFailover = async (req, res, next) => {
+const updateFailover = async (_req, res, next) => {
   try {
-    const { enableProviderFailover } = req.body;
-    if (typeof enableProviderFailover !== 'boolean') {
-      return res.status(400).json({ success: false, message: 'enableProviderFailover must be a boolean' });
-    }
-    const settings = await SystemSettings.getSettings();
-    settings.enableProviderFailover = enableProviderFailover;
-    await settings.save();
-    routing.invalidateRoutingCache();
-
     const snapshot = await routing.getRoutingSnapshot();
     res.json({ success: true, data: snapshot });
   } catch (error) {
@@ -105,32 +78,29 @@ const updateFailover = async (req, res, next) => {
   }
 };
 
-const testProviderConnection = async (req, res, next) => {
+const testProviderConnection = async (_req, res, next) => {
   try {
-    const providerId = normalizeProvider(req.params.providerId);
-    if (!routing.isProviderConfigured(providerId)) {
+    if (!routing.isProviderConfigured()) {
       return res.status(400).json({
         success: false,
-        message: `${PROVIDER_LABELS[providerId]} credentials are not configured`,
+        message: 'VTpass credentials are not configured',
       });
     }
 
-    const testFn = providerId === 'vtpass'
-      ? vtuProvider.verifyVtpassConnectivity
-      : vtuProvider.verifyClubkonnectConnectivity;
-
-    const result = await testFn();
-    const { healthStatus, message, lastHealthCheckAt } = await persistProviderHealth(providerId, result);
+    const result = await vtuProvider.verifyVtpassConnectivity();
+    const { healthStatus, message, lastHealthCheckAt } = await persistProviderHealth('vtpass', result);
 
     res.json({
       success: healthStatus === 'healthy',
       data: {
-        providerId,
+        providerId: 'vtpass',
         healthStatus,
         message,
         lastHealthCheckAt,
+        balance: result.balance ?? null,
         serverIp: result.serverIp || null,
         purchasesEnabled: result.purchasesEnabled ?? null,
+        baseUrl: result.baseUrl || null,
       },
     });
   } catch (error) {
@@ -138,10 +108,9 @@ const testProviderConnection = async (req, res, next) => {
   }
 };
 
-const syncDataPlansForProvider = async (providerId, networkFilter) => {
-  const source = normalizeProvider(providerId);
-  if (!routing.isProviderConfigured(source)) {
-    const error = new Error(`${PROVIDER_LABELS[source]} is not configured on the server`);
+const syncDataPlansForProvider = async (networkFilter) => {
+  if (!routing.isProviderConfigured()) {
+    const error = new Error('VTpass is not configured on the server');
     error.statusCode = 400;
     throw error;
   }
@@ -152,14 +121,14 @@ const syncDataPlansForProvider = async (providerId, networkFilter) => {
   let synced = 0;
 
   for (const network of networks) {
-    const result = await vtuProvider.getDataPlans(network, source);
+    const result = await vtuProvider.getDataPlans(network);
     const variations = result.content?.variations || [];
 
     for (const plan of variations) {
       if (!plan.variation_code) continue;
-      const update = buildDataPlanSyncUpdate(source, network, plan);
+      const update = buildDataPlanSyncUpdate('vtpass', network, plan);
       await DataPlan.findOneAndUpdate(
-        { vtuProvider: source, providerPlanCode: plan.variation_code },
+        { vtuProvider: 'vtpass', providerPlanCode: plan.variation_code },
         { $set: update },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
@@ -168,18 +137,17 @@ const syncDataPlansForProvider = async (providerId, networkFilter) => {
   }
 
   await VtuProviderConfig.findOneAndUpdate(
-    { providerId: source },
+    { providerId: 'vtpass' },
     { $set: { lastSyncAt: new Date() } },
     { upsert: true }
   );
 
-  return { synced, networks, source };
+  return { synced, networks, source: 'vtpass' };
 };
 
-const syncTvPlansForProvider = async (providerId, providerFilter) => {
-  const source = normalizeProvider(providerId);
-  if (!routing.isProviderConfigured(source)) {
-    const error = new Error(`${PROVIDER_LABELS[source]} is not configured on the server`);
+const syncTvPlansForProvider = async (providerFilter) => {
+  if (!routing.isProviderConfigured()) {
+    const error = new Error('VTpass is not configured on the server');
     error.statusCode = 400;
     throw error;
   }
@@ -190,47 +158,50 @@ const syncTvPlansForProvider = async (providerId, providerFilter) => {
   let synced = 0;
 
   for (const provider of providers) {
-    const result = await vtuProvider.getTVPackages(provider, source);
+    const result = await vtuProvider.getTVPackages(provider);
     const variations = result.content?.variations || [];
 
     for (const pkg of variations) {
       if (!pkg.variation_code) continue;
       const code = pkg.variation_code;
       const planName = pkg.name || code;
-      const common = {
+      const update = {
         provider,
         name: planName,
         amount: parseFloat(pkg.variation_amount) || 0,
         enabled: true,
-        vtuProvider: source,
+        vtuProvider: 'vtpass',
+        variationCode: code,
+        vtpassVariationCode: code,
       };
 
-      const update = source === 'vtpass'
-        ? { ...common, variationCode: code, vtpassVariationCode: code }
-        : { ...common, variationCode: code, vtpassVariationCode: '' };
-
       await TvPlan.findOneAndUpdate(
-        { provider, vtuProvider: source, variationCode: code },
-        { $set: tagWithVtuProvider(update, source) },
+        { provider, vtuProvider: 'vtpass', variationCode: code },
+        { $set: tagWithVtuProvider(update) },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
       synced += 1;
     }
   }
 
-  return { synced, providers, source };
+  return { synced, providers, source: 'vtpass' };
 };
 
 const syncProviderDataPlans = async (req, res, next) => {
   try {
-    const providerId = normalizeProvider(req.params.providerId);
     const network = String(req.query.network || '').toLowerCase();
-    const result = await syncDataPlansForProvider(providerId, network || null);
+    const result = await syncDataPlansForProvider(network || null);
     await bumpCatalogVersion();
     res.json({ success: true, data: result });
   } catch (error) {
     if (error.statusCode) {
       return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    if (error.isVtpassError) {
+      return res.status(error.statusCode || 502).json({
+        success: false,
+        message: error.message,
+      });
     }
     next(error);
   }
@@ -238,14 +209,19 @@ const syncProviderDataPlans = async (req, res, next) => {
 
 const syncProviderTvPlans = async (req, res, next) => {
   try {
-    const providerId = normalizeProvider(req.params.providerId);
     const provider = String(req.query.provider || '').toLowerCase();
-    const result = await syncTvPlansForProvider(providerId, provider || null);
+    const result = await syncTvPlansForProvider(provider || null);
     await bumpCatalogVersion();
     res.json({ success: true, data: result });
   } catch (error) {
     if (error.statusCode) {
       return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    if (error.isVtpassError) {
+      return res.status(error.statusCode || 502).json({
+        success: false,
+        message: error.message,
+      });
     }
     next(error);
   }
@@ -253,20 +229,16 @@ const syncProviderTvPlans = async (req, res, next) => {
 
 const syncAllDataProviders = async (_req, res, next) => {
   try {
-    const results = {};
-    for (const providerId of ['clubkonnect', 'vtpass']) {
-      if (!routing.isProviderConfigured(providerId)) {
-        results[providerId] = { skipped: true, reason: 'not configured' };
-        continue;
-      }
-      if (!routing.isDataProviderEnabled(providerId, await routing.loadSettings())) {
-        results[providerId] = { skipped: true, reason: 'data provider disabled' };
-        continue;
-      }
-      results[providerId] = await syncDataPlansForProvider(providerId);
+    if (!routing.isProviderConfigured()) {
+      return res.status(400).json({ success: false, message: 'VTpass is not configured' });
     }
+    const settings = await routing.loadSettings();
+    if (!routing.isDataProviderEnabled('vtpass', settings)) {
+      return res.status(400).json({ success: false, message: 'VTpass data provider is disabled' });
+    }
+    const result = await syncDataPlansForProvider();
     await bumpCatalogVersion();
-    res.json({ success: true, data: results });
+    res.json({ success: true, data: { vtpass: result } });
   } catch (error) {
     next(error);
   }

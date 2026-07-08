@@ -60,10 +60,6 @@ const TvPlansPage = () => {
 
   const handleSave = async () => {
     const payload = { ...form, amount: Number(form.amount), order: Number(form.order) };
-    if (showBoth && form.altVariationCode) {
-      if (selected === 'vtpass') payload.clubkonnectVariationCode = form.altVariationCode;
-      else payload.vtpassVariationCode = form.altVariationCode;
-    }
     delete payload.altVariationCode;
     try {
       if (modal === 'create') await tvPlansApi.create(payload);

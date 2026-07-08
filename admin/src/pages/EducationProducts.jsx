@@ -71,10 +71,6 @@ const EducationProductsPage = () => {
       amount: Number(form.amount),
       order: Number(form.order || 0),
     };
-    if (showBoth && form.altServiceId) {
-      if (selected === 'vtpass') payload.clubkonnectServiceId = form.altServiceId;
-      else payload.vtpassServiceId = form.altServiceId;
-    }
     delete payload.altServiceId;
     try {
       if (modal === 'create') await educationProductsApi.create(payload);

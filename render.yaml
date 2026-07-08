@@ -37,10 +37,6 @@ services:
         sync: false
       - key: PAYSTACK_SECRET_KEY
         sync: false
-      - key: CLUBKONNECT_USER_ID
-        sync: false
-      - key: CLUBKONNECT_API_KEY
-        sync: false
       - key: VTPASS_API_KEY
         sync: false
       - key: VTPASS_PUBLIC_KEY
@@ -60,11 +56,9 @@ services:
       - key: FIREBASE_PRIVATE_KEY
         sync: false
 
-      # Paystack / Clubkonnect
+      # Paystack / VTpass
       - key: PAYSTACK_ENV
         value: live
-      - key: CLUBKONNECT_BASE_URL
-        value: https://www.clubkonnect.com
       - key: VTPASS_ENV
         value: live
 

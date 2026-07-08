@@ -27,10 +27,8 @@ const legalRoutes = require('./src/routes/legalRoutes');
 const seedAdmin = require('./src/utils/seedAdmin');
 const serviceConfig = require('./src/config/serviceConfig');
 const { initializeFcm } = require('./src/services/fcmService');
-const { verifyClubkonnectConnectivity } = require('./src/services/clubkonnectService');
 const { verifyVtpassConnectivity } = require('./src/services/vtpassService');
 const { syncBettingPlatforms } = require('./src/services/bettingPlatformService');
-const { startClubkonnectReconciliationWorker } = require('./src/services/clubkonnectReconciliationWorker');
 const { startVtpassReconciliationWorker } = require('./src/services/vtpassReconciliationWorker');
 const SystemSettings = require('./src/models/SystemSettings');
 const { persistProviderHealth } = require('./src/utils/providerHealth');
@@ -106,9 +104,6 @@ const startServer = async () => {
   await connectDB();
   await seedAdmin();
 
-  // Validate Firebase credentials at startup so problems surface immediately in
-  // the logs. Push notifications are non-critical, so a failure here is logged
-  // clearly but does NOT crash the server or block payments/VTU.
   const fcmStatus = initializeFcm();
   if (!fcmStatus.configured) {
     console.warn('[FCM] Push notifications OFF — Firebase credentials not configured.');
@@ -118,29 +113,14 @@ const startServer = async () => {
     console.error(`[FCM] Push notifications DISABLED — invalid Firebase credentials: ${fcmStatus.reason || 'initialization failed'}. The API will keep running; fix FIREBASE_PRIVATE_KEY to re-enable push.`);
   }
 
-  const clubkonnectStatus = await verifyClubkonnectConnectivity();
-  if (!clubkonnectStatus.configured) {
-    console.warn('[Clubkonnect] Credentials not configured.');
-  } else if (clubkonnectStatus.ok) {
-    console.log(`[Clubkonnect] Connected — ${clubkonnectStatus.baseUrl}.`);
-    if (clubkonnectStatus.balance != null) {
-      console.log(`[Clubkonnect] Wallet balance: ${clubkonnectStatus.balance}`);
-    }
-  } else {
-    console.error(`[Clubkonnect] Connection issue — ${clubkonnectStatus.reason}`);
-    if (clubkonnectStatus.serverIp) {
-      console.error(`[Clubkonnect] Whitelist this outbound IP: ${clubkonnectStatus.serverIp}`);
-    }
-  }
-  if (clubkonnectStatus.configured) {
-    await persistProviderHealth('clubkonnect', clubkonnectStatus);
-  }
-
   const vtpassStatus = await verifyVtpassConnectivity();
   if (!vtpassStatus.configured) {
     console.warn('[VTpass] Credentials not configured.');
   } else if (vtpassStatus.ok) {
     console.log(`[VTpass] Connected — ${vtpassStatus.baseUrl} (${vtpassStatus.mode}).`);
+    if (vtpassStatus.balance != null) {
+      console.log(`[VTpass] Wallet balance: ${vtpassStatus.balance}`);
+    }
   } else {
     console.error(`[VTpass] Connection issue — ${vtpassStatus.reason}`);
     if (vtpassStatus.serverIp) {
@@ -154,22 +134,13 @@ const startServer = async () => {
   const settings = await SystemSettings.getSettings();
   const vtuProvider = require('./src/services/vtuProviderService');
   const effectiveProvider = await vtuProvider.getActiveProviderName();
-  console.log(`[VTU] Preferred provider: ${settings.vtuProvider}, effective: ${effectiveProvider}`);
-  if (settings.vtuProvider === 'clubkonnect' && !serviceConfig.clubkonnect.configured) {
-    console.warn('[VTU] Clubkonnect is not configured — add CLUBKONNECT_USER_ID and CLUBKONNECT_API_KEY on Render, or switch to VTpass in Admin → Settings.');
-  }
+  console.log(`[VTU] Provider: ${settings.vtuProvider}, effective: ${effectiveProvider}`);
 
-  if (serviceConfig.clubkonnect.configured || serviceConfig.vtpass.configured) {
+  if (serviceConfig.vtpass.configured) {
     const bettingSync = await syncBettingPlatforms();
     if (bettingSync.synced > 0) {
-      console.log(`[Betting] Synced ${bettingSync.synced} platform(s) from ${bettingSync.source || settings.vtuProvider}.`);
+      console.log(`[Betting] Synced ${bettingSync.synced} platform(s) from VTpass.`);
     }
-  }
-
-  if (serviceConfig.clubkonnect.configured) {
-    startClubkonnectReconciliationWorker();
-  }
-  if (serviceConfig.vtpass.configured) {
     startVtpassReconciliationWorker();
   }
 

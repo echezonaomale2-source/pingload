@@ -569,15 +569,12 @@ const adminEducationPurchases = async (req, res, next) => {
   }
 };
 
-const adminSyncDataPlansFromClubkonnect = async (req, res, next) => {
+const adminSyncDataPlansFromVtpass = async (req, res, next) => {
   try {
-    const source = normalizeProvider(
-      req.query.source || req.body?.source || await vtuProvider.getSelectedProviderName()
-    );
-    if (!vtuProvider.isProviderConfigured(source)) {
+    if (!vtuProvider.isProviderConfigured()) {
       return res.status(400).json({
         success: false,
-        message: `${source === 'vtpass' ? 'VTpass' : 'Clubkonnect'} is not configured on the server`,
+        message: 'VTpass is not configured on the server',
       });
     }
     const requestedNetwork = String(req.query.network || '').toLowerCase();
@@ -587,14 +584,14 @@ const adminSyncDataPlansFromClubkonnect = async (req, res, next) => {
     let synced = 0;
 
     for (const network of networks) {
-      const result = await vtuProvider.getDataPlans(network, source);
+      const result = await vtuProvider.getDataPlans(network);
       const variations = result.content?.variations || [];
 
       for (const plan of variations) {
         if (!plan.variation_code) continue;
-        const update = buildDataPlanSyncUpdate(source, network, plan);
+        const update = buildDataPlanSyncUpdate('vtpass', network, plan);
         await DataPlan.findOneAndUpdate(
-          { vtuProvider: source, providerPlanCode: plan.variation_code },
+          { vtuProvider: 'vtpass', providerPlanCode: plan.variation_code },
           { $set: update },
           { upsert: true, new: true, setDefaultsOnInsert: true }
         );
@@ -603,21 +600,18 @@ const adminSyncDataPlansFromClubkonnect = async (req, res, next) => {
     }
 
     await bumpCatalogVersion();
-    res.json({ success: true, data: { synced, networks, source } });
+    res.json({ success: true, data: { synced, networks, source: 'vtpass' } });
   } catch (error) {
     next(error);
   }
 };
 
-const adminSyncTvPlansFromClubkonnect = async (req, res, next) => {
+const adminSyncTvPlansFromVtpass = async (req, res, next) => {
   try {
-    const source = normalizeProvider(
-      req.query.source || req.body?.source || await vtuProvider.getSelectedProviderName()
-    );
-    if (!vtuProvider.isProviderConfigured(source)) {
+    if (!vtuProvider.isProviderConfigured()) {
       return res.status(400).json({
         success: false,
-        message: `${source === 'vtpass' ? 'VTpass' : 'Clubkonnect'} is not configured on the server`,
+        message: 'VTpass is not configured on the server',
       });
     }
     const requestedProvider = String(req.query.provider || '').toLowerCase();
@@ -627,27 +621,26 @@ const adminSyncTvPlansFromClubkonnect = async (req, res, next) => {
     let synced = 0;
 
     for (const provider of providers) {
-      const result = await vtuProvider.getTVPackages(provider, source);
+      const result = await vtuProvider.getTVPackages(provider);
       const variations = result.content?.variations || [];
 
       for (const pkg of variations) {
         if (!pkg.variation_code) continue;
         const code = pkg.variation_code;
         const planName = pkg.name || code;
-        const common = {
+        const update = {
           provider,
           name: planName,
           amount: parseFloat(pkg.variation_amount) || 0,
           enabled: true,
-          vtuProvider: source,
+          vtuProvider: 'vtpass',
+          variationCode: code,
+          vtpassVariationCode: code,
         };
-        const update = source === 'vtpass'
-          ? { ...common, variationCode: code, vtpassVariationCode: code }
-          : { ...common, variationCode: code, vtpassVariationCode: '' };
 
         await TvPlan.findOneAndUpdate(
-          { provider, vtuProvider: source, variationCode: code },
-          { $set: tagWithVtuProvider(update, source) },
+          { provider, vtuProvider: 'vtpass', variationCode: code },
+          { $set: tagWithVtuProvider(update) },
           { upsert: true, new: true, setDefaultsOnInsert: true }
         );
         synced += 1;
@@ -655,7 +648,7 @@ const adminSyncTvPlansFromClubkonnect = async (req, res, next) => {
     }
 
     await bumpCatalogVersion();
-    res.json({ success: true, data: { synced, providers, source } });
+    res.json({ success: true, data: { synced, providers, source: 'vtpass' } });
   } catch (error) {
     next(error);
   }
@@ -693,6 +686,6 @@ module.exports = {
   adminUpdateEducationProduct,
   adminDeleteEducationProduct,
   adminEducationPurchases,
-  adminSyncDataPlansFromClubkonnect,
-  adminSyncTvPlansFromClubkonnect,
+  adminSyncDataPlansFromVtpass,
+  adminSyncTvPlansFromVtpass,
 };

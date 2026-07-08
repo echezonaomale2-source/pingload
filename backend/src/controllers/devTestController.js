@@ -43,26 +43,20 @@ const getSampleRequests = (_req, res) => {
           { number: '5060666666666666666', cvv: '123', expiry: '12/30', note: 'Declined card for failure testing' },
         ],
       },
-      clubkonnect: {
+      vtpass: {
         headers: { Authorization: 'Bearer <JWT_TOKEN>' },
+        note: 'Configure VTPASS_API_KEY, VTPASS_PUBLIC_KEY, and VTPASS_SECRET_KEY.',
         airtime: { method: 'POST', url: `${baseUrl}/vtu/airtime`, body: { network: 'mtn', phone: '08012345678', amount: 100, pin: '1234' } },
         dataPlans: { method: 'GET', url: `${baseUrl}/vtu/data-plans/mtn` },
-        data: { method: 'POST', url: `${baseUrl}/vtu/data`, body: { network: 'mtn', phone: '08012345678', variationCode: '1000.01', amount: 500, pin: '1234' } },
+        data: { method: 'POST', url: `${baseUrl}/vtu/data`, body: { network: 'mtn', phone: '08012345678', variationCode: 'mtn-1gb', amount: 500, pin: '1234' } },
         electricityVerify: { method: 'POST', url: `${baseUrl}/vtu/electricity/verify`, body: { provider: 'ikeja', meterNumber: '12345678901', meterType: 'prepaid' } },
         electricity: { method: 'POST', url: `${baseUrl}/vtu/electricity`, body: { provider: 'ikeja', meterNumber: '12345678901', meterType: 'prepaid', amount: 2000, phone: '08012345678', pin: '1234' } },
         tvPackages: { method: 'GET', url: `${baseUrl}/vtu/tv-packages/dstv` },
         tvVerify: { method: 'POST', url: `${baseUrl}/vtu/tv/verify`, body: { provider: 'dstv', smartcardNumber: '1234567890' } },
-        tv: { method: 'POST', url: `${baseUrl}/vtu/tv`, body: { provider: 'dstv', smartcardNumber: '1234567890', variationCode: 'Compact', amount: 2950, phone: '08012345678', pin: '1234' } },
-        note: 'Configure CLUBKONNECT_USER_ID and CLUBKONNECT_API_KEY. Switch active provider in Admin → Settings.',
-      },
-      vtpass: {
-        headers: { Authorization: 'Bearer <JWT_TOKEN>' },
-        note: 'Set active provider to VTpass in Admin → Settings. Configure VTPASS_* env vars.',
-        airtime: { method: 'POST', url: `${baseUrl}/vtu/airtime`, body: { network: 'mtn', phone: '08012345678', amount: 100, pin: '1234' } },
-        data: { method: 'POST', url: `${baseUrl}/vtu/data`, body: { network: 'mtn', phone: '08012345678', variationCode: 'mtn-1gb', amount: 500, pin: '1234' } },
+        tv: { method: 'POST', url: `${baseUrl}/vtu/tv`, body: { provider: 'dstv', smartcardNumber: '1234567890', variationCode: 'dstv3', amount: 2950, phone: '08012345678', pin: '1234' } },
       },
       admin: {
-        switchProvider: { method: 'PATCH', url: `${baseUrl}/admin/settings`, body: { vtuProvider: 'clubkonnect' }, note: 'Use clubkonnect or vtpass' },
+        syncDataPlans: { method: 'POST', url: `${baseUrl}/admin/providers/vtpass/sync/data`, note: 'Requires admin JWT' },
       },
       pin: {
         createPin: { method: 'POST', url: `${baseUrl}/pin/create`, body: { pin: '1234' } },

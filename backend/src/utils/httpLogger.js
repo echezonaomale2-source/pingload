@@ -1,4 +1,4 @@
-const { logPaystack, logClubkonnect, logVtpass } = require('./logger');
+const { logPaystack, logVtpass } = require('./logger');
 
 const attachPaystackLogger = (client) => {
   client.interceptors.request.use((config) => {
@@ -17,34 +17,6 @@ const attachPaystackLogger = (client) => {
     },
     (error) => {
       logPaystack('error', error.config?.url || 'request failed', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
-      });
-      return Promise.reject(error);
-    }
-  );
-
-  return client;
-};
-
-const attachClubkonnectLogger = (client) => {
-  client.interceptors.request.use((config) => {
-    logClubkonnect('request', `${(config.method || 'GET').toUpperCase()} ${config.url}`, {
-      params: config.params,
-    });
-    return config;
-  });
-
-  client.interceptors.response.use(
-    (response) => {
-      logClubkonnect('response', `${response.status} ${response.config.url}`, {
-        data: response.data,
-      });
-      return response;
-    },
-    (error) => {
-      logClubkonnect('error', error.config?.url || 'request failed', {
         status: error.response?.status,
         data: error.response?.data,
         message: error.message,
@@ -84,4 +56,4 @@ const attachVtpassLogger = (client) => {
   return client;
 };
 
-module.exports = { attachPaystackLogger, attachClubkonnectLogger, attachVtpassLogger };
+module.exports = { attachPaystackLogger, attachVtpassLogger };

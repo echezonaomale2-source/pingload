@@ -24,17 +24,11 @@ const vtuProviderConfigSchema = new mongoose.Schema(
 );
 
 vtuProviderConfigSchema.statics.ensureDefaults = async function ensureDefaults() {
-  const defaults = [
-    { providerId: 'clubkonnect', displayName: 'Clubkonnect', enabled: true },
-    { providerId: 'vtpass', displayName: 'VTpass', enabled: true },
-  ];
-  for (const item of defaults) {
-    await this.findOneAndUpdate(
-      { providerId: item.providerId },
-      { $setOnInsert: item },
-      { upsert: true, new: true }
-    );
-  }
+  await this.findOneAndUpdate(
+    { providerId: 'vtpass' },
+    { $setOnInsert: { providerId: 'vtpass', displayName: 'VTpass', enabled: true } },
+    { upsert: true, new: true }
+  );
 };
 
 module.exports = mongoose.model('VtuProviderConfig', vtuProviderConfigSchema);

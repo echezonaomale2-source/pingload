@@ -9,7 +9,11 @@ const { processRefund, buildRefundReason } = require('./refundService');
 const { createDebitWithAtomicWallet } = require('./walletTransactionService');
 const generateReference = require('../utils/generateReference');
 const applyServicePricing = require('../utils/applyServicePricing');
-const { logWallet, logClubkonnect, logVtpass, logApiFailure } = require('../utils/logger');
+const { logWallet, logVtpass, logApiFailure } = require('../utils/logger');
+
+const logProviderError = (providerName, level, message, meta = {}) => {
+  logVtpass(level, message, { ...meta, routedProvider: providerName });
+};
 
 const formatTransactionPayload = (transaction, extra = {}) => ({
   reference: transaction.reference,
@@ -23,11 +27,6 @@ const formatTransactionPayload = (transaction, extra = {}) => ({
   refundReason: transaction.metadata?.refundReason || null,
   ...extra,
 });
-
-const logProviderError = (providerName, level, message, meta = {}) => {
-  if (providerName === 'vtpass') logVtpass(level, message, meta);
-  else logClubkonnect(level, message, meta);
-};
 
 const buildPurchaseFailureMessage = (description, metadata = {}) => {
   const label = description.split(':')[0];
@@ -157,7 +156,7 @@ const finalizeTransaction = async (transaction, success, metadata = {}) => {
       refundReference: refundResult?.refundTransaction?.reference,
       failureReason: buildRefundReason(metadata),
     });
-    logProviderError(metadata.vtuProvider || 'clubkonnect', 'error', 'VTU provider rejected purchase', {
+    logProviderError(metadata.vtuProvider || 'vtpass', 'error', 'VTU provider rejected purchase', {
       reference: transaction.reference,
       service: transaction.service,
       response: metadata.providerResponse || metadata.vtpassResponse,

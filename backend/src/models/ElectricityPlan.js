@@ -19,7 +19,7 @@ const electricityPlanSchema = new mongoose.Schema(
     vtuProvider: {
       type: String,
       enum: ['clubkonnect', 'vtpass'],
-      default: 'clubkonnect',
+      default: 'vtpass',
       index: true,
     },
   },

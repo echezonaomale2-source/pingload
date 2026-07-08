@@ -28,11 +28,6 @@ const logPaystack = (level, message, meta = {}) => {
   console.log(JSON.stringify({ ts: timestamp(), provider: 'paystack', level, message, ...sanitize(meta) }));
 };
 
-const logClubkonnect = (level, message, meta = {}) => {
-  if (!shouldLog()) return;
-  console.log(JSON.stringify({ ts: timestamp(), provider: 'clubkonnect', level, message, ...sanitize(meta) }));
-};
-
 const logVtpass = (level, message, meta = {}) => {
   if (!shouldLog()) return;
   console.log(JSON.stringify({ ts: timestamp(), provider: 'vtpass', level, message, ...sanitize(meta) }));
@@ -64,7 +59,6 @@ const logApiFailure = (context, error, meta = {}) => {
 module.exports = {
   sanitize,
   logPaystack,
-  logClubkonnect,
   logVtpass,
   logWallet,
   logApiFailure,

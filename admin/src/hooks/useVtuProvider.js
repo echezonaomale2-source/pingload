@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { settingsApi, providersApi } from '../services/adminService';
 
-const providerLabel = (name) => (name === 'vtpass' ? 'VTpass' : 'Clubkonnect');
-
 export const useVtuProvider = () => {
   const [status, setStatus] = useState(null);
   const [providers, setProviders] = useState([]);
@@ -33,17 +31,9 @@ export const useVtuProvider = () => {
     return () => window.removeEventListener('focus', onFocus);
   }, [refresh]);
 
-  const activeProviders = (providers || [])
-    .filter((p) => p.dataEnabled && p.configured)
-    .map((p) => p.providerId);
-  const selected = status?.preferred || status?.active || 'clubkonnect';
-  const label = providerLabel(selected);
-  const otherLabel = providerLabel(selected === 'vtpass' ? 'clubkonnect' : 'vtpass');
-  const showBoth = activeProviders.length > 1;
-
-  const codeLabelForProvider = (providerId) => (
-    providerId === 'vtpass' ? 'Variation Code' : 'Plan Code'
-  );
+  const activeProviders = ['vtpass'];
+  const selected = 'vtpass';
+  const label = 'VTpass';
 
   return {
     status,
@@ -52,14 +42,14 @@ export const useVtuProvider = () => {
     serviceRouting,
     loading,
     selected,
-    active: status?.active || selected,
+    active: 'vtpass',
     label,
-    otherLabel,
-    showBoth,
-    usingFallback: Boolean(status?.usingFallback),
-    serviceIdLabel: `${label} service ID`,
-    variationCodeLabel: codeLabelForProvider(selected),
-    codeLabelForProvider,
+    otherLabel: 'VTpass',
+    showBoth: false,
+    usingFallback: false,
+    serviceIdLabel: 'VTpass service ID',
+    variationCodeLabel: 'Variation Code',
+    codeLabelForProvider: () => 'Variation Code',
     refresh,
   };
 };

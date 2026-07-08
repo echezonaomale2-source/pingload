@@ -1,4 +1,4 @@
-/** Betting platforms — patterns match VTpass listings; Clubkonnect uses code mappings. */
+/** Betting platforms — patterns match VTpass service listings. */
 module.exports = [
   {
     platformId: 'bet9ja',

@@ -45,7 +45,7 @@ ping/
 │       ├── services/
 │       │   ├── termiiService.js    # OTP via Termii
 │       │   ├── paystackService.js  # Payment gateway
-│       │   └── clubkonnectService.js  # VTU provider
+│       │   └── vtpassService.js  # VTU provider
 │       └── utils/
 │           ├── generateReference.js
 │           ├── generateReferralCode.js
@@ -106,7 +106,7 @@ ping/
 | Database | MongoDB Atlas, Mongoose |
 | OTP | Termii Verify |
 | Payments | Paystack |
-| VTU | Clubkonnect |
+| VTU | VTpass |
 | Hosting | Render |
 
 ## Prerequisites
@@ -116,7 +116,7 @@ ping/
 - MongoDB Atlas account
 - Expo CLI (`npm install -g expo-cli`)
 - Android Studio / Xcode (for device builds)
-- API keys: Termii, Paystack, Clubkonnect
+- API keys: Termii, Paystack, VTpass
 
 ## Setup Instructions
 
@@ -155,9 +155,11 @@ TERMII_SENDER_ID=Pingload
 PAYSTACK_SECRET_KEY=sk_test_xxx
 PAYSTACK_PUBLIC_KEY=pk_test_xxx
 
-# Clubkonnect
-CLUBKONNECT_USER_ID=your-clubkonnect-user-id
-CLUBKONNECT_API_KEY=your-clubkonnect-api-key
+# VTpass
+VTPASS_ENV=live
+VTPASS_API_KEY=your-vtpass-api-key
+VTPASS_PUBLIC_KEY=your-vtpass-public-key
+VTPASS_SECRET_KEY=your-vtpass-secret-key
 
 # App
 FRONTEND_URL=http://localhost:8081

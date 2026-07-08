@@ -1,10 +1,9 @@
-const VTU_PROVIDERS = ['clubkonnect', 'vtpass'];
+const VTU_PROVIDERS = ['vtpass'];
 
 const VTU_SERVICES = ['airtime', 'data', 'electricity', 'tv', 'betting', 'education'];
 const NON_DATA_SERVICES = ['airtime', 'electricity', 'tv', 'betting', 'education'];
 
 const PROVIDER_LABELS = {
-  clubkonnect: 'Clubkonnect',
   vtpass: 'VTpass',
 };
 
@@ -17,7 +16,7 @@ const SERVICE_LABELS = {
   education: 'Exam Pins',
 };
 
-const defaultServiceRouting = (provider = 'clubkonnect') => VTU_SERVICES.reduce((acc, service) => {
+const defaultServiceRouting = (provider = 'vtpass') => VTU_SERVICES.reduce((acc, service) => {
   acc[service] = provider;
   return acc;
 }, {});

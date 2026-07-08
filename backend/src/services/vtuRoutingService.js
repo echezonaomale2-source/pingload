@@ -19,108 +19,67 @@ const loadSettings = async () => {
   return settingsCache;
 };
 
-const isProviderConfigured = (name) => (
-  name === 'vtpass' ? serviceConfig.vtpass.configured : serviceConfig.clubkonnect.configured
-);
+const isProviderConfigured = () => serviceConfig.vtpass.configured;
 
-const isDataProviderEnabled = (name, settings) => {
-  const normalized = normalizeProvider(name);
+const isDataProviderEnabled = (_name, settings) => {
   if (settings?.dataProviderEnabled) {
-    return settings.dataProviderEnabled[normalized] !== false;
+    return settings.dataProviderEnabled.vtpass !== false;
   }
   if (settings?.providerEnabled) {
-    return settings.providerEnabled[normalized] !== false;
+    return settings.providerEnabled.vtpass !== false;
   }
   return true;
 };
 
-const getAlternateProvider = (name) => (
-  normalizeProvider(name) === 'vtpass' ? 'clubkonnect' : 'vtpass'
-);
+const getRoutedProviderName = async () => 'vtpass';
 
-const resolveUsableProvider = (preferred, settings) => {
-  const choice = normalizeProvider(preferred);
-  if (isProviderConfigured(choice)) return choice;
-  const fallback = getAlternateProvider(choice);
-  if (isProviderConfigured(fallback)) return fallback;
-  return choice;
-};
-
-/** Preferred provider for non-data services (airtime, electricity, tv, betting, education). */
-const getRoutedProviderName = async (serviceId) => {
-  const settings = await loadSettings();
-  const routed = normalizeProvider(settings.serviceRouting?.[serviceId] || settings.vtuProvider);
-  return resolveUsableProvider(routed, settings);
-};
-
-/** Data is the only service that supports multiple active providers. */
 const getDataCatalogProviders = async () => {
+  if (!isProviderConfigured()) return [];
   const settings = await loadSettings();
-  const enabled = VTU_PROVIDERS.filter(
-    (name) => isDataProviderEnabled(name, settings) && isProviderConfigured(name)
-  );
-  if (enabled.length > 0) return enabled;
-  const fallback = resolveUsableProvider(settings.serviceRouting?.data || settings.vtuProvider, settings);
-  return [fallback];
+  if (!isDataProviderEnabled('vtpass', settings)) return [];
+  return ['vtpass'];
 };
 
-/** Catalog providers for a service — multi only for data. */
-const getCatalogProviders = async (serviceId) => {
-  if (serviceId === 'data') return getDataCatalogProviders();
-  return [await getRoutedProviderName(serviceId)];
-};
+const getCatalogProviders = async () => ['vtpass'];
 
-const getActiveProviderName = async () => getRoutedProviderName('data');
+const getActiveProviderName = async () => 'vtpass';
 
-const getSelectedProviderName = async () => {
-  const settings = await loadSettings();
-  return normalizeProvider(settings.serviceRouting?.data || settings.vtuProvider);
-};
+const getSelectedProviderName = async () => 'vtpass';
 
-const getFailoverEnabled = async () => {
-  const settings = await loadSettings();
-  return Boolean(settings.enableProviderFailover);
-};
+const getFailoverEnabled = async () => false;
 
 const getRoutingSnapshot = async () => {
   const settings = await loadSettings();
   await VtuProviderConfig.ensureDefaults();
-  const configs = await VtuProviderConfig.find().lean();
+  const config = await VtuProviderConfig.findOne({ providerId: 'vtpass' }).lean();
 
-  const providers = VTU_PROVIDERS.map((providerId) => {
-    const config = configs.find((c) => c.providerId === providerId) || {};
-    return {
-      providerId,
-      displayName: config.displayName || (providerId === 'vtpass' ? 'VTpass' : 'Clubkonnect'),
-      dataEnabled: isDataProviderEnabled(providerId, settings),
-      configured: isProviderConfigured(providerId),
-      credentialsSource: 'environment',
-      lastSyncAt: config.lastSyncAt || null,
-      lastHealthCheckAt: config.lastHealthCheckAt || null,
-      healthStatus: config.healthStatus || 'unknown',
-      lastHealthMessage: config.lastHealthMessage || '',
-      ...(providerId === 'vtpass'
-        ? { mode: serviceConfig.vtpass.mode, baseUrl: serviceConfig.vtpass.baseUrl }
-        : { baseUrl: serviceConfig.clubkonnect.baseUrl }),
-    };
-  });
+  const providers = [{
+    providerId: 'vtpass',
+    displayName: config?.displayName || 'VTpass',
+    dataEnabled: isDataProviderEnabled('vtpass', settings),
+    configured: isProviderConfigured(),
+    credentialsSource: 'environment',
+    lastSyncAt: config?.lastSyncAt || null,
+    lastHealthCheckAt: config?.lastHealthCheckAt || null,
+    healthStatus: config?.healthStatus || 'unknown',
+    lastHealthMessage: config?.lastHealthMessage || '',
+    mode: serviceConfig.vtpass.mode,
+    baseUrl: serviceConfig.vtpass.baseUrl,
+  }];
 
   const serviceRouting = NON_DATA_SERVICES.reduce((acc, service) => {
-    acc[service] = normalizeProvider(settings.serviceRouting?.[service] || settings.vtuProvider);
+    acc[service] = 'vtpass';
     return acc;
   }, {});
 
   return {
     providers,
-    dataProviderEnabled: {
-      clubkonnect: isDataProviderEnabled('clubkonnect', settings),
-      vtpass: isDataProviderEnabled('vtpass', settings),
-    },
+    dataProviderEnabled: { vtpass: isDataProviderEnabled('vtpass', settings) },
     serviceRouting,
     preferredServiceLabels: PREFERRED_SERVICE_LABELS,
-    enableProviderFailover: Boolean(settings.enableProviderFailover),
+    enableProviderFailover: false,
     catalogVersion: settings.catalogVersion || 1,
-    vtuProvider: normalizeProvider(settings.vtuProvider),
+    vtuProvider: 'vtpass',
   };
 };
 
@@ -131,7 +90,6 @@ module.exports = {
   invalidateRoutingCache,
   isProviderConfigured,
   isDataProviderEnabled,
-  getAlternateProvider,
   getRoutedProviderName,
   getDataCatalogProviders,
   getCatalogProviders,
@@ -140,5 +98,4 @@ module.exports = {
   getFailoverEnabled,
   getRoutingSnapshot,
   loadSettings,
-  resolveUsableProvider,
 };

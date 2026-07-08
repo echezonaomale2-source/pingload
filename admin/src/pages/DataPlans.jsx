@@ -11,7 +11,7 @@ const VALIDITY_CATEGORIES = ['daily', 'weekly', 'monthly', 'yearly', 'other'];
 const emptyForm = {
   network: 'mtn', name: '', dataSize: '', validity: '', validityCategory: 'other', category: '',
   variationCode: '', altVariationCode: '', amount: '', commissionPercent: 0, enabled: true, order: 0,
-  vtuProvider: 'clubkonnect',
+  vtuProvider: 'vtpass',
 };
 
 const DataPlansPage = () => {
@@ -149,7 +149,7 @@ const DataPlansPage = () => {
   };
 
   const columns = [
-    { key: 'vtuProvider', label: 'Provider', render: (r) => <span className="font-semibold">{r.vtuProvider === 'vtpass' ? 'VTpass' : 'Clubkonnect'}</span> },
+    { key: 'vtuProvider', label: 'Provider', render: () => <span className="font-semibold">VTpass</span> },
     { key: 'network', label: 'Network', render: (r) => <span className="uppercase font-bold">{r.network}</span> },
     { key: 'name', label: 'Plan' },
     { key: 'dataSize', label: 'Data' },
@@ -210,7 +210,7 @@ const DataPlansPage = () => {
 
       <div className="mb-4 flex flex-wrap gap-2">
         <button type="button" onClick={() => setProviderFilter('')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${!providerFilter ? 'bg-secondary text-white' : 'bg-slate-100'}`}>All Providers</button>
-        {(activeProviders.length ? activeProviders : ['clubkonnect', 'vtpass']).map((p) => (
+        {['vtpass'].map((p) => (
           <button key={p} type="button" onClick={() => setProviderFilter(p)} className={`rounded-lg px-3 py-1.5 text-xs font-bold capitalize ${providerFilter === p ? 'bg-secondary text-white' : 'bg-slate-100'}`}>{p}</button>
         ))}
       </div>
@@ -247,14 +247,14 @@ const DataPlansPage = () => {
         <div className="space-y-2">
           {modal !== 'create' && (
             <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              Provider: <strong>{form.vtuProvider === 'vtpass' ? 'VTpass' : 'Clubkonnect'}</strong>
+              Provider: <strong>VTpass</strong>
               {' · '}Plan code: <strong className="font-mono">{form.variationCode}</strong>
             </div>
           )}
           {modal === 'create' && (
             <select value={form.vtuProvider} onChange={(e) => setForm({ ...form, vtuProvider: e.target.value, variationCode: '' })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-              {(activeProviders.length ? activeProviders : ['clubkonnect', 'vtpass']).map((p) => (
-                <option key={p} value={p}>{p === 'vtpass' ? 'VTpass' : 'Clubkonnect'}</option>
+              {['vtpass'].map((p) => (
+                <option key={p} value={p}>VTpass</option>
               ))}
             </select>
           )}

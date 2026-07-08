@@ -29,10 +29,12 @@ if (serviceConfig.isProduction) {
     'CORS_ORIGIN',
     'FRONTEND_URL',
     'API_PUBLIC_URL',
+    'VTPASS_API_KEY',
+    'VTPASS_SECRET_KEY',
   ].forEach(requireEnv);
 
-  if (!serviceConfig.clubkonnect.configured && !serviceConfig.vtpass.configured) {
-    throw new Error('Configure CLUBKONNECT_* or VTPASS_* credentials when NODE_ENV=production');
+  if (!serviceConfig.vtpass.configured) {
+    throw new Error('Configure VTPASS_* credentials when NODE_ENV=production');
   }
 
   if (serviceConfig.serviceMode !== 'production' && serviceConfig.serviceMode !== 'live') {
@@ -58,19 +60,12 @@ if (serviceConfig.isProduction) {
   ['PAYSTACK_SECRET_KEY', 'PAYSTACK_PUBLIC_KEY', 'TERMII_API_KEY'].forEach((key) => {
     rejectPlaceholder(key, ['<your-', 'xxx', 'dev-placeholder']);
   });
-  if (serviceConfig.clubkonnect.configured) {
-    ['CLUBKONNECT_USER_ID', 'CLUBKONNECT_API_KEY'].forEach((key) => {
-      rejectPlaceholder(key, ['<your-', 'xxx', 'dev-placeholder']);
-    });
-  }
-  if (serviceConfig.vtpass.configured) {
-    ['VTPASS_API_KEY', 'VTPASS_SECRET_KEY'].forEach((key) => {
-      rejectPlaceholder(key, ['<your-', 'xxx', 'dev-placeholder']);
-    });
-  }
+  ['VTPASS_API_KEY', 'VTPASS_SECRET_KEY', 'VTPASS_PUBLIC_KEY'].forEach((key) => {
+    rejectPlaceholder(key, ['<your-', 'xxx', 'dev-placeholder']);
+  });
 } else if (serviceConfig.isDevelopment) {
-  if (!serviceConfig.clubkonnect.configured && !serviceConfig.vtpass.configured) {
-    console.warn('Warning: No VTU provider credentials configured — VTU purchases will be limited');
+  if (!serviceConfig.vtpass.configured) {
+    console.warn('Warning: VTpass credentials not configured — VTU purchases will be limited');
   }
   if (!process.env.PAYSTACK_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY.includes('<your-')) {
     console.warn('Warning: PAYSTACK_SECRET_KEY is not set — wallet funding will be limited');
@@ -102,7 +97,7 @@ module.exports = {
     otpChannel: process.env.TERMII_OTP_CHANNEL || 'auto',
   },
   paystack: serviceConfig.paystack,
-  clubkonnect: serviceConfig.clubkonnect,
+  vtpass: serviceConfig.vtpass,
   apiPublicUrl: process.env.API_PUBLIC_URL || '',
   frontendUrl: process.env.FRONTEND_URL || (serviceConfig.isProduction ? '' : 'http://localhost:8081'),
   corsOrigins: parseCorsOrigins(),
