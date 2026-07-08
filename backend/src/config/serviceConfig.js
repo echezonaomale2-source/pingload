@@ -67,14 +67,14 @@ const serviceConfig = {
     env: vtpassEnv,
     mode: vtpassIsSandbox ? 'sandbox' : 'live',
     baseUrl: VTPASS_BASE_URL,
-    apiKey: process.env.VTPASS_API_KEY || '',
-    publicKey: process.env.VTPASS_PUBLIC_KEY || '',
-    secretKey: process.env.VTPASS_SECRET_KEY || '',
+    apiKey: (process.env.VTPASS_API_KEY || '').trim(),
+    publicKey: (process.env.VTPASS_PUBLIC_KEY || '').trim(),
+    secretKey: (process.env.VTPASS_SECRET_KEY || '').trim(),
     isSandbox: vtpassIsSandbox,
     configured: Boolean(
-      process.env.VTPASS_API_KEY
-      && process.env.VTPASS_SECRET_KEY
-      && process.env.VTPASS_PUBLIC_KEY
+      (process.env.VTPASS_API_KEY || '').trim()
+      && (process.env.VTPASS_SECRET_KEY || '').trim()
+      && (process.env.VTPASS_PUBLIC_KEY || '').trim()
     ),
   },
 

@@ -19,29 +19,32 @@ const VTPASS_ERROR_MESSAGES = {
   '040': 'Transaction could not be processed',
 };
 
-const vtpassHeaders = {
+const vtpassHeaders = () => ({
   'Content-Type': 'application/json',
   'api-key': serviceConfig.vtpass.apiKey,
-};
+});
 
-// VTpass: GET uses public-key; POST uses secret-key (see vtpass.com/documentation/authentication)
-const vtpassGetClient = attachVtpassLogger(axios.create({
+// VTpass clients are created lazily so env trimming in serviceConfig is always applied.
+const createVtpassGetClient = () => attachVtpassLogger(axios.create({
   baseURL: serviceConfig.vtpass.baseUrl,
   timeout: 45000,
   headers: {
-    ...vtpassHeaders,
+    ...vtpassHeaders(),
     'public-key': serviceConfig.vtpass.publicKey,
   },
 }));
 
-const vtpassPostClient = attachVtpassLogger(axios.create({
+const createVtpassPostClient = () => attachVtpassLogger(axios.create({
   baseURL: serviceConfig.vtpass.baseUrl,
   timeout: 45000,
   headers: {
-    ...vtpassHeaders,
+    ...vtpassHeaders(),
     'secret-key': serviceConfig.vtpass.secretKey,
   },
 }));
+
+const vtpassGetClient = createVtpassGetClient();
+const vtpassPostClient = createVtpassPostClient();
 
 const generateRequestId = () => {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -434,23 +437,19 @@ const parseBalanceFromResponse = (data) => {
 
 const getWalletBalance = async () => {
   assertVtpassConfigured();
+  const client = createVtpassGetClient();
   try {
-    const response = await vtpassGetClient.get('/balance');
-    const balance = parseBalanceFromResponse(response.data);
-    if (balance != null) {
-      return { balance, raw: response.data };
-    }
-  } catch (getError) {
-    logVtpass('warn', 'VTpass balance GET with public-key failed, retrying with secret-key', {
-      message: getError.message,
-    });
-  }
-
-  try {
-    const response = await vtpassPostClient.get('/balance');
+    const response = await client.get('/balance');
     const balance = parseBalanceFromResponse(response.data);
     return { balance, raw: response.data };
   } catch (error) {
+    const data = error.response?.data;
+    logVtpass('error', 'VTpass balance request failed', {
+      message: error.message,
+      status: error.response?.status,
+      code: data?.code,
+      response: data,
+    });
     handleVtpassError(error);
   }
 };
