@@ -22,7 +22,10 @@ const normalizeDataPlanRecord = (record = {}) => {
 };
 
 const buildDataPlanSyncUpdate = (_providerName, network, remotePlan) => {
-  const code = remotePlan.variation_code;
+  const code = remotePlan?.variation_code;
+  if (!code || !String(code).trim()) {
+    return null;
+  }
   const planName = remotePlan.name || code;
   const now = new Date();
   const base = {

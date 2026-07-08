@@ -6,7 +6,7 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const mongoose = require('mongoose');
 const connectDB = require('../src/config/db');
-const { migrateDataPlanIndexes, isLegacyBlockingIndex } = require('../src/utils/migrateDataPlanIndexes');
+const { migrateDataPlanIndexes, isLegacyBlockingIndex, migrateInvalidDataPlans } = require('../src/utils/migrateDataPlanIndexes');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -21,7 +21,17 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
   if (DRY_RUN) {
     const toDrop = (await collection.indexes()).filter((idx) => isLegacyBlockingIndex(idx));
+    const invalidCount = await collection.countDocuments({
+      $or: [
+        { providerPlanCode: null },
+        { providerPlanCode: { $exists: false } },
+        { providerPlanCode: '' },
+        { vtuProvider: null },
+        { vtuProvider: { $exists: false } },
+      ],
+    });
     console.log('\nWould drop:', toDrop.map((i) => i.name).join(', ') || '(none)');
+    console.log(`Invalid dataplans to clean: ${invalidCount}`);
   } else {
     const result = await migrateDataPlanIndexes();
     console.log('\nResult:', result);

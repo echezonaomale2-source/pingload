@@ -30,21 +30,34 @@ const dataPlanSchema = new mongoose.Schema(
       type: String,
       enum: ['vtpass'],
       default: 'vtpass',
+      required: true,
       index: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, autoIndex: false }
 );
 
 dataPlanSchema.index({ vtuProvider: 1, providerPlanCode: 1 }, { unique: true });
 dataPlanSchema.index({ network: 1, vtuProvider: 1, enabled: 1 });
 
+const applyNormalizedFields = (doc) => {
+  const normalized = normalizeDataPlanRecord(doc.toObject ? doc.toObject() : doc);
+  Object.assign(doc, normalized);
+};
+
 dataPlanSchema.pre('validate', function preValidate(next) {
-  const normalized = normalizeDataPlanRecord(this.toObject(), this.vtuProvider);
-  Object.assign(this, normalized);
-  if (!this.providerPlanCode) {
+  applyNormalizedFields(this);
+  if (!this.providerPlanCode || !String(this.providerPlanCode).trim()) {
     this.invalidate('providerPlanCode', 'Provider plan code is required');
   }
+  if (!this.vtuProvider) {
+    this.invalidate('vtuProvider', 'VTU provider is required');
+  }
+  next();
+});
+
+dataPlanSchema.pre('save', function preSave(next) {
+  applyNormalizedFields(this);
   next();
 });
 

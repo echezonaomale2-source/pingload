@@ -1,4 +1,5 @@
 const Admin = require('../models/Admin');
+const { normalizeDataPlanRecord } = require('./dataPlanFields');
 const SystemSettings = require('../models/SystemSettings');
 const SupportTicket = require('../models/SupportTicket');
 const User = require('../models/User');
@@ -47,13 +48,14 @@ const seedAdmin = async () => {
 
   const planCount = await DataPlan.countDocuments();
   if (planCount === 0) {
-    await DataPlan.insertMany([
+    const seeds = [
       { network: 'mtn', name: 'MTN 1GB', dataSize: '1GB', validity: '30 days', providerPlanCode: 'mtn-1gb', variationCode: 'mtn-1gb', amount: 350, order: 1 },
       { network: 'mtn', name: 'MTN 2GB', dataSize: '2GB', validity: '30 days', providerPlanCode: 'mtn-2gb', variationCode: 'mtn-2gb', amount: 700, order: 2 },
       { network: 'airtel', name: 'Airtel 1.5GB', dataSize: '1.5GB', validity: '30 days', providerPlanCode: 'airtel-1.5gb', variationCode: 'airtel-1.5gb', amount: 500, order: 1 },
       { network: 'glo', name: 'Glo 1GB', dataSize: '1GB', validity: '14 days', providerPlanCode: 'glo-1gb', variationCode: 'glo-1gb', amount: 300, order: 1 },
       { network: '9mobile', name: '9mobile 1GB', dataSize: '1GB', validity: '30 days', providerPlanCode: '9mobile-1gb', variationCode: '9mobile-1gb', amount: 400, order: 1 },
-    ]);
+    ].map((plan) => normalizeDataPlanRecord(plan));
+    await DataPlan.insertMany(seeds, { ordered: false });
     console.log('Default data plans seeded');
   }
 

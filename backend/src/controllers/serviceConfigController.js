@@ -590,10 +590,11 @@ const adminSyncDataPlansFromVtpass = async (req, res, next) => {
       for (const plan of variations) {
         if (!plan.variation_code) continue;
         const update = buildDataPlanSyncUpdate('vtpass', network, plan);
+        if (!update) continue;
         await DataPlan.findOneAndUpdate(
           { vtuProvider: 'vtpass', providerPlanCode: plan.variation_code },
           { $set: update },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
+          { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
         );
         synced += 1;
       }

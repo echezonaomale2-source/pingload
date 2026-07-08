@@ -106,9 +106,9 @@ app.use(errorHandler);
 
 const startServer = async () => {
   await connectDB();
-  await seedAdmin();
   const indexResult = await migrateDataPlanIndexes();
   await migrateLegacyVtuProviders();
+  await seedAdmin();
 
   if (serviceConfig.vtpass.configured) {
     const vtpassPlanCount = await DataPlan.countDocuments({ vtuProvider: 'vtpass' });
