@@ -23,12 +23,15 @@ const {
 } = require('../utils/resolveProviderFields');
 const {
   mapDataPlanForPublicApi,
-  buildDataPlanSyncUpdate,
   pickEditableDataPlanFields,
   normalizeDataPlanRecord,
 } = require('../utils/dataPlanFields');
-const { upsertDataPlanFromSync } = require('../utils/dataPlanUpsert');
 const { normalizeProvider } = require('../utils/migrateVtuSettings');
+const { bumpCatalogVersion } = require('../utils/catalogInvalidation');
+const {
+  syncDataPlansForNetwork,
+  syncAllVtpassDataPlans,
+} = require('../services/vtpassDataPlanSyncService');
 
 const DATA_NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
 const TV_PROVIDERS = ['dstv', 'gotv', 'startimes'];
@@ -578,26 +581,27 @@ const adminSyncDataPlansFromVtpass = async (req, res, next) => {
       });
     }
     const requestedNetwork = String(req.query.network || '').toLowerCase();
-    const networks = requestedNetwork && DATA_NETWORKS.includes(requestedNetwork)
-      ? [requestedNetwork]
-      : DATA_NETWORKS;
-    let synced = 0;
 
-    for (const network of networks) {
-      const result = await vtuProvider.getDataPlans(network);
-      const variations = result.content?.variations || [];
-
-      for (const plan of variations) {
-        if (!plan.variation_code) continue;
-        const update = buildDataPlanSyncUpdate('vtpass', network, plan);
-        if (!update) continue;
-        await upsertDataPlanFromSync(update);
-        synced += 1;
-      }
+    if (requestedNetwork && DATA_NETWORKS.includes(requestedNetwork)) {
+      const result = await syncDataPlansForNetwork(requestedNetwork);
+      await bumpCatalogVersion();
+      return res.json({
+        success: true,
+        data: { synced: result.synced, networks: [requestedNetwork], source: 'vtpass' },
+      });
     }
 
-    await bumpCatalogVersion();
-    res.json({ success: true, data: { synced, networks, source: 'vtpass' } });
+    const result = await syncAllVtpassDataPlans();
+    if (result.skipped) {
+      return res.status(400).json({
+        success: false,
+        message: 'VTpass is not configured on the server',
+      });
+    }
+    res.json({
+      success: true,
+      data: { synced: result.total, networks: result.networks, source: 'vtpass' },
+    });
   } catch (error) {
     next(error);
   }

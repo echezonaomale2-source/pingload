@@ -10,7 +10,6 @@ const emptyForm = {
   providerId: '',
   name: '',
   providerServiceId: '',
-  altServiceId: '',
   minAmount: 500,
   maxAmount: 500000,
   enabled: true,
@@ -19,7 +18,7 @@ const emptyForm = {
 
 const ElectricityPlansPage = () => {
   const dialog = useDialog();
-  const { selected, label, otherLabel, showBoth, serviceIdLabel, refresh } = useVtuProvider();
+  const { label, serviceIdLabel, refresh } = useVtuProvider();
   const [plans, setPlans] = useState([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -43,19 +42,14 @@ const ElectricityPlansPage = () => {
     setModal('create');
   };
 
-  const serviceIdForActive = (plan) => (
-    selected === 'vtpass'
-      ? (plan.vtpassServiceId || plan.providerServiceId || '')
-      : (plan.providerServiceId || plan.vtpassServiceId || '')
-  );
+  const serviceIdForPlan = (plan) => plan.vtpassServiceId || plan.providerServiceId || '';
 
   const openEdit = async (plan) => {
     await refresh();
     setForm({
       providerId: plan.providerId,
       name: plan.name,
-      providerServiceId: serviceIdForActive(plan),
-      altServiceId: selected === 'vtpass' ? (plan.providerServiceId || '') : (plan.vtpassServiceId || ''),
+      providerServiceId: serviceIdForPlan(plan),
       minAmount: plan.minAmount,
       maxAmount: plan.maxAmount,
       enabled: plan.enabled,
@@ -72,7 +66,6 @@ const ElectricityPlansPage = () => {
       maxAmount: Number(form.maxAmount),
       order: Number(form.order),
     };
-    delete payload.altServiceId;
     try {
       if (modal === 'create') await electricityPlansApi.create(payload);
       else await electricityPlansApi.update(modal, payload);
@@ -113,7 +106,7 @@ const ElectricityPlansPage = () => {
   const columns = [
     { key: 'providerId', label: 'ID', render: (r) => <span className="font-mono text-xs">{r.providerId}</span> },
     { key: 'name', label: 'Provider' },
-    { key: 'providerServiceId', label: 'Service ID', render: (r) => <span className="font-mono text-xs">{serviceIdForActive(r)}</span> },
+    { key: 'providerServiceId', label: 'Service ID', render: (r) => <span className="font-mono text-xs">{serviceIdForPlan(r)}</span> },
     {
       key: 'range',
       label: 'Amount Range',
@@ -170,9 +163,6 @@ const ElectricityPlansPage = () => {
           <input value={form.providerId} onChange={(e) => setForm({ ...form, providerId: e.target.value })} placeholder="Provider ID (e.g. ikeja)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Display name" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input value={form.providerServiceId} onChange={(e) => setForm({ ...form, providerServiceId: e.target.value })} placeholder={serviceIdLabel} className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          {showBoth && (
-            <input value={form.altServiceId} onChange={(e) => setForm({ ...form, altServiceId: e.target.value })} placeholder={`${otherLabel} service ID (optional)`} className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          )}
           <div className="grid grid-cols-2 gap-3">
             <input type="number" value={form.minAmount} onChange={(e) => setForm({ ...form, minAmount: e.target.value })} placeholder="Min amount" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
             <input type="number" value={form.maxAmount} onChange={(e) => setForm({ ...form, maxAmount: e.target.value })} placeholder="Max amount" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />

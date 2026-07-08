@@ -31,25 +31,17 @@ export const useVtuProvider = () => {
     return () => window.removeEventListener('focus', onFocus);
   }, [refresh]);
 
-  const activeProviders = ['vtpass'];
-  const selected = 'vtpass';
-  const label = 'VTpass';
-
   return {
     status,
     providers,
-    activeProviders,
+    activeProviders: ['vtpass'],
     serviceRouting,
     loading,
-    selected,
+    selected: 'vtpass',
     active: 'vtpass',
-    label,
-    otherLabel: 'VTpass',
-    showBoth: false,
-    usingFallback: false,
+    label: 'VTpass',
     serviceIdLabel: 'VTpass service ID',
     variationCodeLabel: 'Variation Code',
-    codeLabelForProvider: () => 'Variation Code',
     refresh,
   };
 };

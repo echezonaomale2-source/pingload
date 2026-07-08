@@ -7,11 +7,13 @@ import { useDialog } from '../hooks/useDialog';
 import { useVtuProvider } from '../hooks/useVtuProvider';
 
 const PROVIDERS = ['dstv', 'gotv', 'startimes'];
-const emptyForm = { provider: 'dstv', name: '', variationCode: '', altVariationCode: '', amount: '', enabled: true, order: 0 };
+const emptyForm = { provider: 'dstv', name: '', variationCode: '', amount: '', enabled: true, order: 0 };
+
+const variationCodeForPlan = (plan) => plan.vtpassVariationCode || plan.variationCode || '';
 
 const TvPlansPage = () => {
   const dialog = useDialog();
-  const { selected, label, otherLabel, showBoth, variationCodeLabel, refresh } = useVtuProvider();
+  const { label, variationCodeLabel, refresh } = useVtuProvider();
   const [plans, setPlans] = useState([]);
   const [provider, setProvider] = useState('');
   const [page, setPage] = useState(1);
@@ -38,19 +40,12 @@ const TvPlansPage = () => {
     setForm({ ...emptyForm, provider: provider || 'dstv' });
     setModal('create');
   };
-  const planCodeForActive = (plan) => (
-    selected === 'vtpass'
-      ? (plan.vtpassVariationCode || plan.variationCode || '')
-      : (plan.variationCode || plan.vtpassVariationCode || '')
-  );
-
   const openEdit = async (plan) => {
     await refresh();
     setForm({
       provider: plan.provider,
       name: plan.name,
-      variationCode: planCodeForActive(plan),
-      altVariationCode: selected === 'vtpass' ? (plan.variationCode || '') : (plan.vtpassVariationCode || ''),
+      variationCode: variationCodeForPlan(plan),
       amount: plan.amount,
       enabled: plan.enabled,
       order: plan.order,
@@ -60,7 +55,6 @@ const TvPlansPage = () => {
 
   const handleSave = async () => {
     const payload = { ...form, amount: Number(form.amount), order: Number(form.order) };
-    delete payload.altVariationCode;
     try {
       if (modal === 'create') await tvPlansApi.create(payload);
       else await tvPlansApi.update(modal, payload);
@@ -115,7 +109,7 @@ const TvPlansPage = () => {
   const columns = [
     { key: 'provider', label: 'Provider', render: (r) => <span className="uppercase font-bold">{r.provider}</span> },
     { key: 'name', label: 'Bouquet' },
-    { key: 'variationCode', label: 'Code', render: (r) => <span className="font-mono text-xs">{planCodeForActive(r)}</span> },
+    { key: 'variationCode', label: 'Variation Code', render: (r) => <span className="font-mono text-xs">{variationCodeForPlan(r)}</span> },
     { key: 'amount', label: 'Price', render: (r) => formatCurrency(r.amount) },
     { key: 'order', label: 'Order' },
     {
@@ -182,9 +176,6 @@ const TvPlansPage = () => {
           </select>
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Bouquet name" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input value={form.variationCode} onChange={(e) => setForm({ ...form, variationCode: e.target.value })} placeholder={variationCodeLabel} className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          {showBoth && (
-            <input value={form.altVariationCode} onChange={(e) => setForm({ ...form, altVariationCode: e.target.value })} placeholder={`${otherLabel} plan code (optional)`} className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
-          )}
           <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="Price (₦)" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <input type="number" value={form.order} onChange={(e) => setForm({ ...form, order: e.target.value })} placeholder="Display order" className="w-full rounded-xl border border-slate-200 p-3 text-sm" />
           <label className="flex items-center gap-2 text-sm">

@@ -1,5 +1,8 @@
 import api from './api';
 
+/** VTpass catalog sync can exceed the default 30s client timeout. */
+const SYNC_TIMEOUT = 180000;
+
 export const adminAuth = {
   login: (email, password) => api.post('/admin/auth/login', { email, password }, { skipAuthLogout: true }),
   logout: () => api.post('/admin/auth/logout', {}, { skipAuthLogout: true, skipGlobalLoader: true }),
@@ -66,7 +69,7 @@ export const dataPlansApi = {
   create: (data) => api.post('/admin/data-plans', data),
   update: (id, data) => api.patch(`/admin/data-plans/${id}`, data),
   delete: (id) => api.delete(`/admin/data-plans/${id}`),
-  sync: (params) => api.post('/admin/data-plans/sync', {}, { params }),
+  sync: (params) => api.post('/admin/data-plans/sync', {}, { params, timeout: SYNC_TIMEOUT }),
 };
 export const electricityPlansApi = {
   list: () => api.get('/admin/electricity-plans'),
@@ -80,7 +83,7 @@ export const tvPlansApi = {
   create: (data) => api.post('/admin/tv-plans', data),
   update: (id, data) => api.patch(`/admin/tv-plans/${id}`, data),
   delete: (id) => api.delete(`/admin/tv-plans/${id}`),
-  sync: (params) => api.post('/admin/tv-plans/sync', {}, { params }),
+  sync: (params) => api.post('/admin/tv-plans/sync', {}, { params, timeout: SYNC_TIMEOUT }),
 };
 
 export const educationProductsApi = {
@@ -145,9 +148,9 @@ export const providersApi = {
   updateRouting: (serviceRouting) => api.patch('/admin/providers/routing', { serviceRouting }),
   updateFailover: (data) => api.patch('/admin/providers/failover', data),
   test: (providerId) => api.post(`/admin/providers/${providerId}/test`),
-  syncData: (providerId, params) => api.post(`/admin/providers/${providerId}/sync/data`, {}, { params }),
-  syncTv: (providerId, params) => api.post(`/admin/providers/${providerId}/sync/tv`, {}, { params }),
-  syncAllData: () => api.post('/admin/providers/sync-all-data', {}),
+  syncData: (providerId, params) => api.post(`/admin/providers/${providerId}/sync/data`, {}, { params, timeout: SYNC_TIMEOUT }),
+  syncTv: (providerId, params) => api.post(`/admin/providers/${providerId}/sync/tv`, {}, { params, timeout: SYNC_TIMEOUT }),
+  syncAllData: () => api.post('/admin/providers/sync-all-data', {}, { timeout: SYNC_TIMEOUT }),
 };
 
 export const getErrorMessage = (error, fallback = 'Something went wrong') =>

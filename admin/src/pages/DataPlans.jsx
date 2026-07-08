@@ -10,16 +10,16 @@ const NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
 const VALIDITY_CATEGORIES = ['daily', 'weekly', 'monthly', 'yearly', 'other'];
 const emptyForm = {
   network: 'mtn', name: '', dataSize: '', validity: '', validityCategory: 'other', category: '',
-  variationCode: '', altVariationCode: '', amount: '', commissionPercent: 0, enabled: true, order: 0,
-  vtuProvider: 'vtpass',
+  variationCode: '', amount: '', commissionPercent: 0, enabled: true, order: 0,
 };
+
+const variationCodeForPlan = (plan) => plan.vtpassVariationCode || plan.variationCode || plan.providerPlanCode || '';
 
 const DataPlansPage = () => {
   const dialog = useDialog();
-  const { selected, label, showBoth, codeLabelForProvider, refresh } = useVtuProvider();
+  const { variationCodeLabel, refresh } = useVtuProvider();
   const [plans, setPlans] = useState([]);
   const [network, setNetwork] = useState('');
-  const [providerFilter, setProviderFilter] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,34 +31,24 @@ const DataPlansPage = () => {
     setLoading(true);
     const params = {};
     if (network) params.network = network;
-    if (providerFilter) params.provider = providerFilter;
     dataPlansApi.list(params)
       .then((res) => setPlans(res.data.data))
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
-  }, [network, providerFilter]);
+  }, [network]);
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
-  useEffect(() => { setPage(1); }, [network, providerFilter]);
-
-  const formProvider = form.vtuProvider || selected;
-  const variationCodeLabel = codeLabelForProvider(formProvider);
+  useEffect(() => { setPage(1); }, [network]);
 
   const openCreate = async () => {
     await refresh();
-    setForm({ ...emptyForm, network: network || 'mtn', vtuProvider: providerFilter || selected });
+    setForm({ ...emptyForm, network: network || 'mtn' });
     setModal('create');
   };
-  const planCodeForProvider = (plan, providerId = plan.vtuProvider || selected) => (
-    providerId === 'vtpass'
-      ? (plan.vtpassVariationCode || plan.variationCode || '')
-      : (plan.planCode || plan.variationCode || plan.vtpassVariationCode || '')
-  );
 
   const openEdit = async (plan) => {
     await refresh();
-    const planProvider = plan.vtuProvider || selected;
     setForm({
       network: plan.network,
       name: plan.name,
@@ -66,13 +56,11 @@ const DataPlansPage = () => {
       validity: plan.validity,
       validityCategory: plan.validityCategory || 'other',
       category: plan.category || '',
-      variationCode: planCodeForProvider(plan, planProvider),
-      altVariationCode: planProvider === 'vtpass' ? (plan.planCode || plan.variationCode || '') : (plan.vtpassVariationCode || ''),
+      variationCode: variationCodeForPlan(plan),
       amount: plan.amount,
       commissionPercent: plan.commissionPercent ?? 0,
       enabled: plan.enabled,
       order: plan.order,
-      vtuProvider: planProvider,
     });
     setModal(plan._id);
   };
@@ -91,7 +79,7 @@ const DataPlansPage = () => {
     };
     if (modal === 'create') {
       payload.network = form.network;
-      payload.vtuProvider = form.vtuProvider || selected;
+      payload.vtuProvider = 'vtpass';
       payload.variationCode = form.variationCode;
     }
     try {
@@ -136,7 +124,6 @@ const DataPlansPage = () => {
     try {
       const params = {};
       if (network) params.network = network;
-      if (providerFilter) params.source = providerFilter;
       const res = await dataPlansApi.sync(params);
       const source = res.data.data?.source ? ` from ${res.data.data.source}` : '';
       dialog.notifySuccess(`Synced ${res.data.data?.synced || 0} data plan(s)${source}`);
@@ -149,7 +136,6 @@ const DataPlansPage = () => {
   };
 
   const columns = [
-    { key: 'vtuProvider', label: 'Provider', render: () => <span className="font-semibold">VTpass</span> },
     { key: 'network', label: 'Network', render: (r) => <span className="uppercase font-bold">{r.network}</span> },
     { key: 'name', label: 'Plan' },
     { key: 'dataSize', label: 'Data' },
@@ -157,12 +143,10 @@ const DataPlansPage = () => {
     { key: 'validityCategory', label: 'Group', render: (r) => r.validityCategory || 'other' },
     { key: 'category', label: 'Category' },
     {
-      key: 'providerPlanCode',
-      label: 'Plan Code',
+      key: 'variationCode',
+      label: 'Variation Code',
       render: (r) => (
-        <span className="font-mono text-xs">
-          {r.providerPlanCode || planCodeForProvider(r)}
-        </span>
+        <span className="font-mono text-xs">{variationCodeForPlan(r)}</span>
       ),
     },
     { key: 'amount', label: 'Price', render: (r) => formatCurrency(r.amount) },
@@ -195,7 +179,7 @@ const DataPlansPage = () => {
     <div>
       <PageHeader
         title="Data Plans"
-        subtitle={`${plans.length} plan${plans.length === 1 ? '' : 's'}${network ? ` · ${network.toUpperCase()}` : ''}${providerFilter ? ` · ${providerFilter}` : showBoth ? ' · all providers' : ` · ${label}`}`}
+        subtitle={`${plans.length} plan${plans.length === 1 ? '' : 's'}${network ? ` · ${network.toUpperCase()}` : ''} · VTpass`}
         action={(
           <div className="flex gap-2">
             <button type="button" onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-60">
@@ -207,13 +191,6 @@ const DataPlansPage = () => {
           </div>
         )}
       />
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button type="button" onClick={() => setProviderFilter('')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${!providerFilter ? 'bg-secondary text-white' : 'bg-slate-100'}`}>All Providers</button>
-        {['vtpass'].map((p) => (
-          <button key={p} type="button" onClick={() => setProviderFilter(p)} className={`rounded-lg px-3 py-1.5 text-xs font-bold capitalize ${providerFilter === p ? 'bg-secondary text-white' : 'bg-slate-100'}`}>{p}</button>
-        ))}
-      </div>
 
       <div className="mb-4 flex gap-2">
         <button type="button" onClick={() => setNetwork('')} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${!network ? 'bg-primary text-white' : 'bg-slate-100'}`}>All</button>
@@ -247,16 +224,8 @@ const DataPlansPage = () => {
         <div className="space-y-2">
           {modal !== 'create' && (
             <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              Provider: <strong>VTpass</strong>
-              {' · '}Plan code: <strong className="font-mono">{form.variationCode}</strong>
+              Variation code: <strong className="font-mono">{form.variationCode}</strong>
             </div>
-          )}
-          {modal === 'create' && (
-            <select value={form.vtuProvider} onChange={(e) => setForm({ ...form, vtuProvider: e.target.value, variationCode: '' })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
-              {['vtpass'].map((p) => (
-                <option key={p} value={p}>VTpass</option>
-              ))}
-            </select>
           )}
           <select value={form.network} onChange={(e) => setForm({ ...form, network: e.target.value })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
             {NETWORKS.map((n) => <option key={n} value={n}>{n.toUpperCase()}</option>)}
