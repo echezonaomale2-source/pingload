@@ -58,14 +58,23 @@ const check = (name, ok, detail = '') => {
     results.push(check(`Data plans ${net}`, plans.status === 200 && count > 0, `${count} plans`));
   }
 
-  const legal = await request('GET', '/../privacy'.replace('/api/../', '/'));
-  // privacy is on root not /api
   const privacy = await new Promise((resolve, reject) => {
     https.get('https://pingload.top/privacy', (res) => {
       resolve({ status: res.statusCode });
     }).on('error', reject);
   });
   results.push(check('Privacy page', privacy.status === 200));
+
+  const purchaseRoutes = [
+    ['Airtime purchase route', 'POST', '/vtu/airtime'],
+    ['Data purchase route', 'POST', '/vtu/data'],
+    ['Electricity purchase route', 'POST', '/vtu/electricity'],
+    ['TV purchase route', 'POST', '/vtu/tv'],
+  ];
+  for (const [label, method, path] of purchaseRoutes) {
+    const res = await request(method, path, {});
+    results.push(check(label, res.status === 401, `HTTP ${res.status}`));
+  }
 
   if (!ADMIN_PASSWORD) {
     console.log('SKIP  Admin tests (set ADMIN_PASSWORD env var)');
@@ -83,16 +92,20 @@ const check = (name, ok, detail = '') => {
       const test = await request('POST', '/admin/providers/vtpass/test', {}, token);
       const bal = test.data?.data?.balance;
       const balErr = test.data?.data?.balanceError;
-      // Balance display is non-blocking for purchases; POST auth already proves health.
-      if (bal != null) {
-        results.push(check('VTpass balance', true, `₦${bal}`));
-      } else {
-        console.log(`WARN  VTpass balance — null${balErr ? ` (${balErr})` : ''} — POST auth healthy; check VTPASS_PUBLIC_KEY on Render`);
-        results.push(true);
+      const keyVal = test.data?.data?.keyValidation;
+      const keyDiag = test.data?.data?.keyDiagnostics;
+      results.push(check('VTpass key format', keyVal?.valid === true, keyVal?.issues?.join('; ') || 'ok'));
+      if (keyDiag?.publicKey) {
+        console.log(`      key fingerprints — api:${keyDiag.apiKey?.fingerprint} public:${keyDiag.publicKey?.fingerprint} secret:${keyDiag.secretKey?.fingerprint}`);
       }
+      results.push(check('VTpass balance', bal != null && Number.isFinite(bal), bal != null ? `₦${bal}` : (balErr || 'null')));
 
       const adminPlans = await request('GET', '/admin/data-plans', null, token);
       results.push(check('Admin data plans', adminPlans.status === 200 && (adminPlans.data?.data?.length ?? 0) > 0, `${adminPlans.data?.data?.length ?? 0} plans`));
+
+      const sync = await request('POST', '/admin/providers/sync-all-data', {}, token);
+      const synced = sync.data?.data?.vtpass?.synced;
+      results.push(check('Data plan sync', sync.status === 200 && synced > 0, `${synced ?? 0} synced`));
     }
   }
 

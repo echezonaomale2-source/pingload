@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const serviceConfig = require('../config/serviceConfig');
 const { attachVtpassLogger } = require('../utils/httpLogger');
 const { logVtpass, logApiFailure } = require('../utils/logger');
+const { getVtpassKeyDiagnostics, validateVtpassKeyFormats } = require('../utils/vtpassKeyUtils');
 
 /** VTpass response codes ΓÇö https://vtpass.com/documentation/response-codes/ */
 const VTPASS_ERROR_MESSAGES = {
@@ -429,11 +430,40 @@ const fundBettingWallet = async ({ vtpassServiceId, customerId, amount, phone, r
 };
 
 const parseBalanceFromResponse = (data) => {
-  if (!data) return null;
-  const content = data.content || data.contents || {};
-  const balance = content.balance ?? content.wallet_balance ?? content.amount ?? data.balance ?? null;
-  return balance != null ? parseFloat(balance) : null;
+  let payload = data;
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      return null;
+    }
+  }
+  if (!payload || typeof payload !== 'object') return null;
+
+  const code = payload.code;
+  const codeIndicatesSuccess = code === 1 || code === '1' || code === 0 || code === '0'
+    || code === '000';
+
+  const content = payload.contents || payload.content || payload;
+  const rawBalance = content?.balance ?? content?.wallet_balance ?? content?.amount
+    ?? payload.balance ?? null;
+
+  if (rawBalance == null) {
+    if (codeIndicatesSuccess) return null;
+    return null;
+  }
+
+  const normalized = String(rawBalance).replace(/,/g, '').trim();
+  const parsed = parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 };
+
+const maskKeyHint = (key) => ({
+  set: Boolean(key),
+  length: key ? key.length : 0,
+  prefix: key ? key.slice(0, 3) : null,
+  suffix: key ? key.slice(-4) : null,
+});
 
 const getWalletBalance = async () => {
   assertVtpassConfigured();
@@ -443,14 +473,35 @@ const getWalletBalance = async () => {
     { label: 'secret-key', client: createVtpassPostClient() },
   ];
 
+  logVtpass('info', 'VTpass balance probe starting', {
+    baseUrl: serviceConfig.vtpass.baseUrl,
+    apiKey: maskKeyHint(serviceConfig.vtpass.apiKey),
+    publicKey: maskKeyHint(serviceConfig.vtpass.publicKey),
+    secretKey: maskKeyHint(serviceConfig.vtpass.secretKey),
+  });
+
+  let lastPayload = null;
   let lastError = null;
+
   for (const attempt of attempts) {
     try {
-      const response = await attempt.client.get('/balance');
+      const response = await attempt.client.get('/balance', { responseType: 'json' });
       const balance = parseBalanceFromResponse(response.data);
+      lastPayload = response.data;
+
+      logVtpass('info', 'VTpass balance response received', {
+        authMode: attempt.label,
+        httpStatus: response.status,
+        responseCode: response.data?.code,
+        responseType: typeof response.data,
+        hasContents: Boolean(response.data?.contents || response.data?.content),
+        parsedBalance: balance,
+      });
+
       if (balance != null) {
         return { balance, raw: response.data, authMode: attempt.label };
       }
+
       lastError = new Error(`VTpass balance response missing amount (${attempt.label})`);
       lastError.vtpassResponse = response.data;
     } catch (error) {
@@ -458,11 +509,21 @@ const getWalletBalance = async () => {
       logVtpass('warn', `VTpass balance GET failed (${attempt.label})`, {
         message: error.message,
         status: error.response?.status,
-        response: error.response?.data,
+        responseType: typeof error.response?.data,
+        responseCode: error.response?.data?.code,
+        responsePreview: typeof error.response?.data === 'string'
+          ? error.response.data.slice(0, 200)
+          : error.response?.data,
       });
     }
   }
 
+  logVtpass('error', 'VTpass balance probe failed for all auth modes', {
+    lastResponse: lastPayload,
+    message: lastError?.message,
+  });
+
+  if (lastError?.isVtpassError) throw lastError;
   handleVtpassError(lastError || new Error('VTpass balance request failed'));
 };
 
@@ -624,4 +685,6 @@ module.exports = {
   extractVtpassFailureReason,
   assertVtpassConfigured,
   verifyVtpassConnectivity,
+  getVtpassKeyDiagnostics: () => getVtpassKeyDiagnostics(serviceConfig.vtpass),
+  validateVtpassKeyFormats: () => validateVtpassKeyFormats(serviceConfig.vtpass),
 };

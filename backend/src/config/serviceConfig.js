@@ -24,6 +24,8 @@ const VTPASS_BASE_URL = process.env.VTPASS_BASE_URL
   || (vtpassEnv === 'live' ? 'https://vtpass.com/api' : 'https://sandbox.vtpass.com/api');
 const vtpassIsSandbox = vtpassEnv === 'sandbox';
 
+const { normalizeEnvValue } = require('../utils/vtpassKeyUtils');
+
 const maskKey = (key) => {
   if (!key) return null;
   if (key.length <= 8) return '****';
@@ -67,14 +69,14 @@ const serviceConfig = {
     env: vtpassEnv,
     mode: vtpassIsSandbox ? 'sandbox' : 'live',
     baseUrl: VTPASS_BASE_URL,
-    apiKey: (process.env.VTPASS_API_KEY || '').trim(),
-    publicKey: (process.env.VTPASS_PUBLIC_KEY || '').trim(),
-    secretKey: (process.env.VTPASS_SECRET_KEY || '').trim(),
+    apiKey: normalizeEnvValue(process.env.VTPASS_API_KEY),
+    publicKey: normalizeEnvValue(process.env.VTPASS_PUBLIC_KEY),
+    secretKey: normalizeEnvValue(process.env.VTPASS_SECRET_KEY),
     isSandbox: vtpassIsSandbox,
     configured: Boolean(
-      (process.env.VTPASS_API_KEY || '').trim()
-      && (process.env.VTPASS_SECRET_KEY || '').trim()
-      && (process.env.VTPASS_PUBLIC_KEY || '').trim()
+      normalizeEnvValue(process.env.VTPASS_API_KEY)
+      && normalizeEnvValue(process.env.VTPASS_SECRET_KEY)
+      && normalizeEnvValue(process.env.VTPASS_PUBLIC_KEY)
     ),
   },
 

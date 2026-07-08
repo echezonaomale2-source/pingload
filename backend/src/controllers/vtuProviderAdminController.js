@@ -2,6 +2,7 @@ const SystemSettings = require('../models/SystemSettings');
 const VtuProviderConfig = require('../models/VtuProviderConfig');
 const TvPlan = require('../models/TvPlan');
 const vtuProvider = require('../services/vtuProviderService');
+const vtpass = require('../services/vtpassService');
 const routing = require('../services/vtuRoutingService');
 const { bumpCatalogVersion } = require('../utils/catalogInvalidation');
 const { tagWithVtuProvider } = require('../utils/resolveProviderFields');
@@ -97,6 +98,9 @@ const testProviderConnection = async (_req, res, next) => {
     }
     const { healthStatus, message, lastHealthCheckAt } = await persistProviderHealth('vtpass', { ...result, balance });
 
+    const keyDiagnostics = vtpass.getVtpassKeyDiagnostics();
+    const keyValidation = vtpass.validateVtpassKeyFormats();
+
     res.json({
       success: healthStatus === 'healthy',
       data: {
@@ -110,6 +114,8 @@ const testProviderConnection = async (_req, res, next) => {
         purchasesEnabled: result.purchasesEnabled ?? null,
         baseUrl: result.baseUrl || null,
         publicKeyConfigured: result.publicKeyConfigured ?? null,
+        keyDiagnostics,
+        keyValidation,
       },
     });
   } catch (error) {

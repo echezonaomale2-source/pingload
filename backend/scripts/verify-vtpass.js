@@ -27,6 +27,8 @@ const printJson = (label, data) => {
 
 (async () => {
   section('ENV CONFIG (masked)');
+  const keyValidation = vtpass.validateVtpassKeyFormats();
+  const keyDiagnostics = vtpass.getVtpassKeyDiagnostics();
   console.log({
     NODE_ENV: process.env.NODE_ENV,
     SERVICE_MODE: process.env.SERVICE_MODE,
@@ -37,6 +39,8 @@ const printJson = (label, data) => {
     VTPASS_SECRET_KEY: mask(process.env.VTPASS_SECRET_KEY),
     configured: serviceConfig.vtpass.configured,
     mode: serviceConfig.vtpass.mode,
+    keyValidation,
+    keyDiagnostics,
   });
 
   section('1. CONNECTIVITY / AUTH PROBE (POST /merchant-verify)');

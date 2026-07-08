@@ -21,6 +21,21 @@ const variationCodeQuery = (code) => ({
   ],
 });
 
+const LEGACY_PROVIDER_FIELDS = [
+  'clubkonnectVariationCode',
+  'clubkonnectPlanCode',
+  'clubkonnectServiceId',
+  'planCode',
+];
+
+const stripLegacyProviderFields = (payload) => {
+  const next = { ...payload };
+  for (const field of LEGACY_PROVIDER_FIELDS) {
+    delete next[field];
+  }
+  return next;
+};
+
 const assignVariationCodeForProvider = (payload) => {
   const next = { ...payload };
   const { variationCode, vtpassVariationCode } = payload;
@@ -33,10 +48,7 @@ const assignVariationCodeForProvider = (payload) => {
     next.variationCode = variationCode;
   }
 
-  delete next.clubkonnectVariationCode;
-  delete next.clubkonnectPlanCode;
-  delete next.planCode;
-  return next;
+  return stripLegacyProviderFields(next);
 };
 
 const assignServiceIdForProvider = (payload) => {
@@ -51,8 +63,7 @@ const assignServiceIdForProvider = (payload) => {
     next.providerServiceId = providerServiceId;
   }
 
-  delete next.clubkonnectServiceId;
-  return next;
+  return stripLegacyProviderFields(next);
 };
 
 const extractAnyProviderFailureReason = (metadata = {}) => {

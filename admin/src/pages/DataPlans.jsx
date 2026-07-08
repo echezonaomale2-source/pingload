@@ -16,7 +16,7 @@ const emptyForm = {
 
 const DataPlansPage = () => {
   const dialog = useDialog();
-  const { selected, label, otherLabel, showBoth, codeLabelForProvider, activeProviders, refresh } = useVtuProvider();
+  const { selected, label, showBoth, codeLabelForProvider, refresh } = useVtuProvider();
   const [plans, setPlans] = useState([]);
   const [network, setNetwork] = useState('');
   const [providerFilter, setProviderFilter] = useState('');

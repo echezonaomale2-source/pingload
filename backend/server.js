@@ -134,12 +134,19 @@ const startServer = async () => {
   }
 
   const vtpassStatus = await verifyVtpassConnectivity();
+  const { validateVtpassKeyFormats } = require('./src/utils/vtpassKeyUtils');
+  const keyValidation = validateVtpassKeyFormats(serviceConfig.vtpass);
+  if (serviceConfig.vtpass.configured && !keyValidation.valid) {
+    console.warn(`[VTpass] Key format issues: ${keyValidation.issues.join('; ')}`);
+  }
   if (!vtpassStatus.configured) {
     console.warn('[VTpass] Credentials not configured.');
   } else if (vtpassStatus.ok) {
     console.log(`[VTpass] Connected — ${vtpassStatus.baseUrl} (${vtpassStatus.mode}).`);
     if (vtpassStatus.balance != null) {
-      console.log(`[VTpass] Wallet balance: ${vtpassStatus.balance}`);
+      console.log(`[VTpass] Wallet balance: ₦${vtpassStatus.balance}`);
+    } else if (vtpassStatus.balanceError) {
+      console.warn(`[VTpass] Wallet balance unavailable: ${vtpassStatus.balanceError}`);
     }
   } else {
     console.error(`[VTpass] Connection issue — ${vtpassStatus.reason}`);
