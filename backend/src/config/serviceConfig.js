@@ -71,7 +71,11 @@ const serviceConfig = {
     publicKey: process.env.VTPASS_PUBLIC_KEY || '',
     secretKey: process.env.VTPASS_SECRET_KEY || '',
     isSandbox: vtpassIsSandbox,
-    configured: Boolean(process.env.VTPASS_API_KEY && process.env.VTPASS_SECRET_KEY),
+    configured: Boolean(
+      process.env.VTPASS_API_KEY
+      && process.env.VTPASS_SECRET_KEY
+      && process.env.VTPASS_PUBLIC_KEY
+    ),
   },
 
   termii: {

@@ -425,17 +425,31 @@ const fundBettingWallet = async ({ vtpassServiceId, customerId, amount, phone, r
   }
 };
 
+const parseBalanceFromResponse = (data) => {
+  if (!data) return null;
+  const content = data.content || data.contents || {};
+  const balance = content.balance ?? content.wallet_balance ?? content.amount ?? data.balance ?? null;
+  return balance != null ? parseFloat(balance) : null;
+};
+
 const getWalletBalance = async () => {
   assertVtpassConfigured();
   try {
     const response = await vtpassGetClient.get('/balance');
-    const data = response.data || {};
-    const content = data.content || data.contents || {};
-    const balance = content.balance ?? content.wallet_balance ?? content.amount ?? null;
-    return {
-      balance: balance != null ? parseFloat(balance) : null,
-      raw: data,
-    };
+    const balance = parseBalanceFromResponse(response.data);
+    if (balance != null) {
+      return { balance, raw: response.data };
+    }
+  } catch (getError) {
+    logVtpass('warn', 'VTpass balance GET with public-key failed, retrying with secret-key', {
+      message: getError.message,
+    });
+  }
+
+  try {
+    const response = await vtpassPostClient.get('/balance');
+    const balance = parseBalanceFromResponse(response.data);
+    return { balance, raw: response.data };
   } catch (error) {
     handleVtpassError(error);
   }
@@ -449,6 +463,11 @@ const assertVtpassConfigured = () => {
   }
   if (!serviceConfig.vtpass.secretKey) {
     const error = new Error('VTpass secret key is not configured. Please contact support.');
+    error.statusCode = 503;
+    throw error;
+  }
+  if (!serviceConfig.vtpass.publicKey) {
+    const error = new Error('VTpass public key is not configured. Please contact support.');
     error.statusCode = 503;
     throw error;
   }

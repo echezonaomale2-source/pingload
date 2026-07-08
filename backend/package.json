@@ -15,6 +15,7 @@
     "verify:vtpass": "node scripts/verify-vtpass.js",
     "fix:dataplan-indexes": "node scripts/fix-dataplan-indexes.js",
     "sync:vtpass-data": "node scripts/sync-vtpass-data-plans.js",
+    "audit:production": "node scripts/production-audit.js",
     "test:security-remediation": "node scripts/security-remediation-check.js"
   },
   "dependencies": {

@@ -85,7 +85,16 @@ const testProviderConnection = async (_req, res, next) => {
     }
 
     const result = await vtuProvider.verifyVtpassConnectivity();
-    const { healthStatus, message, lastHealthCheckAt } = await persistProviderHealth('vtpass', result);
+    let balance = result.balance ?? null;
+    if (balance == null) {
+      try {
+        const balanceResult = await vtuProvider.getWalletBalance();
+        balance = balanceResult?.balance ?? null;
+      } catch {
+        // Balance is optional for health test.
+      }
+    }
+    const { healthStatus, message, lastHealthCheckAt } = await persistProviderHealth('vtpass', { ...result, balance });
 
     res.json({
       success: healthStatus === 'healthy',
@@ -94,7 +103,7 @@ const testProviderConnection = async (_req, res, next) => {
         healthStatus,
         message,
         lastHealthCheckAt,
-        balance: result.balance ?? null,
+        balance: balance ?? null,
         serverIp: result.serverIp || null,
         purchasesEnabled: result.purchasesEnabled ?? null,
         baseUrl: result.baseUrl || null,

@@ -28,12 +28,12 @@ const dataProviderEnabledSchema = new mongoose.Schema(
 
 const serviceRoutingSchema = new mongoose.Schema(
   {
-    airtime: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
-    data: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
-    electricity: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
-    tv: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
-    betting: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
-    education: { type: String, enum: ['clubkonnect', 'vtpass'], default: 'vtpass' },
+    airtime: { type: String, enum: ['vtpass'], default: 'vtpass' },
+    data: { type: String, enum: ['vtpass'], default: 'vtpass' },
+    electricity: { type: String, enum: ['vtpass'], default: 'vtpass' },
+    tv: { type: String, enum: ['vtpass'], default: 'vtpass' },
+    betting: { type: String, enum: ['vtpass'], default: 'vtpass' },
+    education: { type: String, enum: ['vtpass'], default: 'vtpass' },
   },
   { _id: false }
 );
@@ -50,7 +50,7 @@ const systemSettingsSchema = new mongoose.Schema(
     /** @deprecated Use serviceRouting — kept for backward compatibility */
     vtuProvider: {
       type: String,
-      enum: ['clubkonnect', 'vtpass'],
+      enum: ['vtpass'],
       default: 'vtpass',
     },
     providerEnabled: {

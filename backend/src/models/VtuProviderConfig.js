@@ -4,7 +4,7 @@ const vtuProviderConfigSchema = new mongoose.Schema(
   {
     providerId: {
       type: String,
-      enum: ['clubkonnect', 'vtpass'],
+      enum: ['vtpass'],
       required: true,
       unique: true,
       index: true,

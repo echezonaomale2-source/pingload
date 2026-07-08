@@ -76,7 +76,7 @@ services:
       - key: FRONTEND_URL
         value: pingload://wallet/verify
       - key: CORS_ORIGIN
-        value: https://admin.pingload.top
+        value: https://admin.pingload.top,https://pingload-admin.onrender.com
 
       # App settings
       - key: JWT_EXPIRES_IN

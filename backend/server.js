@@ -26,6 +26,7 @@ const devTestRoutes = require('./src/routes/devTestRoutes');
 const legalRoutes = require('./src/routes/legalRoutes');
 const seedAdmin = require('./src/utils/seedAdmin');
 const { migrateDataPlanIndexes } = require('./src/utils/migrateDataPlanIndexes');
+const { migrateLegacyVtuProviders } = require('./src/utils/migrateLegacyVtuProviders');
 const serviceConfig = require('./src/config/serviceConfig');
 const { initializeFcm } = require('./src/services/fcmService');
 const { verifyVtpassConnectivity } = require('./src/services/vtpassService');
@@ -107,6 +108,7 @@ const startServer = async () => {
   await connectDB();
   await seedAdmin();
   const indexResult = await migrateDataPlanIndexes();
+  await migrateLegacyVtuProviders();
 
   if (serviceConfig.vtpass.configured) {
     const vtpassPlanCount = await DataPlan.countDocuments({ vtuProvider: 'vtpass' });
