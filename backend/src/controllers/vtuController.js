@@ -130,8 +130,6 @@ const fetchDataPlans = async (req, res, next) => {
   }
 };
 
-const amountsMatch = (a, b) => Math.abs(Number(a) - Number(b)) < 0.01;
-
 const findDataPlan = async ({ network, variationCode, planId }) => {
   if (planId) {
     const plan = await DataPlan.findById(planId);
@@ -160,12 +158,21 @@ const resolveDataPurchaseCode = (plan) => {
 
 const resolveDataPlanAmount = async ({ network, variationCode, amount, planId }) => {
   const plan = await findDataPlan({ network, variationCode, planId });
-  if (plan && !amountsMatch(amount, plan.amount)) {
-    const error = new Error(`Invalid plan amount. Expected ₦${plan.amount}`);
+  if (plan) {
+    return { amount: plan.amount, plan };
+  }
+  if (planId) {
+    const error = new Error('Selected data plan was not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  const numericAmount = parseFloat(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount < 1) {
+    const error = new Error('Invalid amount');
     error.statusCode = 400;
     throw error;
   }
-  return { amount: plan?.amount ?? amount, plan };
+  return { amount: numericAmount, plan: null };
 };
 
 const resolveDataProviderCode = async ({ network, variationCode, plan, planId }) => {
@@ -174,7 +181,13 @@ const resolveDataProviderCode = async ({ network, variationCode, plan, planId })
   return resolveDataPurchaseCode(resolvedPlan) || variationCode;
 };
 
-const findTvPlan = async ({ provider, variationCode }) => {
+const findTvPlan = async ({ provider, variationCode, planId }) => {
+  if (planId) {
+    const plan = await TvPlan.findById(planId);
+    if (!plan || !plan.enabled) return null;
+    if (provider && plan.provider !== String(provider).toLowerCase()) return null;
+    return plan;
+  }
   const routedProvider = await vtuProvider.getRoutedProviderName('tv');
   return TvPlan.findOne(
     buildProviderCatalogQuery({
@@ -185,14 +198,23 @@ const findTvPlan = async ({ provider, variationCode }) => {
   );
 };
 
-const resolveTvPlanAmount = async ({ provider, variationCode, amount }) => {
-  const plan = await findTvPlan({ provider, variationCode });
-  if (plan && !amountsMatch(amount, plan.amount)) {
-    const error = new Error(`Invalid package amount. Expected ₦${plan.amount}`);
+const resolveTvPlanAmount = async ({ provider, variationCode, amount, planId }) => {
+  const plan = await findTvPlan({ provider, variationCode, planId });
+  if (plan) {
+    return { amount: plan.amount, plan };
+  }
+  if (planId) {
+    const error = new Error('Selected TV package was not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  const numericAmount = parseFloat(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount < 1) {
+    const error = new Error('Invalid amount');
     error.statusCode = 400;
     throw error;
   }
-  return { amount: plan?.amount ?? amount, plan };
+  return { amount: numericAmount, plan: null };
 };
 
 const resolveTvProviderCode = async ({ provider, variationCode, plan }) => {
@@ -444,7 +466,9 @@ const payTV = async (req, res, next) => {
     const { provider, smartcardNumber, variationCode, amount, phone, pin } = req.body;
     await verifyTransactionPin(req.user._id, pin, req);
 
-    const { amount: validatedAmount, plan: tvPlan } = await resolveTvPlanAmount({ provider, variationCode, amount });
+    const { amount: validatedAmount, plan: tvPlan } = await resolveTvPlanAmount({
+      provider, variationCode, amount, planId: req.body.planId,
+    });
     const providerCode = await resolveTvProviderCode({ provider, variationCode, plan: tvPlan });
     const purchaseProvider = tvPlan?.vtuProvider || await vtuProvider.getRoutedProviderName('tv');
 
@@ -717,8 +741,8 @@ const dataValidation = [
   body('network').isIn(['mtn', 'airtel', 'glo', '9mobile']).withMessage('Invalid network'),
   body('phone').matches(/^0[789][01]\d{8}$/).withMessage('Invalid Nigerian phone number'),
   body('variationCode').notEmpty().withMessage('Data plan is required'),
-  body('planId').optional().isMongoId().withMessage('Invalid plan ID'),
-  body('amount').isFloat({ min: 100 }).withMessage('Invalid amount'),
+  body('planId').optional({ values: 'falsy' }).isMongoId().withMessage('Invalid plan ID'),
+  body('amount').optional({ values: 'falsy' }).isFloat({ min: 1 }).withMessage('Invalid amount'),
   pinValidation,
 ];
 
@@ -741,7 +765,8 @@ const tvValidation = [
   body('provider').isIn(['dstv', 'gotv', 'startimes']).withMessage('Invalid TV provider'),
   body('smartcardNumber').trim().notEmpty().withMessage('Smartcard number is required'),
   body('variationCode').notEmpty().withMessage('Package is required'),
-  body('amount').isFloat({ min: 100 }).withMessage('Invalid amount'),
+  body('planId').optional({ values: 'falsy' }).isMongoId().withMessage('Invalid plan ID'),
+  body('amount').optional({ values: 'falsy' }).isFloat({ min: 1 }).withMessage('Invalid amount'),
   body('phone').optional().matches(/^0[789][01]\d{8}$/).withMessage('Invalid phone number'),
   pinValidation,
 ];

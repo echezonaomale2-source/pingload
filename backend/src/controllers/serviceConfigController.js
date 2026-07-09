@@ -38,6 +38,7 @@ const {
   pickTvPlanFields,
   pickEducationProductFields,
 } = require('../utils/catalogFieldPickers');
+const { upsertTvPlanFromSync } = require('../utils/tvPlanUpsert');
 
 const DATA_NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
 const TV_PROVIDERS = ['dstv', 'gotv', 'startimes'];
@@ -660,11 +661,7 @@ const adminSyncTvPlansFromVtpass = async (req, res, next) => {
           vtpassVariationCode: code,
         };
 
-        await TvPlan.findOneAndUpdate(
-          { provider, vtuProvider: 'vtpass', variationCode: code },
-          { $set: tagWithVtuProvider(update) },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
+        await upsertTvPlanFromSync(tagWithVtuProvider(update));
         synced += 1;
       }
     }

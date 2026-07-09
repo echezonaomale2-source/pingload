@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { getPushChannelId } from '../utils/pushChannels';
 
 const loadMessaging = () => {
   try {
@@ -15,7 +16,7 @@ const scheduleDataOnlyNotification = async (remoteMessage) => {
   const body = remoteMessage?.notification?.body || data.body || data.message || '';
   if (!title && !body) return;
 
-  const channelId = data.channelId || data.type || 'default';
+  const channelId = getPushChannelId(data.channelId || data.type);
 
   await Notifications.scheduleNotificationAsync({
     content: {

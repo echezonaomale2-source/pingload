@@ -12,8 +12,12 @@ const errorHandler = (err, req, res, _next) => {
   }
 
   if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
-    return res.status(400).json({ success: false, message: `${field} already exists` });
+    const keyValue = err.keyValue || {};
+    const keys = Object.keys(keyValue);
+    const message = keys.length > 1
+      ? `Duplicate record (${keys.map((k) => `${k}=${keyValue[k]}`).join(', ')})`
+      : `${keys[0] || 'record'} already exists`;
+    return res.status(400).json({ success: false, message });
   }
 
   if (err.name === 'JsonWebTokenError') {

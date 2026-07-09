@@ -1,8 +1,7 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { ELECTRICITY_PROVIDERS } from '../../utils/constants';
@@ -39,8 +38,11 @@ const ElectricityScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [showPin, setShowPin] = useState(false);
 
-  const loadProviders = useCallback(async (showError = false) => {
-    setLoadingProviders(true);
+  const providersLoadedRef = useRef(false);
+
+  const loadProviders = useCallback(async (showError = false, forceReload = false) => {
+    const isInitialLoad = !providersLoadedRef.current || forceReload;
+    if (isInitialLoad) setLoadingProviders(true);
     try {
       const res = await vtuService.getElectricityPlans();
       const apiProviders = res.data.data || [];
@@ -49,21 +51,20 @@ const ElectricityScreen = ({ navigation }) => {
         return { ...meta, ...p, id: p.id, name: p.name };
       });
       setProviders(merged);
+      providersLoadedRef.current = true;
     } catch {
       setProviders([]);
       if (showError) {
         dialog.alertError('Error', 'Could not load electricity providers. Pull to refresh.');
       }
     } finally {
-      setLoadingProviders(false);
+      if (isInitialLoad) setLoadingProviders(false);
     }
   }, [dialog]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadProviders(false);
-    }, [loadProviders])
-  );
+  useEffect(() => {
+    loadProviders(false);
+  }, [loadProviders]);
 
   const handleVerifyMeter = async () => {
     if (!provider || !meterNumber) {
@@ -148,7 +149,7 @@ const ElectricityScreen = ({ navigation }) => {
       </TouchableOpacity>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={loadingProviders} onRefresh={() => loadProviders(true)} />}
+        refreshControl={<RefreshControl refreshing={loadingProviders && providers.length > 0} onRefresh={() => loadProviders(true, true)} />}
       >
         <Text style={styles.title}>Pay Electricity</Text>
         <Text style={styles.subtitle}>Pay your electricity bills instantly</Text>

@@ -2,7 +2,6 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { NETWORKS } from '../../utils/constants';
@@ -42,6 +41,18 @@ const GROUP_LABELS = {
   monthly: 'Monthly',
   yearly: 'Yearly',
   other: 'Other',
+};
+
+const parsePlanAmount = (plan) => {
+  const raw = plan?.variation_amount ?? plan?.amount;
+  const value = Number(String(raw ?? '').replace(/,/g, ''));
+  return Number.isFinite(value) ? value : null;
+};
+
+const isSameDataPlan = (a, b) => {
+  if (!a || !b) return false;
+  if (a.planId && b.planId) return a.planId === b.planId;
+  return a.variation_code === b.variation_code;
 };
 
 const DataScreen = ({ navigation }) => {
@@ -87,12 +98,6 @@ const DataScreen = ({ navigation }) => {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      if (network) fetchPlans(network);
-    }, [network])
-  );
-
   const handlePhoneChange = useCallback((value) => {
     const normalized = normalizePhone(value);
     setPhone(normalized);
@@ -135,8 +140,8 @@ const DataScreen = ({ navigation }) => {
         network,
         phone: normalizePhone(phone),
         variationCode: selectedPlan.variation_code,
-        planId: selectedPlan.planId,
-        amount: parseFloat(selectedPlan.variation_amount),
+        planId: selectedPlan.planId || undefined,
+        amount: parsePlanAmount(selectedPlan) ?? undefined,
         pin,
       });
       await refreshBalance();
@@ -214,7 +219,7 @@ const DataScreen = ({ navigation }) => {
         {activeGroup?.plans?.length ? activeGroup.plans.map((plan) => (
           <TouchableOpacity
             key={plan.planId || `${plan.provider}-${plan.variation_code}`}
-            style={[styles.planItem, selectedPlan?.planId === plan.planId && styles.planActive]}
+            style={[styles.planItem, isSameDataPlan(selectedPlan, plan) && styles.planActive]}
             onPress={() => setSelectedPlan(plan)}
           >
             <View style={styles.planInfo}>
@@ -238,7 +243,7 @@ const DataScreen = ({ navigation }) => {
             {planGroups.find((g) => g.category === 'other').plans.map((plan) => (
               <TouchableOpacity
                 key={`other-${plan.planId || plan.variation_code}`}
-                style={[styles.planItem, selectedPlan?.planId === plan.planId && styles.planActive]}
+                style={[styles.planItem, isSameDataPlan(selectedPlan, plan) && styles.planActive]}
                 onPress={() => setSelectedPlan(plan)}
               >
                 <View style={styles.planInfo}>

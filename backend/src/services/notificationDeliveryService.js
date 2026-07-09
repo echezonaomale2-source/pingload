@@ -3,7 +3,10 @@ const User = require('../models/User');
 const { sendPushToUser, sendPushToUsers } = require('./fcmService');
 const { logApiFailure } = require('../utils/logger');
 
+const { getPushChannelId } = require('../utils/pushChannels');
+
 const shouldSendPush = (user, type) => {
+  if (type === 'system') return true;
   const settings = user?.notificationSettings || {};
   if (type === 'security') return settings.security !== false;
   if (type === 'promotion' || type === 'promotions') return settings.promotions !== false;
@@ -16,6 +19,7 @@ const stringifyMetadata = (payload) => Object.fromEntries(
 
 const buildPushData = ({ type, screen, metadata = {}, notificationId }) => stringifyMetadata({
   type: type || 'system',
+  channelId: getPushChannelId(type),
   screen: screen || 'Notifications',
   notificationId: notificationId ? String(notificationId) : '',
   transactionId: metadata.transactionId ? String(metadata.transactionId) : '',

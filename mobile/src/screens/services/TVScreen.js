@@ -1,8 +1,7 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { TV_PROVIDERS } from '../../utils/constants';
@@ -59,12 +58,6 @@ const TVScreen = ({ navigation }) => {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      if (provider) loadPackages(provider);
-    }, [provider])
-  );
-
   const handleVerifySmartcard = async () => {
     if (!provider || !smartcard) {
       dialog.alertError('Missing Details', 'Select provider and enter smartcard number');
@@ -110,7 +103,8 @@ const TVScreen = ({ navigation }) => {
         provider,
         smartcardNumber: smartcard,
         variationCode: selectedPackage.code,
-        amount: selectedPackage.amount,
+        planId: selectedPackage.planId || undefined,
+        amount: Number(selectedPackage.amount) || undefined,
         phone: user?.phoneNumber,
         pin,
       });
@@ -188,7 +182,7 @@ const TVScreen = ({ navigation }) => {
             </TouchableOpacity>
             {expandedGroups[group.category] && group.plans.map((pkg) => (
               <TouchableOpacity
-                key={pkg.code}
+                key={pkg.planId || pkg.code}
                 style={[styles.pkgItem, selectedPackage?.code === pkg.code && styles.pkgActive]}
                 onPress={() => setSelectedPackage(pkg)}
               >
@@ -199,7 +193,12 @@ const TVScreen = ({ navigation }) => {
           </View>
         ))}
 
-        <CustomButton title="Pay Subscription" onPress={handlePay} loading={loading} disabled={!selectedPackage} />
+        <CustomButton
+          title={selectedPackage ? `Pay ${selectedPackage.name}` : 'Pay Subscription'}
+          onPress={handlePay}
+          loading={loading}
+          disabled={!selectedPackage}
+        />
         <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPay} loading={loading} onForgotPin={() => navigateToForgotTransactionPin(navigation, setShowPin)} />
       </ScrollView>
     </SafeAreaView>

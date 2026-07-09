@@ -6,6 +6,7 @@ const vtpass = require('../services/vtpassService');
 const routing = require('../services/vtuRoutingService');
 const { bumpCatalogVersion } = require('../utils/catalogInvalidation');
 const { tagWithVtuProvider } = require('../utils/resolveProviderFields');
+const { upsertTvPlanFromSync } = require('../utils/tvPlanUpsert');
 const { persistProviderHealth } = require('../utils/providerHealth');
 const { syncAllVtpassDataPlans, DATA_NETWORKS } = require('../services/vtpassDataPlanSyncService');
 const TV_PROVIDERS = ['dstv', 'gotv', 'startimes'];
@@ -185,11 +186,7 @@ const syncTvPlansForProvider = async (providerFilter) => {
         vtpassVariationCode: code,
       };
 
-      await TvPlan.findOneAndUpdate(
-        { provider, vtuProvider: 'vtpass', variationCode: code },
-        { $set: tagWithVtuProvider(update) },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
+      await upsertTvPlanFromSync(tagWithVtuProvider(update));
       synced += 1;
     }
   }

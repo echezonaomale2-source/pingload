@@ -18,6 +18,7 @@ import {
   markNotificationResponseHandled,
   wasNotificationResponseHandled,
 } from '../utils/pendingNotificationNav';
+import { getPushChannelId } from '../utils/pushChannels';
 
 const COLD_START_MAX_AGE_MS = 10 * 60 * 1000;
 
@@ -99,7 +100,7 @@ const presentForegroundNotification = async (remoteMessage) => {
       body: body || '',
       data,
       sound: 'default',
-      ...(Platform.OS === 'android' ? { channelId: data.type || 'default' } : {}),
+      ...(Platform.OS === 'android' ? { channelId: getPushChannelId(data.channelId || data.type) } : {}),
     },
     trigger: null,
   });
