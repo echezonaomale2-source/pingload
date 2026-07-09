@@ -36,7 +36,7 @@ if (!firebaseConfig.isConfigured) {
 module.exports = {
   name: 'Pingload',
   slug: 'pingload',
-  version: '1.0.9',
+  version: '1.0.10',
   orientation: 'portrait',
   icon: './src/assets/icon.png',
   userInterfaceStyle: 'automatic',
@@ -64,7 +64,7 @@ module.exports = {
   },
   android: {
     package: 'com.pingload.app',
-    versionCode: 10,
+    versionCode: 11,
     icon: './src/assets/icon.png',
     googleServicesFile: firebaseConfig.androidConfigPath,
     adaptiveIcon: {
