@@ -32,6 +32,8 @@ const {
   syncDataPlansForNetwork,
   syncAllVtpassDataPlans,
 } = require('../services/vtpassDataPlanSyncService');
+const { syncElectricityPlansFromVtpass } = require('../services/vtpassElectricitySyncService');
+const { syncEducationProductsFromVtpass } = require('../services/vtpassEducationSyncService');
 const {
   pickDataPlanCreateFields,
   pickElectricityPlanFields,
@@ -60,7 +62,11 @@ const planValidation = [
   body('variationCode').trim().notEmpty().withMessage('Variation code is required'),
   body('amount').isFloat({ min: 0 }).withMessage('Valid amount is required'),
   body('commissionPercent').optional().isFloat({ min: 0, max: 100 }).withMessage('Commission must be 0-100'),
-  body('validityCategory').optional().isIn(['daily', 'weekly', 'monthly', 'yearly', 'other']),
+  body('validityCategory').optional().isIn([
+    'daily', 'weekly', 'monthly', 'yearly',
+    'social', 'night', 'sme', 'corporate', 'broadband', 'weekend', 'special',
+    'other',
+  ]),
   body('category').optional().trim(),
   body('order').optional().isInt({ min: 0 }),
   body('enabled').optional().isBoolean(),
@@ -88,7 +94,7 @@ const tvPlanValidation = [
 ];
 
 const educationProductValidation = [
-  body('examType').isIn(['waec', 'neco', 'jamb']).withMessage('Invalid exam type'),
+  body('examType').isIn(['waec', 'neco', 'jamb', 'nabteb', 'other']).withMessage('Invalid exam type'),
   body('productCode').trim().notEmpty().withMessage('Product code is required'),
   body('name').trim().notEmpty().withMessage('Product name is required'),
   body('providerServiceId').trim().notEmpty().withMessage('Provider service ID is required'),
@@ -673,6 +679,30 @@ const adminSyncTvPlansFromVtpass = async (req, res, next) => {
   }
 };
 
+const adminSyncElectricityPlansFromVtpass = async (req, res, next) => {
+  try {
+    const result = await syncElectricityPlansFromVtpass();
+    res.json({ success: true, data: result });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
+};
+
+const adminSyncEducationProductsFromVtpass = async (req, res, next) => {
+  try {
+    const result = await syncEducationProductsFromVtpass();
+    res.json({ success: true, data: result });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
+};
+
 module.exports = {
   priceValidation,
   planValidation,
@@ -707,4 +737,6 @@ module.exports = {
   adminEducationPurchases,
   adminSyncDataPlansFromVtpass,
   adminSyncTvPlansFromVtpass,
+  adminSyncElectricityPlansFromVtpass,
+  adminSyncEducationProductsFromVtpass,
 };

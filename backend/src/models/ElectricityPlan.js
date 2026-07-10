@@ -33,14 +33,16 @@ electricityPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
   if (count > 0) return;
 
   await this.insertMany([
-    { providerId: 'ikeja', name: 'Ikeja Electric', providerServiceId: '02', order: 1 },
-    { providerId: 'eko', name: 'Eko Electric', providerServiceId: '01', order: 2 },
-    { providerId: 'abuja', name: 'Abuja Electric', providerServiceId: '03', order: 3 },
-    { providerId: 'kaduna', name: 'Kaduna Electric', providerServiceId: '08', order: 4 },
-    { providerId: 'kano', name: 'Kano Electric', providerServiceId: '04', order: 5 },
-    { providerId: 'portharcourt', name: 'Port Harcourt Electric', providerServiceId: '05', order: 6 },
-    { providerId: 'jos', name: 'Jos Electric', providerServiceId: '06', order: 7 },
-    { providerId: 'ibadan', name: 'Ibadan Electric', providerServiceId: '07', order: 8 },
+    { providerId: 'ikeja', name: 'Ikeja Electric (IKEDC)', providerServiceId: 'ikeja-electric', order: 1 },
+    { providerId: 'eko', name: 'Eko Electric (EKEDC)', providerServiceId: 'eko-electric', order: 2 },
+    { providerId: 'abuja', name: 'Abuja Electric (AEDC)', providerServiceId: 'abuja-electric', order: 3 },
+    { providerId: 'ibadan', name: 'Ibadan Electric (IBEDC)', providerServiceId: 'ibadan-electric', order: 4 },
+    { providerId: 'kano', name: 'Kano Electric (KEDCO)', providerServiceId: 'kano-electric', order: 5 },
+    { providerId: 'jos', name: 'Jos Electric (JED)', providerServiceId: 'jos-electric', order: 6 },
+    { providerId: 'benin', name: 'Benin Electric (BEDC)', providerServiceId: 'benin-electric', order: 7 },
+    { providerId: 'enugu', name: 'Enugu Electric (EEDC)', providerServiceId: 'enugu-electric', order: 8 },
+    { providerId: 'portharcourt', name: 'Port Harcourt Electric (PHED)', providerServiceId: 'portharcourt-electric', order: 9 },
+    { providerId: 'kaduna', name: 'Kaduna Electric (KAEDCO)', providerServiceId: 'kaduna-electric', order: 10 },
   ]);
 };
 

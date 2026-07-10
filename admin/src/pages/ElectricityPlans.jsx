@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { PageHeader, DataTable, Modal, PageLoader, ErrorAlert } from '../components';
 import { electricityPlansApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency } from '../utils/formatters';
@@ -25,6 +25,7 @@ const ElectricityPlansPage = () => {
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchPlans = useCallback(() => {
     setLoading(true);
@@ -103,6 +104,19 @@ const ElectricityPlansPage = () => {
     }
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await electricityPlansApi.sync();
+      fetchPlans();
+      dialog.notifySuccess(`Synced ${res.data?.data?.synced || 0} electricity provider(s) from VTpass`);
+    } catch (err) {
+      dialog.notifyError(getErrorMessage(err));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const columns = [
     { key: 'providerId', label: 'ID', render: (r) => <span className="font-mono text-xs">{r.providerId}</span> },
     { key: 'name', label: 'Provider' },
@@ -142,9 +156,14 @@ const ElectricityPlansPage = () => {
         title="Electricity Plans"
         subtitle={`Manage electricity providers · selected provider: ${label}`}
         action={
-          <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
-            <Plus size={18} /> Add Provider
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-60">
+              <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Syncing...' : 'Sync Providers'}
+            </button>
+            <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
+              <Plus size={18} /> Add Provider
+            </button>
+          </div>
         }
       />
 

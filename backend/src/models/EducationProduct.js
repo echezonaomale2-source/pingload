@@ -4,7 +4,7 @@ const educationProductSchema = new mongoose.Schema(
   {
     examType: {
       type: String,
-      enum: ['waec', 'neco', 'jamb'],
+      enum: ['waec', 'neco', 'jamb', 'nabteb', 'other'],
       required: true,
       index: true,
     },

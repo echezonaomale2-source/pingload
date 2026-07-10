@@ -21,25 +21,30 @@ import { useDialog } from '../../hooks/useDialog';
 const dedupeDataPlans = (plans) => {
   const seen = new Set();
   return (plans || []).filter((plan) => {
-    const key = plan.planId || `${plan.provider || plan.vtuProvider || 'vtpass'}:${plan.variation_code}`;
+    const key = plan.planId || plan.variation_code;
     if (!plan.variation_code || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 };
 
-const providerLabel = (plan) => {
-  if (plan.providerLabel) return plan.providerLabel;
-  const provider = plan.provider || plan.vtuProvider;
-  return 'VTpass';
-};
+const GROUP_ORDER = [
+  'daily', 'weekly', 'monthly', 'yearly',
+  'social', 'night', 'sme', 'corporate', 'broadband', 'weekend', 'special', 'other',
+];
 
-const GROUP_ORDER = ['daily', 'weekly', 'monthly', 'yearly'];
 const GROUP_LABELS = {
   daily: 'Daily',
   weekly: 'Weekly',
   monthly: 'Monthly',
   yearly: 'Yearly',
+  social: 'Social',
+  night: 'Night',
+  sme: 'SME',
+  corporate: 'Corporate',
+  broadband: 'Broadband',
+  weekend: 'Weekend',
+  special: 'Special',
   other: 'Other',
 };
 
@@ -79,17 +84,16 @@ const DataScreen = ({ navigation }) => {
       const groups = res.data.groups?.length
         ? res.data.groups
         : [{ category: 'other', label: 'All Plans', plans: dedupeDataPlans(res.data.data) }];
-      const ordered = GROUP_ORDER.map((category) => {
-        const match = groups.find((g) => g.category === category);
-        return match || { category, label: GROUP_LABELS[category], plans: [] };
-      });
-      const otherGroup = groups.find((g) => g.category === 'other');
-      if (otherGroup?.plans?.length) {
-        ordered.push(otherGroup);
-      }
+      const ordered = GROUP_ORDER
+        .map((category) => {
+          const match = groups.find((g) => g.category === category);
+          return match
+            ? { ...match, label: match.label || GROUP_LABELS[category] }
+            : null;
+        })
+        .filter((g) => g?.plans?.length);
       setPlanGroups(ordered);
-      const firstWithPlans = ordered.find((g) => g.plans.length > 0);
-      setActiveCategory(firstWithPlans?.category || 'daily');
+      setActiveCategory(ordered[0]?.category || '');
     } catch {
       setPlanGroups([]);
       dialog.alertError('Error', 'Could not load data plans. Please try again.');
@@ -160,11 +164,17 @@ const DataScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
         <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
-      <ScrollView showsVerticalScrollIndicator={false}>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.title}>Buy Data</Text>
         <Text style={styles.subtitle}>Affordable data plans for all networks</Text>
 
@@ -185,40 +195,33 @@ const DataScreen = ({ navigation }) => {
           </View>
         )}
 
-        {network && !loadingPlans && (
-          <View style={styles.segmentRow}>
-            {GROUP_ORDER.map((category) => {
-              const group = planGroups.find((g) => g.category === category);
-              const count = group?.plans?.length || 0;
-              const isActive = category === activeCategory;
+        {network && !loadingPlans && planGroups.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.segmentScroll}
+            contentContainerStyle={styles.segmentRow}
+          >
+            {planGroups.map((group) => {
+              const isActive = group.category === activeCategory;
               return (
                 <TouchableOpacity
-                  key={category}
-                  style={[
-                    styles.segment,
-                    isActive && styles.segmentActive,
-                    count === 0 && styles.segmentDisabled,
-                  ]}
-                  onPress={() => count > 0 && handleCategoryChange(category)}
-                  disabled={count === 0}
+                  key={group.category}
+                  style={[styles.segment, isActive && styles.segmentActive]}
+                  onPress={() => handleCategoryChange(group.category)}
                 >
-                  <Text style={[
-                    styles.segmentText,
-                    isActive && styles.segmentTextActive,
-                    count === 0 && styles.segmentTextDisabled,
-                  ]}
-                  >
-                    {GROUP_LABELS[category]}
+                  <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
+                    {group.label || GROUP_LABELS[group.category]}
                   </Text>
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
         )}
 
         {activeGroup?.plans?.length ? activeGroup.plans.map((plan) => (
           <TouchableOpacity
-            key={plan.planId || `${plan.provider}-${plan.variation_code}`}
+            key={plan.planId || plan.variation_code}
             style={[styles.planItem, isSameDataPlan(selectedPlan, plan) && styles.planActive]}
             onPress={() => setSelectedPlan(plan)}
           >
@@ -229,68 +232,56 @@ const DataScreen = ({ navigation }) => {
                   {[plan.dataSize, plan.validity].filter(Boolean).join(' · ')}
                 </Text>
               ) : null}
-              <Text style={styles.planProvider}>{providerLabel(plan)}</Text>
             </View>
             <Text style={styles.planPrice}>{formatCurrency(parseFloat(plan.variation_amount))}</Text>
           </TouchableOpacity>
         )) : network && !loadingPlans && activeCategory ? (
-          <Text style={styles.emptyPlans}>No {GROUP_LABELS[activeCategory]?.toLowerCase()} plans for this network.</Text>
+          <Text style={styles.emptyPlans}>No plans in this category.</Text>
         ) : null}
+      </ScrollView>
 
-        {planGroups.find((g) => g.category === 'other')?.plans?.length > 0 && (
-          <>
-            <Text style={styles.otherHeading}>Other Plans</Text>
-            {planGroups.find((g) => g.category === 'other').plans.map((plan) => (
-              <TouchableOpacity
-                key={`other-${plan.planId || plan.variation_code}`}
-                style={[styles.planItem, isSameDataPlan(selectedPlan, plan) && styles.planActive]}
-                onPress={() => setSelectedPlan(plan)}
-              >
-                <View style={styles.planInfo}>
-                  <Text style={styles.planName}>{plan.name}</Text>
-                  {(plan.dataSize || plan.validity) ? (
-                    <Text style={styles.planMeta}>
-                      {[plan.dataSize, plan.validity].filter(Boolean).join(' · ')}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.planProvider}>{providerLabel(plan)}</Text>
-                </View>
-                <Text style={styles.planPrice}>{formatCurrency(parseFloat(plan.variation_amount))}</Text>
-              </TouchableOpacity>
-            ))}
-          </>
-        )}
-
+      <View style={styles.footer}>
         <CustomButton
           title={selectedPlan ? `Buy ${selectedPlan.name}` : 'Buy Data'}
           onPress={handlePurchase}
           loading={loading}
           disabled={!selectedPlan}
         />
-        <TransactionPinModal visible={showPin} onClose={() => setShowPin(false)} onConfirm={confirmPurchase} loading={loading} onForgotPin={() => navigateToForgotTransactionPin(navigation, setShowPin)} />
-      </ScrollView>
+      </View>
+
+      <TransactionPinModal
+        visible={showPin}
+        onClose={() => setShowPin(false)}
+        onConfirm={confirmPurchase}
+        loading={loading}
+        onForgotPin={() => navigateToForgotTransactionPin(navigation, setShowPin)}
+      />
     </SafeAreaView>
   );
 };
 
 const createStyles = (colors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, padding: 24 },
-  backBtn: { marginBottom: 16 },
+  container: { flex: 1, backgroundColor: colors.background },
+  backBtn: { paddingHorizontal: 24, paddingTop: 8, marginBottom: 8 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 24 },
   title: { fontSize: 28, fontWeight: '800', color: colors.text },
   subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 8, marginBottom: 24 },
   networkHint: { fontSize: 12, color: colors.primary, marginTop: -12, marginBottom: 12, fontWeight: '600' },
   loadingText: { color: colors.textSecondary, marginTop: 10, fontSize: 14, textAlign: 'center' },
   plansLoading: { alignItems: 'center', paddingVertical: 24 },
+  segmentScroll: { marginBottom: 12, marginHorizontal: -4 },
   segmentRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 16,
+    gap: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
   segment: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 10,
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -300,24 +291,13 @@ const createStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  segmentDisabled: {
-    opacity: 0.45,
-  },
-  segmentText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
+  segmentText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
   segmentTextActive: { color: '#FFFFFF' },
-  segmentTextDisabled: { color: colors.textSecondary },
   emptyPlans: {
     textAlign: 'center',
     color: colors.textSecondary,
     fontSize: 14,
     paddingVertical: 20,
-  },
-  otherHeading: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: 8,
-    marginBottom: 4,
   },
   planItem: {
     flexDirection: 'row',
@@ -332,8 +312,15 @@ const createStyles = (colors) => StyleSheet.create({
   planInfo: { flex: 1, marginRight: 12 },
   planName: { fontSize: 14, fontWeight: '700', color: colors.text },
   planMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
-  planProvider: { fontSize: 11, color: colors.primary, marginTop: 4, fontWeight: '700' },
   planPrice: { fontSize: 14, fontWeight: '800', color: colors.primary },
+  footer: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
+  },
 });
 
 export default DataScreen;

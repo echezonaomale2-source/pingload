@@ -730,7 +730,8 @@ const dataValidation = [
 ];
 
 const electricityValidation = [
-  body('provider').isIn(['ikeja', 'eko', 'abuja', 'kaduna', 'kano', 'portharcourt', 'jos', 'ibadan']).withMessage('Invalid provider'),
+  body('provider').trim().notEmpty().withMessage('Provider is required')
+    .matches(/^[a-z0-9_-]+$/i).withMessage('Invalid provider'),
   body('meterNumber').trim().notEmpty().withMessage('Meter number is required'),
   body('meterType').isIn(['prepaid', 'postpaid']).withMessage('Invalid meter type'),
   body('amount').isFloat({ min: 500 }).withMessage('Minimum electricity payment is ₦500'),
@@ -739,7 +740,8 @@ const electricityValidation = [
 ];
 
 const electricityVerifyValidation = [
-  body('provider').isIn(['ikeja', 'eko', 'abuja', 'kaduna', 'kano', 'portharcourt', 'jos', 'ibadan']).withMessage('Invalid provider'),
+  body('provider').trim().notEmpty().withMessage('Provider is required')
+    .matches(/^[a-z0-9_-]+$/i).withMessage('Invalid provider'),
   body('meterNumber').trim().notEmpty().withMessage('Meter number is required'),
   body('meterType').isIn(['prepaid', 'postpaid']).withMessage('Invalid meter type'),
 ];

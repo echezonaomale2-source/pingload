@@ -7,7 +7,10 @@ import { useDialog } from '../hooks/useDialog';
 import { useVtuProvider } from '../hooks/useVtuProvider';
 
 const NETWORKS = ['mtn', 'airtel', 'glo', '9mobile'];
-const VALIDITY_CATEGORIES = ['daily', 'weekly', 'monthly', 'yearly', 'other'];
+const VALIDITY_CATEGORIES = [
+  'daily', 'weekly', 'monthly', 'yearly',
+  'social', 'night', 'sme', 'corporate', 'broadband', 'weekend', 'special', 'other',
+];
 const emptyForm = {
   network: 'mtn', name: '', dataSize: '', validity: '', validityCategory: 'other', category: '',
   variationCode: '', amount: '', commissionPercent: 0, enabled: true, order: 0,

@@ -91,31 +91,33 @@ export const requestNotificationPermission = async () => {
 export const getFcmDeviceToken = async () => {
   if (!Device.isDevice) return null;
 
+  // Only register real FCM tokens from @react-native-firebase/messaging.
+  // Expo Go / APNS-native tokens are rejected by Firebase Admin multicast.
   const messaging = await loadFirebaseMessaging();
-  if (messaging) {
-    try {
-      if (Platform.OS === 'ios') {
-        await messaging.registerDeviceForRemoteMessages();
-      }
-      const token = await messaging.getToken();
-      if (token) {
-        return {
-          token,
-          provider: 'fcm',
-          platform: Platform.OS,
-        };
-      }
-    } catch {
-      // Fall through to expo-notifications native token.
+  if (!messaging) {
+    if (__DEV__) {
+      console.warn('[Push] Firebase messaging unavailable — skipping token registration');
     }
+    return null;
   }
 
-  const devicePush = await Notifications.getDevicePushTokenAsync();
-  return {
-    token: devicePush.data,
-    provider: devicePush.type === 'ios' ? 'apns' : 'fcm',
-    platform: Platform.OS,
-  };
+  try {
+    if (Platform.OS === 'ios') {
+      await messaging.registerDeviceForRemoteMessages();
+    }
+    const token = await messaging.getToken();
+    if (!token) return null;
+    return {
+      token,
+      provider: 'fcm',
+      platform: Platform.OS,
+    };
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[Push] FCM token fetch failed:', error?.message || error);
+    }
+    return null;
+  }
 };
 
 export const buildTokenPayload = async () => {

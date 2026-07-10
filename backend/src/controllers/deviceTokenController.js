@@ -8,13 +8,27 @@ const registerDeviceToken = async (req, res, next) => {
     }
 
     const normalizedToken = token.trim();
+    const normalizedProvider = String(provider || 'fcm').toLowerCase();
+    if (normalizedProvider !== 'fcm') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only FCM device tokens are supported. Use a production build with Firebase messaging.',
+      });
+    }
+
+    // Deactivate any non-FCM tokens for this user so stale APNS/Expo tokens stop counting as failures.
+    await DeviceToken.updateMany(
+      { userId: req.user._id, provider: { $ne: 'fcm' }, isActive: true },
+      { $set: { isActive: false } }
+    );
+
     const record = await DeviceToken.findOneAndUpdate(
       { token: normalizedToken },
       {
         $set: {
           userId: req.user._id,
           platform: platform || 'unknown',
-          provider: provider || 'fcm',
+          provider: 'fcm',
           deviceName: deviceName || '',
           appVersion: appVersion || '',
           isActive: true,

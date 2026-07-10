@@ -76,6 +76,7 @@ export const electricityPlansApi = {
   create: (data) => api.post('/admin/electricity-plans', data),
   update: (id, data) => api.patch(`/admin/electricity-plans/${id}`, data),
   delete: (id) => api.delete(`/admin/electricity-plans/${id}`),
+  sync: () => api.post('/admin/electricity-plans/sync', {}, { timeout: SYNC_TIMEOUT }),
 };
 
 export const tvPlansApi = {
@@ -92,6 +93,7 @@ export const educationProductsApi = {
   update: (id, data) => api.patch(`/admin/education-products/${id}`, data),
   delete: (id) => api.delete(`/admin/education-products/${id}`),
   purchases: (params) => api.get('/admin/education/purchases', { params }),
+  sync: () => api.post('/admin/education-products/sync', {}, { timeout: SYNC_TIMEOUT }),
 };
 
 export const bettingPlatformsApi = {

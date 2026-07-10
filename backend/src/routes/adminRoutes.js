@@ -71,6 +71,8 @@ const {
   educationProductValidation,
   adminSyncDataPlansFromVtpass,
   adminSyncTvPlansFromVtpass,
+  adminSyncElectricityPlansFromVtpass,
+  adminSyncEducationProductsFromVtpass,
 } = require('../controllers/serviceConfigController');
 const { getRevenueDashboard } = require('../controllers/revenueController');
 const { listSecurityEvents } = require('../controllers/securityEventController');
@@ -163,6 +165,7 @@ router.patch('/data-plans/:id', protectAdmin, adminUpdateDataPlan);
 router.delete('/data-plans/:id', protectAdmin, adminDeleteDataPlan);
 
 router.get('/electricity-plans', protectAdmin, adminListElectricityPlans);
+router.post('/electricity-plans/sync', protectAdmin, adminSyncElectricityPlansFromVtpass);
 router.post('/electricity-plans', protectAdmin, electricityPlanValidation, validate, adminCreateElectricityPlan);
 router.patch('/electricity-plans/:id', protectAdmin, adminUpdateElectricityPlan);
 router.delete('/electricity-plans/:id', protectAdmin, adminDeleteElectricityPlan);
@@ -174,6 +177,7 @@ router.patch('/tv-plans/:id', protectAdmin, adminUpdateTvPlan);
 router.delete('/tv-plans/:id', protectAdmin, adminDeleteTvPlan);
 
 router.get('/education-products', protectAdmin, adminListEducationProducts);
+router.post('/education-products/sync', protectAdmin, adminSyncEducationProductsFromVtpass);
 router.post('/education-products', protectAdmin, educationProductValidation, validate, adminCreateEducationProduct);
 router.patch('/education-products/:id', protectAdmin, adminUpdateEducationProduct);
 router.delete('/education-products/:id', protectAdmin, adminDeleteEducationProduct);

@@ -1,3 +1,5 @@
+const { inferValidityCategory } = require('./validityCategory');
+
 const resolveProviderPlanCode = (record) => {
   if (!record) return null;
   if (record.providerPlanCode) return record.providerPlanCode;
@@ -45,6 +47,10 @@ const buildDataPlanSyncUpdate = (_providerName, network, remotePlan) => {
     providerVariationCode: code,
     variationCode: code,
     vtpassVariationCode: code,
+    validityCategory: inferValidityCategory(
+      remotePlan.validity || '30 days',
+      planName
+    ),
   });
 };
 
@@ -58,13 +64,10 @@ const mapDataPlanForPublicApi = (plan, inferValidityCategory) => {
     variation_amount: String(normalized.amount),
     dataSize: normalized.dataSize,
     validity: normalized.validity,
-    validityCategory: normalized.validityCategory || inferValidityCategory(normalized.validity),
+    validityCategory: normalized.validityCategory || inferValidityCategory(normalized.validity, normalized.name),
     category: normalized.category || '',
     commissionPercent: normalized.commissionPercent || 0,
     order: normalized.order || 0,
-    provider: 'vtpass',
-    providerLabel: 'VTpass',
-    providerPlanCode: normalized.providerPlanCode,
     planId: String(plan._id || plan.id || ''),
     active: normalized.enabled,
   };

@@ -93,9 +93,18 @@ const NotificationsPage = () => {
       if (push?.skipped && push?.reason === 'fcm_not_configured') {
         dialog.notifySuccess('In-app notification saved. FCM is not configured on the server yet.');
       } else if (push?.skipped && push?.reason === 'no_tokens') {
-        dialog.notifySuccess('In-app notification saved. No device tokens registered for push.');
+        dialog.notifySuccess('In-app notification saved. No FCM device tokens registered. Users must open a production APK and allow notifications.');
+      } else if (push?.skipped && push?.reason === 'fcm_send_error') {
+        dialog.notifyError('Push send failed. Check Firebase credentials on the server.');
+      } else if (push && (push.failed || 0) > 0) {
+        const summary = push.errorSummary
+          ? Object.entries(push.errorSummary).map(([k, v]) => `${k}: ${v}`).join(', ')
+          : '';
+        dialog.notifyError(
+          `Push delivered: ${push.sent || 0}, failed: ${push.failed || 0}${summary ? ` (${summary})` : ''}. Ask users to re-open the app so tokens refresh.`
+        );
       } else if (push) {
-        dialog.notifySuccess(`Notification sent. Push delivered: ${push.sent || 0}, failed: ${push.failed || 0}`);
+        dialog.notifySuccess(`Notification sent. Push delivered: ${push.sent || 0}`);
       } else {
         dialog.notifySuccess('Notification sent');
       }

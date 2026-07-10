@@ -71,14 +71,18 @@ export const NETWORKS = [
 ];
 
 export const ELECTRICITY_PROVIDERS = [
-  { id: 'ikeja', name: 'Ikeja Electric', color: '#F59E0B' },
-  { id: 'eko', name: 'Eko Electric', color: '#2563EB' },
-  { id: 'abuja', name: 'Abuja Electric', color: '#DC2626' },
-  { id: 'kaduna', name: 'Kaduna Electric', color: '#7C3AED' },
-  { id: 'kano', name: 'Kano Electric', color: '#059669' },
-  { id: 'portharcourt', name: 'Port Harcourt Electric', color: '#0891B2' },
-  { id: 'jos', name: 'Jos Electric', color: '#EA580C' },
-  { id: 'ibadan', name: 'Ibadan Electric', color: '#4F46E5' },
+  { id: 'ikeja', name: 'Ikeja Electric (IKEDC)', color: '#F59E0B' },
+  { id: 'eko', name: 'Eko Electric (EKEDC)', color: '#2563EB' },
+  { id: 'abuja', name: 'Abuja Electric (AEDC)', color: '#DC2626' },
+  { id: 'ibadan', name: 'Ibadan Electric (IBEDC)', color: '#4F46E5' },
+  { id: 'kano', name: 'Kano Electric (KEDCO)', color: '#059669' },
+  { id: 'jos', name: 'Jos Electric (JED)', color: '#EA580C' },
+  { id: 'benin', name: 'Benin Electric (BEDC)', color: '#B45309' },
+  { id: 'enugu', name: 'Enugu Electric (EEDC)', color: '#0D9488' },
+  { id: 'portharcourt', name: 'Port Harcourt Electric (PHED)', color: '#0891B2' },
+  { id: 'kaduna', name: 'Kaduna Electric (KAEDCO)', color: '#7C3AED' },
+  { id: 'yola', name: 'Yola Electric (YEDC)', color: '#BE185D' },
+  { id: 'aba', name: 'Aba Electric (APLE)', color: '#4338CA' },
 ];
 
 export const TV_PROVIDERS = [
@@ -90,6 +94,7 @@ export const TV_PROVIDERS = [
 export const EDUCATION_EXAMS = [
   { id: 'waec', name: 'WAEC', color: '#047857' },
   { id: 'neco', name: 'NECO', color: '#1D4ED8' },
+  { id: 'nabteb', name: 'NABTEB', color: '#7C3AED' },
   { id: 'jamb', name: 'JAMB', color: '#0F766E' },
 ];
 

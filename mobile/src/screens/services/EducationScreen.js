@@ -79,11 +79,16 @@ const EducationScreen = ({ navigation, route }) => {
   }, [selectedProduct, quantity]);
 
   const examProviders = useMemo(() => {
-    const source = exams.length
-      ? exams.map((exam) => exam.id)
-      : EDUCATION_EXAMS.map((exam) => exam.id);
-    return EDUCATION_EXAMS.filter((exam) => source.includes(exam.id));
-  }, [exams]);
+    const fromApi = exams.length
+      ? exams
+      : products.map((p) => ({ id: p.examType, name: String(p.examType || '').toUpperCase() }));
+    const ids = [...new Set(fromApi.map((e) => e.id).filter(Boolean))];
+    return ids.map((id) => {
+      const known = EDUCATION_EXAMS.find((exam) => exam.id === id);
+      const api = fromApi.find((exam) => exam.id === id);
+      return known || { id, name: api?.name || String(id).toUpperCase(), color: '#0F766E' };
+    });
+  }, [exams, products]);
 
   const handleExamChange = (examId) => {
     setSelectedExam(examId);

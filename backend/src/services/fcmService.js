@@ -192,15 +192,32 @@ const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount, ch
     });
 
     const invalidTokens = [];
+    const errorSummary = {};
+    const DEACTIVATE_CODES = new Set([
+      'messaging/registration-token-not-registered',
+      'messaging/invalid-registration-token',
+      'messaging/mismatched-credential',
+      'messaging/invalid-argument',
+    ]);
+
     response.responses.forEach((item, index) => {
       if (!item.success) {
-        const code = item.error?.code;
-        if (code === 'messaging/registration-token-not-registered'
-          || code === 'messaging/invalid-registration-token') {
+        const code = item.error?.code || 'unknown';
+        errorSummary[code] = (errorSummary[code] || 0) + 1;
+        if (DEACTIVATE_CODES.has(code)) {
           invalidTokens.push(uniqueTokens[index]);
         }
       }
     });
+
+    if (Object.keys(errorSummary).length) {
+      logApiFailure('fcm:send-batch', new Error('FCM multicast partial/total failure'), {
+        tokenCount: uniqueTokens.length,
+        sent: response.successCount,
+        failed: response.failureCount,
+        errorSummary,
+      });
+    }
 
     await deactivateInvalidTokens(invalidTokens);
 
@@ -209,6 +226,7 @@ const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount, ch
       sent: response.successCount,
       failed: response.failureCount,
       invalidTokens: invalidTokens.length,
+      errorSummary,
     };
   } catch (error) {
     logApiFailure('fcm:send', error, { tokenCount: uniqueTokens.length });
@@ -223,9 +241,13 @@ const getUnreadCountForUser = async (userId) => Notification.countDocuments({
 
 const sendPushToUser = async ({ userId, title, body, data = {} }) => {
   const [devices, badgeCount] = await Promise.all([
-    DeviceToken.find({ userId, isActive: true }).select('token'),
+    DeviceToken.find({ userId, isActive: true, provider: 'fcm' }).select('token'),
     getUnreadCountForUser(userId),
   ]);
+
+  if (!devices.length) {
+    return { success: true, sent: 0, failed: 0, skipped: true, reason: 'no_tokens' };
+  }
 
   return sendPushToTokens({
     tokens: devices.map((device) => device.token),
@@ -243,7 +265,11 @@ const sendPushToUsers = async ({ userIds, title, body, data = {} }) => {
     return { success: true, sent: 0, failed: 0, skipped: true, reason: 'no_users' };
   }
 
-  const devices = await DeviceToken.find({ userId: { $in: ids }, isActive: true }).select('token userId');
+  const devices = await DeviceToken.find({
+    userId: { $in: ids },
+    isActive: true,
+    provider: 'fcm',
+  }).select('token userId');
   if (!devices.length) {
     return { success: true, sent: 0, failed: 0, skipped: true, reason: 'no_tokens' };
   }
@@ -267,11 +293,19 @@ const sendPushToUsers = async ({ userIds, title, body, data = {} }) => {
     }))
   );
 
+  const errorSummary = {};
+  results.forEach((item) => {
+    Object.entries(item.errorSummary || {}).forEach(([code, count]) => {
+      errorSummary[code] = (errorSummary[code] || 0) + count;
+    });
+  });
+
   return {
     success: results.every((item) => item.success),
     sent: results.reduce((sum, item) => sum + (item.sent || 0), 0),
     failed: results.reduce((sum, item) => sum + (item.failed || 0), 0),
     batches: results.length,
+    errorSummary: Object.keys(errorSummary).length ? errorSummary : undefined,
   };
 };
 

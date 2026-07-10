@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { PageHeader, DataTable, Modal, PageLoader, ErrorAlert } from '../components';
 import { educationProductsApi, getErrorMessage } from '../services/adminService';
 import { formatCurrency } from '../utils/formatters';
 import { useDialog } from '../hooks/useDialog';
 import { useVtuProvider } from '../hooks/useVtuProvider';
 
-const EXAM_TYPES = ['waec', 'neco', 'jamb'];
+const EXAM_TYPES = ['waec', 'neco', 'jamb', 'nabteb', 'other'];
 const emptyForm = {
   examType: 'waec',
   productCode: '',
@@ -26,6 +26,7 @@ const EducationProductsPage = () => {
   const [error, setError] = useState('');
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchProducts = useCallback(() => {
     setLoading(true);
@@ -93,6 +94,19 @@ const EducationProductsPage = () => {
     }
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await educationProductsApi.sync();
+      fetchProducts();
+      dialog.notifySuccess(`Synced ${res.data?.data?.synced || 0} education product(s) from VTpass`);
+    } catch (err) {
+      dialog.notifyError(getErrorMessage(err));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const columns = [
     { key: 'examType', label: 'Exam', render: (r) => r.examType?.toUpperCase() },
     { key: 'name', label: 'Name' },
@@ -118,11 +132,16 @@ const EducationProductsPage = () => {
     <div>
       <PageHeader
         title="Education Products"
-        subtitle={`Manage WAEC, NECO, and JAMB pin products · selected provider: ${label}`}
+        subtitle={`Manage WAEC, NECO, NABTEB, and JAMB pin products · selected provider: ${label}`}
         action={(
-          <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
-            <Plus size={18} /> Add Product
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={handleSync} disabled={syncing} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-60">
+              <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Syncing...' : 'Sync Exams'}
+            </button>
+            <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
+              <Plus size={18} /> Add Product
+            </button>
+          </div>
         )}
       />
 

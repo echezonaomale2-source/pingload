@@ -9,7 +9,11 @@ const dataPlanSchema = new mongoose.Schema(
     validity: { type: String, required: true, trim: true },
     validityCategory: {
       type: String,
-      enum: ['daily', 'weekly', 'monthly', 'yearly', 'other'],
+      enum: [
+        'daily', 'weekly', 'monthly', 'yearly',
+        'social', 'night', 'sme', 'corporate', 'broadband', 'weekend', 'special',
+        'other',
+      ],
       default: 'other',
       index: true,
     },
