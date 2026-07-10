@@ -10,3 +10,7 @@ android/keystore.properties
 android/*.keystore
 android/app/*.keystore
 scripts/build-android-release.ps1
+releases/
+build-apk-info.json
+*.apk
+*.aab
