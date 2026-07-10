@@ -15,3 +15,6 @@ dist/
 eas-build*.log
 build-view.json
 bv*.json
+releases/
+build-apk-info.json
+.expo-*/

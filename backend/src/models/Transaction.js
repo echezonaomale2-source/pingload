@@ -62,7 +62,6 @@ const transactionSchema = new mongoose.Schema(
     originalTransactionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Transaction',
-      index: true,
     },
     refundedAt: { type: Date },
   },
