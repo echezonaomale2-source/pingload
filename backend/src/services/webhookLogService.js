@@ -21,10 +21,25 @@ const logWebhookReceived = async ({ event, data, eventKey }) => {
         transferCode: data?.transfer_code,
       },
     });
-    return { log, duplicate: false };
+    return { log, duplicate: false, alreadyProcessed: false };
   } catch (error) {
     if (error.code === 11000) {
-      return { log: null, duplicate: true, eventKey: key };
+      const existing = await WebhookLog.findOne({ eventKey: key });
+      // Allow Paystack retries when the first attempt failed or never finished.
+      const alreadyProcessed = existing
+        && ['processed', 'duplicate', 'ignored'].includes(existing.status);
+      if (!alreadyProcessed && existing) {
+        await WebhookLog.findOneAndUpdate(
+          { eventKey: key },
+          { $set: { status: 'received', error: undefined, resultMessage: undefined } }
+        );
+      }
+      return {
+        log: existing,
+        duplicate: true,
+        alreadyProcessed,
+        eventKey: key,
+      };
     }
     throw error;
   }

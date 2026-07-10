@@ -4,7 +4,7 @@ import { API_BASE_URL } from '../utils/constants';
 import { getLoadingMessage } from '../utils/loadingMessages';
 import { showGlobalLoader, hideGlobalLoader } from '../utils/loadingService';
 import { isOnline } from '../utils/networkStatus';
-import { emitAppLocked } from '../utils/appLockEvents';
+import { emitAppLocked, emitSessionExpired } from '../utils/appLockEvents';
 
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -90,6 +90,7 @@ api.interceptors.response.use(
         emitAppLocked();
       } else if (!isPinError && isAuthFailure) {
         await SecureStore.deleteItemAsync('token');
+        emitSessionExpired();
       }
     }
 

@@ -7,7 +7,7 @@ import { hasLoginPin, setLoginPin, clearLoginPin } from '../services/loginPinSer
 import { syncDeviceTokenWithBackend, updateAppBadgeCount } from '../services/pushNotificationService';
 import { unregisterPushOnLogout, flushPendingNotificationNavigation } from '../hooks/usePushNotifications';
 import { clearPendingNotificationNav } from '../utils/pendingNotificationNav';
-import { onAppLocked } from '../utils/appLockEvents';
+import { onAppLocked, onSessionExpired } from '../utils/appLockEvents';
 
 const BOOTSTRAP_TIMEOUT_MS = 12000;
 
@@ -140,6 +140,18 @@ export const AuthProvider = ({ children }) => {
       }
     });
   }, [user, resolveUnlockGate]);
+
+  useEffect(() => {
+    return onSessionExpired(() => {
+      setUser(null);
+      setBalance(0);
+      setIsAuthenticated(false);
+      setAwaitingUnlock(null);
+      setNeedsLoginPinSetup(false);
+      updateAppBadgeCount(0).catch(() => {});
+      clearPendingNotificationNav().catch(() => {});
+    });
+  }, []);
 
   const completeSession = async (userData, token, initialBalance = null, { isNewAccount = false } = {}) => {
     await SecureStore.setItemAsync('token', token);

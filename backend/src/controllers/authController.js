@@ -34,7 +34,7 @@ const registerValidation = [
   body('fullName').trim().notEmpty().withMessage('Full name is required'),
   body('email').isEmail().withMessage('Valid email is required'),
   body('phoneNumber').trim().notEmpty().withMessage('Phone number is required'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
 ];
 
 const loginValidation = [
@@ -44,8 +44,18 @@ const loginValidation = [
 
 const resetPasswordValidation = [
   body('email').isEmail().withMessage('Valid email is required'),
-  body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('newPassword').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
   body('otp').optional().isLength({ min: 6, max: 6 }).withMessage('OTP must be 6 digits'),
+];
+
+const updateProfileValidation = [
+  body('fullName').optional().trim().isLength({ min: 2, max: 80 }).withMessage('Full name must be 2-80 characters'),
+  body('phoneNumber').optional().matches(/^(\+?234|0)[789][01]\d{8}$/).withMessage('Invalid Nigerian phone number'),
+];
+
+const changePasswordValidation = [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
 ];
 
 const deleteAccountValidation = [
@@ -303,6 +313,7 @@ const resetPassword = async (req, res, next) => {
     }
 
     user.passwordHash = newPassword;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
     await clearEmailVerification(normalizedEmail, OTP_PURPOSES.PASSWORD_RESET);
 
@@ -322,10 +333,17 @@ const getProfile = async (req, res, next) => {
 
 const updateProfile = async (req, res, next) => {
   try {
-    const { fullName, phoneNumber } = req.body;
+    const updates = {};
+    if (req.body.fullName !== undefined) updates.fullName = String(req.body.fullName).trim();
+    if (req.body.phoneNumber !== undefined) updates.phoneNumber = String(req.body.phoneNumber).trim();
+
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ success: false, message: 'No profile fields to update' });
+    }
+
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      { fullName, phoneNumber },
+      updates,
       { new: true, runValidators: true }
     ).select('-passwordHash');
 
@@ -345,6 +363,7 @@ const changePassword = async (req, res, next) => {
     }
 
     user.passwordHash = newPassword;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
     await user.save();
 
     res.json({ success: true, message: 'Password changed successfully' });
@@ -512,5 +531,7 @@ module.exports = {
   registerValidation,
   loginValidation,
   resetPasswordValidation,
+  updateProfileValidation,
+  changePasswordValidation,
   deleteAccountValidation,
 };

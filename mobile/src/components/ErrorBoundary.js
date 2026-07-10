@@ -19,12 +19,16 @@ class ErrorBoundary extends React.Component {
       return this.props.children;
     }
 
-    const message = this.state.error?.message || String(this.state.error);
+    const message = __DEV__
+      ? (this.state.error?.message || String(this.state.error))
+      : 'Something went wrong. Please restart the app. If this keeps happening, contact support.';
 
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>App failed to start</Text>
-        <Text style={styles.subtitle}>Share this error if you need help:</Text>
+        <Text style={styles.title}>Something went wrong</Text>
+        <Text style={styles.subtitle}>
+          {__DEV__ ? 'Share this error if you need help:' : 'Your session data is safe. Try again to continue.'}
+        </Text>
         <ScrollView style={styles.box} contentContainerStyle={styles.boxContent}>
           <Text style={styles.message}>{message}</Text>
         </ScrollView>

@@ -1,10 +1,12 @@
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
+const { parsePagination } = require('../utils/safeQuery');
 
 // GET /transactions
 const getTransactions = async (req, res, next) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status } = req.query;
+    const { page, limit, skip } = parsePagination(req.query);
     const filter = { userId: req.user._id };
 
     if (status === 'refunded') {
@@ -14,21 +16,19 @@ const getTransactions = async (req, res, next) => {
       filter.transactionType = { $ne: 'refund' };
     }
 
-    const transactions = await Transaction.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit, 10));
-
-    const total = await Transaction.countDocuments(filter);
+    const [transactions, total] = await Promise.all([
+      Transaction.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Transaction.countDocuments(filter),
+    ]);
 
     res.json({
       success: true,
       data: transactions,
       pagination: {
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
+        page,
+        limit,
         total,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil(total / limit) || 1,
       },
     });
   } catch (error) {

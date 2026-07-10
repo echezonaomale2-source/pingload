@@ -892,10 +892,11 @@ const changePassword = async (req, res, next) => {
     if (!(await admin.comparePassword(currentPassword))) {
       return res.status(400).json({ success: false, message: 'Current password is incorrect' });
     }
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 8 characters' });
     }
     admin.passwordHash = newPassword;
+    admin.tokenVersion = (admin.tokenVersion || 0) + 1;
     await admin.save();
     res.json({ success: true, message: 'Password updated successfully' });
   } catch (error) {

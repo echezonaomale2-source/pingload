@@ -13,31 +13,43 @@ const WalletsPage = () => {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [history, setHistory] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [userResults, setUserResults] = useState([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [walletModal, setWalletModal] = useState(null);
   const [selectedUser, setSelectedUser] = useState('');
+  const [selectedUserLabel, setSelectedUserLabel] = useState('');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchData = useCallback(() => {
     setLoading(true);
-    Promise.all([
-      walletsApi.history({ search, page, limit: PAGE_SIZE }),
-      usersApi.list({ limit: 50 }),
-    ])
-      .then(([histRes, usersRes]) => {
+    setError('');
+    walletsApi.history({ search, page, limit: PAGE_SIZE })
+      .then((histRes) => {
         setHistory(histRes.data.data);
         setTotal(histRes.data.pagination?.total || 0);
-        setUsers(usersRes.data.data);
       })
       .catch((err) => setError(getErrorMessage(err)))
       .finally(() => setLoading(false));
   }, [search, page]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!walletModal) return undefined;
+    const timer = setTimeout(() => {
+      setSearchingUsers(true);
+      usersApi.list({ search: userSearch, page: 1, limit: 20 })
+        .then((res) => setUserResults(res.data.data || []))
+        .catch(() => setUserResults([]))
+        .finally(() => setSearchingUsers(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [userSearch, walletModal]);
 
   const columns = [
     { key: 'id', label: 'ID', render: (r) => <span className="font-mono text-xs">{String(r.id).slice(-8)}</span> },
@@ -48,13 +60,31 @@ const WalletsPage = () => {
     { key: 'createdAt', label: 'Date', render: (r) => formatDate(r.createdAt) },
   ];
 
+  const openModal = (type) => {
+    setWalletModal(type);
+    setSelectedUser('');
+    setSelectedUserLabel('');
+    setUserSearch('');
+    setAmount('');
+    setNote('');
+  };
+
   const handleAdjust = async () => {
-    if (!selectedUser || !amount) return;
+    if (!selectedUser || !amount) {
+      dialog.notifyError('Select a user and enter a valid amount');
+      return;
+    }
+    const amt = parseFloat(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      dialog.notifyError('Enter a valid amount greater than zero');
+      return;
+    }
     setSubmitting(true);
     try {
-      await walletsApi.adjust({ userId: selectedUser, type: walletModal, amount: parseFloat(amount), note });
+      await walletsApi.adjust({ userId: selectedUser, type: walletModal, amount: amt, note });
       setWalletModal(null);
       setSelectedUser('');
+      setSelectedUserLabel('');
       setAmount('');
       setNote('');
       fetchData();
@@ -66,7 +96,16 @@ const WalletsPage = () => {
     }
   };
 
-  if (error) return <ErrorAlert message={error} />;
+  if (error) {
+    return (
+      <div>
+        <ErrorAlert message={error} />
+        <button type="button" onClick={fetchData} className="mt-4 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -75,27 +114,15 @@ const WalletsPage = () => {
         subtitle="Credit, debit, and view wallet history"
         action={
           <div className="flex gap-2">
-            <button type="button" onClick={() => setWalletModal('credit')} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">
+            <button type="button" onClick={() => openModal('credit')} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">
               <Plus size={18} /> Credit Wallet
             </button>
-            <button type="button" onClick={() => setWalletModal('debit')} className="flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-600">
+            <button type="button" onClick={() => openModal('debit')} className="flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-600">
               <Minus size={18} /> Debit Wallet
             </button>
           </div>
         }
       />
-
-      {users.length > 0 && (
-        <div className="mb-6 grid gap-4 sm:grid-cols-3">
-          {users.slice(0, 3).map((u) => (
-            <div key={u.id} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-              <p className="text-sm font-semibold text-slate-800">{u.fullName}</p>
-              <p className="text-xs text-slate-400">{u.email}</p>
-              <p className="mt-2 text-xl font-extrabold text-primary">{formatCurrency(u.walletBalance)}</p>
-            </div>
-          ))}
-        </div>
-      )}
 
       <div className="mb-4">
         <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search wallet history..." className="max-w-md" />
@@ -117,11 +144,36 @@ const WalletsPage = () => {
       <Modal open={!!walletModal} onClose={() => setWalletModal(null)} title={walletModal === 'credit' ? 'Credit Wallet' : 'Debit Wallet'}>
         <div className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">Select User</label>
-            <select value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-primary">
-              <option value="">Choose a user...</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.fullName} — {formatCurrency(u.walletBalance)}</option>)}
-            </select>
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">Search User</label>
+            <input
+              type="text"
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              placeholder="Name, email, or phone..."
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-primary"
+            />
+            {selectedUserLabel ? (
+              <p className="mt-2 text-sm font-semibold text-emerald-700">Selected: {selectedUserLabel}</p>
+            ) : null}
+            <div className="mt-2 max-h-40 overflow-y-auto rounded-xl border border-slate-200">
+              {searchingUsers ? (
+                <p className="px-3 py-2 text-sm text-slate-400">Searching...</p>
+              ) : userResults.length === 0 ? (
+                <p className="px-3 py-2 text-sm text-slate-400">No users found</p>
+              ) : userResults.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedUser(u.id);
+                    setSelectedUserLabel(`${u.fullName} — ${formatCurrency(u.walletBalance)}`);
+                  }}
+                  className={`block w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${selectedUser === u.id ? 'bg-primary/5 font-semibold' : ''}`}
+                >
+                  {u.fullName} — {u.email} — {formatCurrency(u.walletBalance)}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">Amount (₦)</label>

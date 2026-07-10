@@ -71,6 +71,10 @@ module.exports = {
       foregroundImage: './src/assets/adaptive-icon.png',
       backgroundColor: '#FFFFFF',
     },
+    blockedPermissions: [
+      'android.permission.RECORD_AUDIO',
+      'android.permission.MODIFY_AUDIO_SETTINGS',
+    ],
   },
   web: {
     favicon: './src/assets/icon.png',
@@ -96,6 +100,16 @@ module.exports = {
     // in reverse registration order), letting it resolve the Firebase notification
     // meta-data merge conflict after expo-notifications has injected the nodes.
     './plugins/withNotificationManifestFix',
+    [
+      'expo-build-properties',
+      {
+        android: {
+          compileSdkVersion: 35,
+          targetSdkVersion: 35,
+          minSdkVersion: 24,
+        },
+      },
+    ],
     'expo-asset',
     'expo-font',
     'expo-secure-store',

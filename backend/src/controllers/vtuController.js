@@ -158,21 +158,14 @@ const resolveDataPurchaseCode = (plan) => {
 
 const resolveDataPlanAmount = async ({ network, variationCode, amount, planId }) => {
   const plan = await findDataPlan({ network, variationCode, planId });
-  if (plan) {
-    return { amount: plan.amount, plan };
-  }
-  if (planId) {
-    const error = new Error('Selected data plan was not found');
-    error.statusCode = 404;
+  if (!plan) {
+    const error = new Error(planId
+      ? 'Selected data plan was not found'
+      : 'Data plan not found. Sync plans in admin and try again.');
+    error.statusCode = planId ? 404 : 400;
     throw error;
   }
-  const numericAmount = parseFloat(amount);
-  if (!Number.isFinite(numericAmount) || numericAmount < 1) {
-    const error = new Error('Invalid amount');
-    error.statusCode = 400;
-    throw error;
-  }
-  return { amount: numericAmount, plan: null };
+  return { amount: plan.amount, plan };
 };
 
 const resolveDataProviderCode = async ({ network, variationCode, plan, planId }) => {
@@ -200,21 +193,14 @@ const findTvPlan = async ({ provider, variationCode, planId }) => {
 
 const resolveTvPlanAmount = async ({ provider, variationCode, amount, planId }) => {
   const plan = await findTvPlan({ provider, variationCode, planId });
-  if (plan) {
-    return { amount: plan.amount, plan };
-  }
-  if (planId) {
-    const error = new Error('Selected TV package was not found');
-    error.statusCode = 404;
+  if (!plan) {
+    const error = new Error(planId
+      ? 'Selected TV package was not found'
+      : 'TV package not found. Sync plans in admin and try again.');
+    error.statusCode = planId ? 404 : 400;
     throw error;
   }
-  const numericAmount = parseFloat(amount);
-  if (!Number.isFinite(numericAmount) || numericAmount < 1) {
-    const error = new Error('Invalid amount');
-    error.statusCode = 400;
-    throw error;
-  }
-  return { amount: numericAmount, plan: null };
+  return { amount: plan.amount, plan };
 };
 
 const resolveTvProviderCode = async ({ provider, variationCode, plan }) => {
@@ -370,7 +356,6 @@ const verifyElectricityMeter = async (req, res, next) => {
         minimumAmount: result.content?.Min_Purchase_Amount || result.content?.minimium_amount || plan.minAmount,
         maxAmount: plan.maxAmount,
         providerName: plan.name,
-        raw: result.content,
       },
     });
   } catch (error) {
@@ -452,7 +437,6 @@ const verifyTVSmartcard = async (req, res, next) => {
         currentBouquet: result.content?.Current_Bouquet || result.content?.current_bouquet,
         renewalAmount: result.content?.Renewal_Amount || result.content?.renewal_amount,
         smartcardNumber: result.content?.Customer_Number || smartcardNumber,
-        raw: result.content,
       },
     });
   } catch (error) {
@@ -632,7 +616,6 @@ const verifyBettingCustomer = async (req, res, next) => {
         customerName: result.content?.Customer_Name || result.content?.customerName,
         customerId,
         platformName: bettingPlatform.name,
-        raw: result.content,
       },
     });
   } catch (error) {

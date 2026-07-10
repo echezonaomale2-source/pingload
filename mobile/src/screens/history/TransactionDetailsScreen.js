@@ -33,7 +33,7 @@ const TransactionDetailsScreen = ({ navigation, route }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['transaction', id],
     queryFn: () => transactionService.getTransactionById(id),
   });
@@ -63,7 +63,27 @@ const TransactionDetailsScreen = ({ navigation, route }) => {
     return rows;
   }, [purchaseDetails]);
 
-  if (isLoading || !tx) return <PageLoader message="Loading details..." />;
+  if (isLoading) return <PageLoader message="Loading details..." />;
+
+  if (isError || !tx) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.errorWrap}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+          <Text style={styles.errorTitle}>Could not load transaction</Text>
+          <Text style={styles.errorText}>
+            {error?.response?.data?.message || error?.message || 'Please try again.'}
+          </Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const isRefund = tx.transactionType === 'refund';
   const statusColor = getStatusColor(tx.status, tx.transactionType);
@@ -175,6 +195,17 @@ const createStyles = (colors) => StyleSheet.create({
   rowValue: { fontSize: 14, fontWeight: '600', color: colors.text, maxWidth: '60%', textAlign: 'right' },
   sectionHeader: { paddingTop: 8, paddingBottom: 4 },
   sectionTitle: { fontSize: 13, fontWeight: '800', color: colors.primary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  errorWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  errorTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 16 },
+  errorText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginTop: 8 },
+  retryBtn: {
+    marginTop: 20,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
 });
 
 export default TransactionDetailsScreen;

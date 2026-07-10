@@ -1,12 +1,24 @@
-let listener = null;
+let appLockedListener = null;
+let sessionExpiredListener = null;
 
 export const onAppLocked = (callback) => {
-  listener = callback;
+  appLockedListener = callback;
   return () => {
-    if (listener === callback) listener = null;
+    if (appLockedListener === callback) appLockedListener = null;
   };
 };
 
 export const emitAppLocked = () => {
-  listener?.();
+  appLockedListener?.();
+};
+
+export const onSessionExpired = (callback) => {
+  sessionExpiredListener = callback;
+  return () => {
+    if (sessionExpiredListener === callback) sessionExpiredListener = null;
+  };
+};
+
+export const emitSessionExpired = () => {
+  sessionExpiredListener?.();
 };

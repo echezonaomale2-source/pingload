@@ -20,6 +20,8 @@ const {
   registerValidation,
   loginValidation,
   resetPasswordValidation,
+  updateProfileValidation,
+  changePasswordValidation,
   deleteAccountValidation,
 } = require('../controllers/authController');
 const {
@@ -45,8 +47,8 @@ router.post('/forgot-password', authLimiter, sendOtpValidation, validate, forgot
 router.post('/reset-password', authLimiter, resetPasswordValidation, validate, resetPassword);
 
 router.get('/profile', protect, getProfile);
-router.put('/profile', protect, updateProfile);
-router.put('/change-password', protect, changePassword);
+router.put('/profile', protect, updateProfileValidation, validate, updateProfile);
+router.put('/change-password', protect, changePasswordValidation, validate, changePassword);
 router.put('/settings', protect, updateSettings);
 router.put('/avatar', protect, updateAvatar);
 router.delete('/avatar', protect, removeAvatar);

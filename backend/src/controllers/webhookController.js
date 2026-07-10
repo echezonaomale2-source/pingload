@@ -22,9 +22,9 @@ const handlePaystackWebhook = async (req, res) => {
   const eventKey = buildEventKey(event, data || {});
 
   try {
-    const { duplicate } = await logWebhookReceived({ event, data, eventKey });
+    const { duplicate, alreadyProcessed } = await logWebhookReceived({ event, data, eventKey });
 
-    if (duplicate) {
+    if (duplicate && alreadyProcessed) {
       return res.json({
         success: true,
         message: 'Duplicate webhook ignored',

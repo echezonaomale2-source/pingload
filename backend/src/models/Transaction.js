@@ -74,5 +74,15 @@ transactionSchema.index({ userId: 1, status: 1 });
 transactionSchema.index({ service: 1, status: 1, createdAt: -1 });
 transactionSchema.index({ transactionType: 1, refundedAt: -1 });
 transactionSchema.index({ 'metadata.providerRequestId': 1 }, { sparse: true });
+transactionSchema.index(
+  { originalTransactionId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      transactionType: 'refund',
+      originalTransactionId: { $exists: true, $type: 'objectId' },
+    },
+  }
+);
 
 module.exports = mongoose.model('Transaction', transactionSchema);
