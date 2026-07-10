@@ -7,7 +7,6 @@ const electricityPlanSchema = new mongoose.Schema(
       required: true,
       trim: true,
       lowercase: true,
-      index: true,
     },
     name: { type: String, required: true, trim: true },
     providerServiceId: { type: String, required: true, trim: true },
@@ -20,13 +19,15 @@ const electricityPlanSchema = new mongoose.Schema(
       type: String,
       enum: ['vtpass'],
       default: 'vtpass',
-      index: true,
     },
   },
   { timestamps: true }
 );
 
 electricityPlanSchema.index({ providerId: 1, vtuProvider: 1 }, { unique: true });
+electricityPlanSchema.index({ providerId: 1 });
+electricityPlanSchema.index({ vtuProvider: 1 });
+electricityPlanSchema.index({ providerServiceId: 1 }, { sparse: true });
 
 electricityPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
   const count = await this.countDocuments();

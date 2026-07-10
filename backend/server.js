@@ -28,6 +28,7 @@ const legalRoutes = require('./src/routes/legalRoutes');
 const seedAdmin = require('./src/utils/seedAdmin');
 const { migrateDataPlanIndexes } = require('./src/utils/migrateDataPlanIndexes');
 const { migrateTvPlanIndexes } = require('./src/utils/migrateTvPlanIndexes');
+const { migrateElectricityPlanIndexes } = require('./src/utils/migrateElectricityPlanIndexes');
 const { migrateLegacyVtuProviders } = require('./src/utils/migrateLegacyVtuProviders');
 const serviceConfig = require('./src/config/serviceConfig');
 const { initializeFcm } = require('./src/services/fcmService');
@@ -113,6 +114,10 @@ const startServer = async () => {
   const tvIndexResult = await migrateTvPlanIndexes();
   if (tvIndexResult.dropped.length > 0) {
     console.log(`[TvPlan] Migrated indexes — dropped: ${tvIndexResult.dropped.join(', ')}`);
+  }
+  const electricityIndexResult = await migrateElectricityPlanIndexes();
+  if (electricityIndexResult.dropped.length > 0) {
+    console.log(`[ElectricityPlan] Migrated indexes — dropped: ${electricityIndexResult.dropped.join(', ')}`);
   }
   await migrateLegacyVtuProviders();
   await seedAdmin();
