@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const admin = require('firebase-admin');
 const { getMessaging } = require('firebase-admin/messaging');
 const DeviceToken = require('../models/DeviceToken');
@@ -5,23 +7,18 @@ const Notification = require('../models/Notification');
 const { logApiFailure } = require('../utils/logger');
 const { getPushChannelId } = require('../utils/pushChannels');
 
-let firebaseApp = null;
-// Cache the init failure so we don't spam logs / retry a doomed cert on every push.
-let firebaseInitFailed = false;
+/** Must match mobile/google-services.json project_id */
+const EXPECTED_FIREBASE_PROJECT_ID = process.env.FIREBASE_EXPECTED_PROJECT_ID || 'pingload';
 
-/**
- * Environment variables (especially on hosts like Render) frequently mangle the
- * Firebase private key. This normalizer makes initialization resilient to the
- * three most common forms a key arrives in:
- *   1. Surrounding single/double quotes copied from a .env file.
- *   2. Escaped "\n" sequences instead of real newlines.
- *   3. The whole PEM base64-encoded (an increasingly common workaround).
- */
+let firebaseApp = null;
+let firebaseInitFailed = false;
+let lastCredentialError = null;
+let resolvedCredentialMeta = null;
+
 const normalizePrivateKey = (rawKey) => {
   let key = (rawKey || '').trim();
   if (!key) return '';
 
-  // Strip a single layer of surrounding quotes if present.
   if (
     (key.startsWith('"') && key.endsWith('"'))
     || (key.startsWith("'") && key.endsWith("'"))
@@ -29,97 +26,196 @@ const normalizePrivateKey = (rawKey) => {
     key = key.slice(1, -1).trim();
   }
 
-  // If it doesn't look like a PEM but looks like base64, try to decode it.
+  // Double-escaped newlines from some hosts (\\\\n → \n)
+  key = key.replace(/\\\\n/g, '\\n');
+
   if (!key.includes('BEGIN PRIVATE KEY') && /^[A-Za-z0-9+/=\s]+$/.test(key) && key.length > 100) {
     try {
       const decoded = Buffer.from(key, 'base64').toString('utf8');
       if (decoded.includes('BEGIN PRIVATE KEY')) key = decoded.trim();
     } catch {
-      // Not base64 — fall through and let validation report the real problem.
+      // fall through
     }
   }
 
-  // Convert any escaped newlines to real newlines and normalize CRLF.
-  key = key
+  return key
     .replace(/\\r\\n/g, '\n')
     .replace(/\\n/g, '\n')
-    .replace(/\r\n/g, '\n');
-
-  return key;
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
 };
 
-const isFcmConfigured = () => Boolean(
-  process.env.FIREBASE_PROJECT_ID
-  && process.env.FIREBASE_CLIENT_EMAIL
-  && process.env.FIREBASE_PRIVATE_KEY
-);
-
-/**
- * Validates Firebase Admin credentials without throwing.
- * Returns a structured status object suitable for startup logging.
- */
-const verifyFirebaseConfig = () => {
-  const missing = [];
-  if (!process.env.FIREBASE_PROJECT_ID) missing.push('FIREBASE_PROJECT_ID');
-  if (!process.env.FIREBASE_CLIENT_EMAIL) missing.push('FIREBASE_CLIENT_EMAIL');
-  if (!process.env.FIREBASE_PRIVATE_KEY) missing.push('FIREBASE_PRIVATE_KEY');
-
-  if (missing.length) {
-    return { ok: false, configured: false, reason: `Missing: ${missing.join(', ')}` };
+const parseServiceAccountJson = (raw) => {
+  if (!raw || typeof raw !== 'string') return null;
+  let text = raw.trim();
+  if (
+    (text.startsWith("'") && text.endsWith("'"))
+    || (text.startsWith('"') && text.endsWith('"'))
+  ) {
+    text = text.slice(1, -1);
   }
 
-  const privateKey = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
-  if (!privateKey.includes('BEGIN PRIVATE KEY') || !privateKey.includes('END PRIVATE KEY')) {
+  // Allow base64-encoded full JSON (common on Render).
+  if (!text.startsWith('{')) {
+    try {
+      const decoded = Buffer.from(text, 'base64').toString('utf8');
+      if (decoded.trim().startsWith('{')) text = decoded.trim();
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed.private_key || !parsed.client_email || !parsed.project_id) return null;
+    return {
+      projectId: parsed.project_id,
+      clientEmail: parsed.client_email,
+      privateKey: normalizePrivateKey(parsed.private_key),
+      source: 'FIREBASE_SERVICE_ACCOUNT_JSON',
+    };
+  } catch {
+    return null;
+  }
+};
+
+const loadCredentialFromFile = (filePath) => {
+  if (!filePath) return null;
+  try {
+    const absolute = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+    if (!fs.existsSync(absolute)) return null;
+    const parsed = JSON.parse(fs.readFileSync(absolute, 'utf8'));
+    if (!parsed.private_key || !parsed.client_email || !parsed.project_id) return null;
+    return {
+      projectId: parsed.project_id,
+      clientEmail: parsed.client_email,
+      privateKey: normalizePrivateKey(parsed.private_key),
+      source: `file:${absolute}`,
+    };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Resolve Firebase Admin credentials from (in order):
+ * 1. FIREBASE_SERVICE_ACCOUNT_JSON (raw or base64 JSON)
+ * 2. GOOGLE_APPLICATION_CREDENTIALS / FIREBASE_SERVICE_ACCOUNT_PATH file
+ * 3. FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY
+ */
+const resolveFirebaseCredentials = () => {
+  const fromJson = parseServiceAccountJson(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  if (fromJson) return fromJson;
+
+  const fromFile = loadCredentialFromFile(
+    process.env.GOOGLE_APPLICATION_CREDENTIALS
+    || process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+  );
+  if (fromFile) return fromFile;
+
+  if (
+    process.env.FIREBASE_PROJECT_ID
+    && process.env.FIREBASE_CLIENT_EMAIL
+    && process.env.FIREBASE_PRIVATE_KEY
+  ) {
+    return {
+      projectId: process.env.FIREBASE_PROJECT_ID.trim(),
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL.trim(),
+      privateKey: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
+      source: 'FIREBASE_* env fields',
+    };
+  }
+
+  return null;
+};
+
+const isFcmConfigured = () => Boolean(resolveFirebaseCredentials());
+
+const verifyFirebaseConfig = () => {
+  const creds = resolveFirebaseCredentials();
+  if (!creds) {
+    return {
+      ok: false,
+      configured: false,
+      reason: 'Missing Firebase credentials. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY.',
+      expectedProjectId: EXPECTED_FIREBASE_PROJECT_ID,
+    };
+  }
+
+  if (!creds.privateKey.includes('BEGIN PRIVATE KEY') || !creds.privateKey.includes('END PRIVATE KEY')) {
     return {
       ok: false,
       configured: true,
-      reason: 'FIREBASE_PRIVATE_KEY is not a valid PEM (missing BEGIN/END markers after normalization)',
+      reason: 'Firebase private key is not a valid PEM after normalization',
+      projectId: creds.projectId,
+      clientEmail: creds.clientEmail,
+      source: creds.source,
+      expectedProjectId: EXPECTED_FIREBASE_PROJECT_ID,
+    };
+  }
+
+  if (creds.projectId !== EXPECTED_FIREBASE_PROJECT_ID) {
+    return {
+      ok: false,
+      configured: true,
+      reason: `Firebase project mismatch: credentials are for "${creds.projectId}" but the Android app uses "${EXPECTED_FIREBASE_PROJECT_ID}". Update Render credentials to the pingload service account.`,
+      projectId: creds.projectId,
+      clientEmail: creds.clientEmail,
+      source: creds.source,
+      expectedProjectId: EXPECTED_FIREBASE_PROJECT_ID,
     };
   }
 
   return {
     ok: true,
     configured: true,
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    projectId: creds.projectId,
+    clientEmail: creds.clientEmail,
+    source: creds.source,
+    expectedProjectId: EXPECTED_FIREBASE_PROJECT_ID,
   };
 };
 
-/**
- * Lazily initializes Firebase Admin. Never throws — on failure it logs once and
- * returns null so push notifications degrade gracefully instead of breaking the
- * caller (e.g. a VTU purchase or refund must never fail because of FCM).
- */
 const getFirebaseApp = () => {
   if (firebaseApp) return firebaseApp;
   if (firebaseInitFailed) return null;
-  if (!isFcmConfigured()) return null;
 
+  const status = verifyFirebaseConfig();
+  if (!status.ok) {
+    firebaseInitFailed = true;
+    lastCredentialError = status.reason;
+    return null;
+  }
+
+  const creds = resolveFirebaseCredentials();
   try {
     firebaseApp = admin.initializeApp({
       credential: admin.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
+        projectId: creds.projectId,
+        clientEmail: creds.clientEmail,
+        privateKey: creds.privateKey,
       }),
+      projectId: creds.projectId,
     });
+    resolvedCredentialMeta = {
+      projectId: creds.projectId,
+      clientEmail: creds.clientEmail,
+      source: creds.source,
+    };
+    lastCredentialError = null;
     return firebaseApp;
   } catch (error) {
     firebaseInitFailed = true;
+    lastCredentialError = error.message;
     logApiFailure('fcm:init', error, {
-      hint: 'Firebase Admin failed to initialize. Push notifications are disabled. '
-        + 'Verify FIREBASE_PRIVATE_KEY (escaped \\n, surrounding quotes, or base64) on the host.',
-      projectId: process.env.FIREBASE_PROJECT_ID,
+      hint: 'Firebase Admin failed to initialize. Use a service account JSON from Firebase project "pingload".',
+      projectId: creds?.projectId,
+      source: creds?.source,
     });
     return null;
   }
 };
 
-/**
- * Startup hook: attempts initialization eagerly so credential problems surface
- * immediately in the logs rather than on the first push. Returns a status object
- * and never throws (push is non-critical relative to the rest of the API).
- */
 const initializeFcm = () => {
   const status = verifyFirebaseConfig();
   if (!status.configured) {
@@ -127,12 +223,17 @@ const initializeFcm = () => {
   }
   if (!status.ok) {
     logApiFailure('fcm:startup', new Error(status.reason), {
-      hint: 'Push notifications disabled. Fix FIREBASE_PRIVATE_KEY format on the host.',
+      hint: 'Push notifications disabled until Firebase credentials match project pingload.',
+      expectedProjectId: EXPECTED_FIREBASE_PROJECT_ID,
     });
     return { ...status, initialized: false };
   }
   const app = getFirebaseApp();
-  return { ...status, initialized: Boolean(app) };
+  return {
+    ...status,
+    initialized: Boolean(app),
+    credentialError: lastCredentialError,
+  };
 };
 
 const stringifyData = (data = {}) => Object.fromEntries(
@@ -142,9 +243,15 @@ const stringifyData = (data = {}) => Object.fromEntries(
 );
 
 const deactivateInvalidTokens = async (tokens = []) => {
-  if (!tokens.length) return;
-  await DeviceToken.updateMany({ token: { $in: tokens } }, { $set: { isActive: false } });
+  if (!tokens.length) return 0;
+  const result = await DeviceToken.updateMany(
+    { token: { $in: tokens } },
+    { $set: { isActive: false } }
+  );
+  return result.modifiedCount || result.nModified || tokens.length;
 };
+
+const isCredentialErrorCode = (code = '') => /invalid-credential|mismatched-credential|authentication|third-party-auth-error/i.test(code);
 
 const FCM_MULTICAST_LIMIT = 500;
 
@@ -156,47 +263,68 @@ const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount, ch
 
   const app = getFirebaseApp();
   if (!app) {
-    return { success: false, sent: 0, failed: uniqueTokens.length, skipped: true, reason: 'fcm_not_configured' };
+    return {
+      success: false,
+      sent: 0,
+      failed: uniqueTokens.length,
+      skipped: true,
+      reason: 'fcm_not_configured',
+      message: lastCredentialError
+        || 'Firebase Admin is not configured. Set FIREBASE_SERVICE_ACCOUNT_JSON from the pingload Firebase project.',
+      errorSummary: { 'fcm_not_configured': uniqueTokens.length },
+    };
   }
 
+  const safeTitle = (title && String(title).trim()) || 'Pingload';
+  const safeBody = body == null ? '' : String(body);
   const badge = Number.isFinite(badgeCount) ? badgeCount : undefined;
-  const stringData = stringifyData(data);
+  const stringData = stringifyData({
+    ...data,
+    title: safeTitle,
+    body: safeBody,
+  });
   const androidChannel = channelId || getPushChannelId(data.type);
 
-  // Only deactivate tokens that are permanently invalid for this device.
-  // Credential / payload errors are server config bugs and must not wipe the registry.
   const DEACTIVATE_CODES = new Set([
     'messaging/registration-token-not-registered',
     'messaging/invalid-registration-token',
   ]);
 
   const invalidTokens = [];
+  const failedTokenSamples = [];
   const errorSummary = {};
   let successCount = 0;
   let failureCount = 0;
+  let credentialFailure = false;
 
   try {
     for (let offset = 0; offset < uniqueTokens.length; offset += FCM_MULTICAST_LIMIT) {
       const chunk = uniqueTokens.slice(offset, offset + FCM_MULTICAST_LIMIT);
       const response = await getMessaging(app).sendEachForMulticast({
         tokens: chunk,
-        notification: { title, body },
+        notification: {
+          title: safeTitle,
+          body: safeBody,
+        },
         data: stringData,
         android: {
           priority: 'high',
           notification: {
+            title: safeTitle,
+            body: safeBody,
             channelId: androidChannel,
             sound: 'default',
             notificationCount: badge,
             visibility: 'public',
             defaultVibrateTimings: true,
+            defaultSound: true,
           },
         },
         apns: {
           headers: { 'apns-priority': '10' },
           payload: {
             aps: {
-              alert: { title, body },
+              alert: { title: safeTitle, body: safeBody },
               sound: 'default',
               ...(badge !== undefined ? { badge } : {}),
               'content-available': 1,
@@ -212,11 +340,47 @@ const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount, ch
         if (!item.success) {
           const code = item.error?.code || 'unknown';
           errorSummary[code] = (errorSummary[code] || 0) + 1;
+          if (isCredentialErrorCode(code)) {
+            credentialFailure = true;
+          }
           if (DEACTIVATE_CODES.has(code)) {
             invalidTokens.push(chunk[index]);
           }
+          if (failedTokenSamples.length < 10) {
+            failedTokenSamples.push({
+              tokenPrefix: String(chunk[index]).slice(0, 16),
+              code,
+              message: item.error?.message || '',
+            });
+          }
         }
       });
+    }
+
+    if (credentialFailure) {
+      // Do NOT deactivate tokens — this is a server credential problem.
+      logApiFailure('fcm:invalid-credential', new Error('Firebase Admin credentials rejected by Google'), {
+        tokenCount: uniqueTokens.length,
+        errorSummary,
+        projectId: resolvedCredentialMeta?.projectId,
+        clientEmail: resolvedCredentialMeta?.clientEmail,
+        source: resolvedCredentialMeta?.source,
+        expectedProjectId: EXPECTED_FIREBASE_PROJECT_ID,
+        hint: 'Replace Render FIREBASE_* / FIREBASE_SERVICE_ACCOUNT_JSON with a fresh service account from Firebase project "pingload".',
+      });
+
+      return {
+        success: false,
+        sent: successCount,
+        failed: failureCount,
+        skipped: true,
+        reason: 'invalid_credential',
+        message: `Firebase Admin credentials are invalid for project "${resolvedCredentialMeta?.projectId || 'unknown'}". Update Render env to a service account from Firebase project "${EXPECTED_FIREBASE_PROJECT_ID}".`,
+        errorSummary,
+        failedTokenSamples,
+        projectId: resolvedCredentialMeta?.projectId,
+        expectedProjectId: EXPECTED_FIREBASE_PROJECT_ID,
+      };
     }
 
     if (Object.keys(errorSummary).length) {
@@ -225,24 +389,44 @@ const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount, ch
         sent: successCount,
         failed: failureCount,
         errorSummary,
-        projectId: process.env.FIREBASE_PROJECT_ID,
+        failedTokenSamples,
+        projectId: resolvedCredentialMeta?.projectId,
       });
     }
 
-    await deactivateInvalidTokens(invalidTokens);
+    const deactivated = await deactivateInvalidTokens(invalidTokens);
 
     return {
       success: failureCount === 0,
       sent: successCount,
       failed: failureCount,
       invalidTokens: invalidTokens.length,
+      deactivated,
       errorSummary: Object.keys(errorSummary).length ? errorSummary : undefined,
+      failedTokenSamples: failedTokenSamples.length ? failedTokenSamples : undefined,
+      projectId: resolvedCredentialMeta?.projectId,
     };
   } catch (error) {
+    const code = error.code || 'fcm_send_error';
     logApiFailure('fcm:send', error, {
       tokenCount: uniqueTokens.length,
-      projectId: process.env.FIREBASE_PROJECT_ID,
+      projectId: resolvedCredentialMeta?.projectId,
     });
+
+    if (isCredentialErrorCode(code) || /invalid.credential/i.test(error.message || '')) {
+      return {
+        success: false,
+        sent: 0,
+        failed: uniqueTokens.length,
+        skipped: true,
+        reason: 'invalid_credential',
+        message: `Firebase Admin rejected credentials: ${error.message}`,
+        errorSummary: { [code]: uniqueTokens.length },
+        projectId: resolvedCredentialMeta?.projectId,
+        expectedProjectId: EXPECTED_FIREBASE_PROJECT_ID,
+      };
+    }
+
     return {
       success: false,
       sent: 0,
@@ -250,7 +434,7 @@ const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount, ch
       skipped: true,
       reason: 'fcm_send_error',
       error: error.message,
-      errorSummary: { [error.code || 'fcm_send_error']: uniqueTokens.length },
+      errorSummary: { [code]: uniqueTokens.length },
     };
   }
 };
@@ -310,7 +494,6 @@ const sendPushToUsers = async ({ userIds, title, body, data = {} }) => {
     };
   }
 
-  // Bulk broadcasts skip per-user badge queries (N+1) to avoid admin timeouts.
   return sendPushToTokens({
     tokens: devices.map((device) => device.token),
     title,
@@ -325,6 +508,8 @@ module.exports = {
   verifyFirebaseConfig,
   initializeFcm,
   normalizePrivateKey,
+  resolveFirebaseCredentials,
+  EXPECTED_FIREBASE_PROJECT_ID,
   sendPushToTokens,
   sendPushToUser,
   sendPushToUsers,

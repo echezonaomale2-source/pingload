@@ -7,6 +7,42 @@ import { isOnline } from '../utils/networkStatus';
 import { emitAppLocked, emitSessionExpired } from '../utils/appLockEvents';
 
 const REQUEST_TIMEOUT_MS = 15000;
+const TOKEN_KEY = 'token';
+
+/**
+ * In-memory session token mirrors SecureStore.
+ * Avoids SecureStore read races right after login and makes 401 scoping reliable.
+ */
+let memoryToken = null;
+let sessionEpoch = 0;
+
+export const getSessionToken = () => memoryToken;
+
+export const setSessionToken = async (token) => {
+  memoryToken = token || null;
+  sessionEpoch += 1;
+  if (token) {
+    await SecureStore.setItemAsync(TOKEN_KEY, token);
+  } else {
+    await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+  }
+  return sessionEpoch;
+};
+
+export const clearSessionToken = async () => {
+  memoryToken = null;
+  sessionEpoch += 1;
+  await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+  return sessionEpoch;
+};
+
+export const hydrateSessionToken = async () => {
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
+  memoryToken = token || null;
+  return memoryToken;
+};
+
+export const getSessionEpoch = () => sessionEpoch;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -23,6 +59,14 @@ const shouldShowGlobalLoader = (config) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const readHeader = (headers, name) => {
+  if (!headers) return null;
+  if (typeof headers.get === 'function') {
+    return headers.get(name) || headers.get(name.toLowerCase()) || null;
+  }
+  return headers[name] || headers[name.toLowerCase()] || headers.common?.[name] || null;
+};
+
 const bearerFromHeader = (header) => {
   if (!header || typeof header !== 'string') return null;
   const match = header.match(/^Bearer\s+(.+)$/i);
@@ -37,12 +81,25 @@ api.interceptors.request.use(async (config) => {
     return Promise.reject(error);
   }
 
-  const token = await SecureStore.getItemAsync('token');
+  let token = memoryToken;
+  if (!token) {
+    token = await SecureStore.getItemAsync(TOKEN_KEY);
+    memoryToken = token || null;
+  }
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-  } else {
-    delete config.headers.Authorization;
+  } else if (config.headers) {
+    if (typeof config.headers.delete === 'function') {
+      config.headers.delete('Authorization');
+    } else {
+      delete config.headers.Authorization;
+    }
   }
+
+  // Stamp the request with the session epoch + bearer used so late 401s can be scoped.
+  config.__sessionEpoch = sessionEpoch;
+  config.__requestToken = token || null;
 
   if (__DEV__) {
     const method = (config.method || 'get').toUpperCase();
@@ -93,7 +150,6 @@ api.interceptors.response.use(
     const code = error.response?.data?.code;
     const message = (error.response?.data?.message || '').toLowerCase();
 
-    // Soft-lock is returned as 403 APP_LOCKED (not 401).
     if (status === 403 && code === 'APP_LOCKED' && !config?.skipAuthLogout) {
       emitAppLocked();
       return Promise.reject(error);
@@ -101,18 +157,23 @@ api.interceptors.response.use(
 
     if (status === 401 && !config?.skipAuthLogout) {
       const isPinError = /transaction pin|incorrect pin|current pin/.test(message);
-      const isAuthFailure = /not authorized|token invalid|session expired|invalid token|user not found|user access required|unlock the app/i.test(message);
+      const isAuthFailure = /not authorized|token invalid|session expired|invalid token|user not found|user access required/i.test(message);
 
       if (!isPinError && isAuthFailure) {
-        const failedToken = bearerFromHeader(config?.headers?.Authorization);
-        const currentToken = await SecureStore.getItemAsync('token');
+        const failedToken = config?.__requestToken
+          || bearerFromHeader(readHeader(config?.headers, 'Authorization'));
+        const currentToken = memoryToken || await SecureStore.getItemAsync(TOKEN_KEY);
+        const sameEpoch = config?.__sessionEpoch == null || config.__sessionEpoch === sessionEpoch;
 
-        // Only clear the session if this 401 belongs to the token currently stored.
-        // Late bootstrap failures with an old Bearer must not wipe a freshly logged-in JWT.
-        if (!currentToken || !failedToken || failedToken === currentToken) {
-          if (currentToken) {
-            await SecureStore.deleteItemAsync('token');
-          }
+        // ONLY clear the active session when this 401 is for the CURRENT bearer.
+        // Missing/unreadable Authorization must never wipe a valid logged-in session.
+        if (
+          sameEpoch
+          && currentToken
+          && failedToken
+          && failedToken === currentToken
+        ) {
+          await clearSessionToken();
           emitSessionExpired();
         }
       }

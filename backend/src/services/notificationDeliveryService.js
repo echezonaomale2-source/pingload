@@ -51,7 +51,7 @@ const deliverUserNotification = async ({
     try {
       pushResult = await sendPushToUser({
         userId,
-        title,
+        title: title || 'Pingload',
         body: message,
         data: buildPushData({
           type,
@@ -100,7 +100,7 @@ const deliverBulkNotification = async ({
     try {
       pushResult = await sendPushToUsers({
         userIds: eligibleIds,
-        title,
+        title: title || 'Pingload',
         body: message,
         data: buildPushData({ type, screen, metadata }),
       });

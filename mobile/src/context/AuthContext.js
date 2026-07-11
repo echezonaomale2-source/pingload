@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import { authService } from '../services/authService';
 import { walletService } from '../services/walletService';
+import {
+  hydrateSessionToken,
+  setSessionToken,
+  clearSessionToken,
+} from '../services/api';
 import { isBiometricEnabledLocally } from '../services/biometricService';
 import { hasLoginPin, setLoginPin, clearLoginPin } from '../services/loginPinService';
 import { syncDeviceTokenWithBackend, updateAppBadgeCount } from '../services/pushNotificationService';
@@ -72,11 +76,7 @@ export const AuthProvider = ({ children }) => {
     bootstrapAbortRef.current = controller;
 
     try {
-      const token = await withTimeout(
-        SecureStore.getItemAsync('token'),
-        5000,
-        'SecureStore read',
-      );
+      const token = await withTimeout(hydrateSessionToken(), 5000, 'SecureStore read');
       if (!token) return;
       if (controller.signal.aborted) return;
 
@@ -98,10 +98,8 @@ export const AuthProvider = ({ children }) => {
         const status = reason?.response?.status;
         if (__DEV__) console.warn('[Auth] Profile load failed:', reason?.message);
 
-        // Only wipe the stored JWT on definitive auth failure.
-        // Timeouts/network errors must not force a re-login or race a new session.
         if (status === 401) {
-          await SecureStore.deleteItemAsync('token');
+          await clearSessionToken();
           setUser(null);
           setIsAuthenticated(false);
           setAwaitingUnlock(null);
@@ -116,7 +114,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (userData.accountStatus === 'suspended') {
-        await SecureStore.deleteItemAsync('token');
+        await clearSessionToken();
         setUser(null);
         setIsAuthenticated(false);
         setAwaitingUnlock(null);
@@ -137,7 +135,6 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       if (controller.signal.aborted) return;
       if (__DEV__) console.warn('[Auth] Bootstrap failed:', error?.message);
-      // Non-auth bootstrap errors keep the token so the next launch can retry.
       setUser(null);
       setBalance(0);
       setIsAuthenticated(false);
@@ -181,14 +178,12 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const completeSession = async (userData, token, initialBalance = null, { isNewAccount = false } = {}) => {
-    // Cancel any in-flight bootstrap calls so their late responses cannot race this session.
     bootstrapAbortRef.current?.abort();
     bootstrapAbortRef.current = new AbortController();
 
-    await SecureStore.setItemAsync('token', token);
+    // Persist + cache token BEFORE any authenticated follow-up calls.
+    await setSessionToken(token);
 
-    // Resolve unlock/PIN gates before committing user into React state so RootNavigator
-    // never briefly treats a logged-in user as fully unauthenticated.
     let needsSetup = Boolean(isNewAccount || userData.requireLoginPinReset);
     if (userData.requireLoginPinReset) {
       await clearLoginPin();
@@ -255,7 +250,7 @@ export const AuthProvider = ({ children }) => {
     }
     await unregisterPushOnLogout();
     await clearPendingNotificationNav().catch(() => {});
-    await SecureStore.deleteItemAsync('token');
+    await clearSessionToken();
     await updateAppBadgeCount(0);
     setUser(null);
     setBalance(0);

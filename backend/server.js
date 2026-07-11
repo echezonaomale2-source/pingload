@@ -96,6 +96,9 @@ app.get('/health', (_req, res) => {
       configured: fcm.configured,
       ok: fcm.ok,
       projectId: fcm.projectId || null,
+      expectedProjectId: fcm.expectedProjectId || 'pingload',
+      source: fcm.source || null,
+      reason: fcm.ok ? null : (fcm.reason || null),
     },
   });
 });
@@ -111,6 +114,9 @@ app.get('/api/health', (_req, res) => {
       configured: fcm.configured,
       ok: fcm.ok,
       projectId: fcm.projectId || null,
+      expectedProjectId: fcm.expectedProjectId || 'pingload',
+      source: fcm.source || null,
+      reason: fcm.ok ? null : (fcm.reason || null),
     },
   });
 });

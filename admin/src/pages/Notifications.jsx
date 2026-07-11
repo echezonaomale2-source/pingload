@@ -90,28 +90,52 @@ const NotificationsPage = () => {
       setScreen('Notifications');
       fetchData();
       const push = res?.data?.data?.push;
+      const formatReasons = (summary) => {
+        if (!summary || typeof summary !== 'object') return '';
+        return Object.entries(summary)
+          .map(([code, count]) => `${code} × ${count}`)
+          .join('\n');
+      };
+
       if (push?.skipped && push?.reason === 'fcm_not_configured') {
-        dialog.notifyError('In-app notification saved, but FCM is not configured on the server. Check FIREBASE_* environment variables on Render.');
+        dialog.notifyError(
+          push.message
+          || 'In-app notification saved, but Firebase Admin is not configured on Render. Set FIREBASE_SERVICE_ACCOUNT_JSON from the pingload Firebase project.'
+        );
+      } else if (push?.skipped && push?.reason === 'invalid_credential') {
+        dialog.notifyError(
+          [
+            'Firebase rejected the server credentials (app/invalid-credential).',
+            `Expected project: ${push.expectedProjectId || 'pingload'}`,
+            `Configured project: ${push.projectId || 'unknown'}`,
+            'Fix: download a fresh service account JSON from Firebase Console → Project pingload → Service accounts, then set FIREBASE_SERVICE_ACCOUNT_JSON (or FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY) on Render and redeploy.',
+            formatReasons(push.errorSummary),
+          ].filter(Boolean).join('\n\n')
+        );
       } else if (push?.skipped && push?.reason === 'no_tokens') {
-        dialog.notifyError(push.message || 'In-app notification saved, but no active FCM device tokens were found. Ask users to open the production app and allow notifications.');
+        dialog.notifyError(push.message || 'In-app notification saved, but no active FCM device tokens were found.');
       } else if (push?.skipped && (push?.reason === 'fcm_send_error' || push?.reason === 'push_error')) {
-        const summary = push.errorSummary
-          ? Object.entries(push.errorSummary).map(([k, v]) => `${k}: ${v}`).join(', ')
-          : (push.error || '');
-        dialog.notifyError(`Push send failed${summary ? `: ${summary}` : '. Check Firebase credentials and Render logs.'}`);
+        dialog.notifyError(
+          [
+            'Push send failed.',
+            formatReasons(push.errorSummary) || push.error || 'Check Render logs.',
+          ].filter(Boolean).join('\n\n')
+        );
       } else if (push?.skipped && push?.reason === 'preferences_disabled') {
         dialog.notifyError('In-app notification saved, but push was skipped by user notification preferences.');
       } else if (push && (push.failed || 0) > 0) {
-        const summary = push.errorSummary
-          ? Object.entries(push.errorSummary).map(([k, v]) => `${k}: ${v}`).join(', ')
-          : '';
         dialog.notifyError(
-          `Push delivered: ${push.sent || 0}, failed: ${push.failed || 0}${summary ? ` (${summary})` : ''}. Ask users to re-open the app so tokens refresh.`
+          [
+            `Delivered: ${push.sent || 0}`,
+            `Failed: ${push.failed || 0}`,
+            push.deactivated ? `Invalid tokens deactivated: ${push.deactivated}` : null,
+            formatReasons(push.errorSummary) ? `Failure reasons:\n${formatReasons(push.errorSummary)}` : null,
+          ].filter(Boolean).join('\n')
         );
       } else if (push && (push.sent || 0) === 0) {
-        dialog.notifyError('In-app notification saved, but push delivered 0 devices. Check FCM tokens and Firebase project credentials.');
+        dialog.notifyError('In-app notification saved, but push delivered 0 devices.');
       } else if (push) {
-        dialog.notifySuccess(`Notification sent. Push delivered: ${push.sent || 0}`);
+        dialog.notifySuccess(`Notification sent.\nDelivered: ${push.sent || 0}`);
       } else {
         dialog.notifySuccess('Notification sent');
       }

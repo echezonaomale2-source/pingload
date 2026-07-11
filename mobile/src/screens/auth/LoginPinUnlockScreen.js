@@ -44,7 +44,7 @@ const LoginPinUnlockScreen = () => {
       if (status.isLocked) {
         setError('Your account is temporarily locked. Please try again later or sign in with password.');
       }
-      if (status.requireLoginPinReset || status.code === 'LOGIN_PIN_NOT_SET' || !status.hasLoginPin) {
+      if (status.requireLoginPinReset || status.code === 'LOGIN_PIN_NOT_SET') {
         await forceLoginPinSetup();
       }
     } catch {
