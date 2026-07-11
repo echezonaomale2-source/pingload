@@ -235,8 +235,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const finishLoginPinSetup = async (pin) => {
-    await authService.setupLoginPin(pin);
-    await setLoginPin(pin);
+    const normalized = String(pin || '').trim();
+    await authService.setupLoginPin(normalized);
+    // Persist locally after server success so unlock works offline next launch.
+    await setLoginPin(normalized);
     setNeedsLoginPinSetup(false);
     activateSession();
   };

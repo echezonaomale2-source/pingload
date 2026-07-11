@@ -92,8 +92,18 @@ const getLoginPinStatus = async (req, res, next) => {
 
 const setupLoginPin = async (req, res, next) => {
   try {
-    const { pin } = req.body;
+    const pin = String(req.body?.pin || '').trim();
+    if (!/^\d{4,6}$/.test(pin)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Login PIN must be 4–6 digits',
+      });
+    }
+
     let user = await User.findById(req.user._id).select('+loginPin hasLoginPin loginPinLockedUntil requireLoginPinReset');
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'User not found' });
+    }
     user = await autoUnlockIfExpired(user);
 
     const statusBefore = getLockStatus(user);
@@ -112,14 +122,19 @@ const setupLoginPin = async (req, res, next) => {
     grantAppUnlock(user);
     await user.save();
 
-    await recordSecurityEvent({
-      userId: user._id,
-      eventType: 'login_pin_unlocked',
-      severity: 'low',
-      message: 'Login PIN set or reset',
-      req,
-      ...getClientMeta(req),
-    });
+    try {
+      await recordSecurityEvent({
+        userId: user._id,
+        eventType: 'login_pin_unlocked',
+        severity: 'low',
+        message: 'Login PIN set or reset',
+        req,
+        ...getClientMeta(req),
+      });
+    } catch (eventError) {
+      // PIN is already persisted — never fail the client on audit logging.
+      console.warn(`[LoginPin] security event skipped: ${eventError.message}`);
+    }
 
     res.json({ success: true, message: 'Login PIN saved', data: getLockStatus(user) });
   } catch (error) {

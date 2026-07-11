@@ -55,7 +55,9 @@ router.delete('/avatar', protect, removeAvatar);
 router.delete('/account', protect, authLimiter, deleteAccountValidation, validate, deleteAccount);
 
 router.get('/login-pin/status', protect, getLoginPinStatus);
-router.post('/login-pin/setup', protect, authLimiter, loginPinValidation, validate, setupLoginPin);
+// Authenticated PIN setup must not share the public login rate limiter —
+// users often hit setup immediately after several login attempts.
+router.post('/login-pin/setup', protect, loginPinValidation, validate, setupLoginPin);
 router.post('/login-pin/verify', protect, loginPinLimiter, loginPinValidation, validate, verifyLoginPin);
 router.post('/login-pin/biometric-unlock', protect, loginPinLimiter, confirmBiometricUnlock);
 

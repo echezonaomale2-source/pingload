@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../hooks/useDialog';
 import { enrollBiometric, getBiometricSupport } from '../../services/biometricService';
 import { authService } from '../../services/authService';
+import { getApiErrorMessage } from '../../utils/getApiErrorMessage';
 
 const LoginPinSetupScreen = () => {
   const { finishLoginPinSetup, updateUser } = useAuth();
@@ -50,8 +51,11 @@ const LoginPinSetupScreen = () => {
     try {
       await finishLoginPinSetup(confirmedPin);
       await offerBiometricEnrollment();
-    } catch {
-      dialog.alertError('Setup Failed', 'Could not save your login PIN. Please try again.');
+    } catch (err) {
+      dialog.alertError(
+        'Setup Failed',
+        getApiErrorMessage(err, err?.message || 'Could not save your login PIN. Please try again.')
+      );
       setStep('create');
       setPin('');
       setConfirmPin('');
