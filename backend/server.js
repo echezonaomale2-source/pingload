@@ -29,6 +29,7 @@ const seedAdmin = require('./src/utils/seedAdmin');
 const { migrateDataPlanIndexes } = require('./src/utils/migrateDataPlanIndexes');
 const { migrateTvPlanIndexes } = require('./src/utils/migrateTvPlanIndexes');
 const { migrateElectricityPlanIndexes } = require('./src/utils/migrateElectricityPlanIndexes');
+const { migrateEducationProductIndexes } = require('./src/utils/migrateEducationProductIndexes');
 const { migrateLegacyVtuProviders } = require('./src/utils/migrateLegacyVtuProviders');
 const serviceConfig = require('./src/config/serviceConfig');
 const { initializeFcm } = require('./src/services/fcmService');
@@ -39,6 +40,16 @@ const DataPlan = require('./src/models/DataPlan');
 const { startVtpassReconciliationWorker } = require('./src/services/vtpassReconciliationWorker');
 const SystemSettings = require('./src/models/SystemSettings');
 const { persistProviderHealth } = require('./src/utils/providerHealth');
+
+const runSafe = async (label, fn) => {
+  try {
+    return await fn();
+  } catch (error) {
+    // Catalog/index repairs must never take down the API process.
+    console.error(`[Startup] ${label} failed (continuing): ${error.message}`);
+    return null;
+  }
+};
 
 const app = express();
 
@@ -132,16 +143,30 @@ app.use(errorHandler);
 
 const startServer = async () => {
   await connectDB();
-  const indexResult = await migrateDataPlanIndexes();
-  const tvIndexResult = await migrateTvPlanIndexes();
-  if (tvIndexResult.dropped.length > 0) {
+
+  const indexResult = await runSafe('DataPlan index migration', migrateDataPlanIndexes) || { dropped: [] };
+  const tvIndexResult = await runSafe('TvPlan index migration', migrateTvPlanIndexes) || { dropped: [] };
+  if (tvIndexResult.dropped?.length > 0) {
     console.log(`[TvPlan] Migrated indexes — dropped: ${tvIndexResult.dropped.join(', ')}`);
   }
-  const electricityIndexResult = await migrateElectricityPlanIndexes();
-  if (electricityIndexResult.dropped.length > 0) {
+  const electricityIndexResult = await runSafe(
+    'ElectricityPlan index migration',
+    migrateElectricityPlanIndexes
+  ) || { dropped: [] };
+  if (electricityIndexResult.dropped?.length > 0) {
     console.log(`[ElectricityPlan] Migrated indexes — dropped: ${electricityIndexResult.dropped.join(', ')}`);
   }
-  await migrateLegacyVtuProviders();
+  const educationIndexResult = await runSafe(
+    'EducationProduct index migration',
+    migrateEducationProductIndexes
+  ) || { dropped: [], removedDuplicates: 0 };
+  if (educationIndexResult.removedDuplicates > 0 || educationIndexResult.dropped?.length > 0) {
+    console.log(
+      `[EducationProduct] Migration complete — removed ${educationIndexResult.removedDuplicates || 0} duplicate(s), dropped indexes: ${(educationIndexResult.dropped || []).join(', ') || 'none'}`
+    );
+  }
+
+  await runSafe('Legacy VTU provider migration', migrateLegacyVtuProviders);
   await seedAdmin();
 
   if (serviceConfig.vtpass.configured) {
@@ -149,12 +174,11 @@ const startServer = async () => {
     const needsSync = vtpassPlanCount === 0 || indexResult.dropped.length > 0;
     if (needsSync) {
       console.log('[VTU] Running VTpass data plan sync...');
-      try {
+      await runSafe('VTpass data plan sync', async () => {
         const syncResult = await syncAllVtpassDataPlans();
         console.log(`[VTU] VTpass data plan sync complete — ${syncResult.total} plan(s) saved.`);
-      } catch (syncError) {
-        console.error(`[VTU] VTpass data plan sync failed: ${syncError.message}`);
-      }
+        return syncResult;
+      });
     }
   }
 
@@ -198,10 +222,13 @@ const startServer = async () => {
   console.log(`[VTU] Provider: ${settings.vtuProvider}, effective: ${effectiveProvider}`);
 
   if (serviceConfig.vtpass.configured) {
-    const bettingSync = await syncBettingPlatforms();
-    if (bettingSync.synced > 0) {
-      console.log(`[Betting] Synced ${bettingSync.synced} platform(s) from VTpass.`);
-    }
+    await runSafe('Betting platform sync', async () => {
+      const bettingSync = await syncBettingPlatforms();
+      if (bettingSync.synced > 0) {
+        console.log(`[Betting] Synced ${bettingSync.synced} platform(s) from VTpass.`);
+      }
+      return bettingSync;
+    });
     startVtpassReconciliationWorker();
   }
 

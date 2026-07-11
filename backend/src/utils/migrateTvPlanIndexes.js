@@ -17,9 +17,50 @@ const dropIndexIfExists = async (collection, name) => {
   }
 };
 
+const dedupeTvPlans = async (collection) => {
+  const groups = await collection.aggregate([
+    {
+      $group: {
+        _id: {
+          provider: '$provider',
+          vtuProvider: { $ifNull: ['$vtuProvider', 'vtpass'] },
+          variationCode: '$variationCode',
+        },
+        count: { $sum: 1 },
+        docs: { $push: { _id: '$_id', updatedAt: '$updatedAt', createdAt: '$createdAt' } },
+      },
+    },
+    { $match: { count: { $gt: 1 } } },
+  ]).toArray();
+
+  let removed = 0;
+  for (const group of groups) {
+    const sorted = [...group.docs].sort((a, b) => {
+      const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return bTime - aTime;
+    });
+    const duplicateIds = sorted.slice(1).map((doc) => doc._id);
+    if (!duplicateIds.length) continue;
+    await collection.deleteMany({ _id: { $in: duplicateIds } });
+    removed += duplicateIds.length;
+  }
+  return removed;
+};
+
 const migrateTvPlanIndexes = async () => {
   const collection = mongoose.connection.collection('tvplans');
   const dropped = [];
+
+  await collection.updateMany(
+    { $or: [{ vtuProvider: { $exists: false } }, { vtuProvider: null }, { vtuProvider: '' }] },
+    { $set: { vtuProvider: 'vtpass' } }
+  );
+
+  const removedDuplicates = await dedupeTvPlans(collection);
+  if (removedDuplicates > 0) {
+    console.log(`[TvPlan] Merged duplicates — removed ${removedDuplicates} record(s)`);
+  }
 
   for (const name of LEGACY_UNIQUE_INDEX_NAMES) {
     if (await dropIndexIfExists(collection, name)) {
@@ -42,12 +83,24 @@ const migrateTvPlanIndexes = async () => {
     }
   }
 
-  await collection.createIndex(
-    { provider: 1, vtuProvider: 1, variationCode: 1 },
-    { unique: true, name: UNIQUE_INDEX_NAME }
-  );
+  try {
+    await collection.createIndex(
+      { provider: 1, vtuProvider: 1, variationCode: 1 },
+      { unique: true, name: UNIQUE_INDEX_NAME }
+    );
+  } catch (error) {
+    if (error.code === 11000 || error.codeName === 'DuplicateKey') {
+      await dedupeTvPlans(collection);
+      await collection.createIndex(
+        { provider: 1, vtuProvider: 1, variationCode: 1 },
+        { unique: true, name: UNIQUE_INDEX_NAME }
+      );
+    } else {
+      throw error;
+    }
+  }
 
-  return { dropped };
+  return { dropped, removedDuplicates };
 };
 
 module.exports = {

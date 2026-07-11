@@ -120,7 +120,8 @@ const syncBettingPlatformsFromVtpass = async () => {
           enabled: true,
           lastSyncedAt: new Date(),
         },
-      }
+      },
+      { upsert: true, setDefaultsOnInsert: true }
     );
   }
 
@@ -146,7 +147,8 @@ const syncBettingPlatformsFromVtpass = async () => {
           enabled: true,
           lastSyncedAt: new Date(),
         },
-      }
+      },
+      { upsert: true, setDefaultsOnInsert: true }
     );
   }
 

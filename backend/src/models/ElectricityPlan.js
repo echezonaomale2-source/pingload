@@ -30,10 +30,8 @@ electricityPlanSchema.index({ vtuProvider: 1 });
 electricityPlanSchema.index({ providerServiceId: 1 }, { sparse: true });
 
 electricityPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
-  const count = await this.countDocuments();
-  if (count > 0) return;
-
-  await this.insertMany([
+  const { upsertElectricityPlanFromSync } = require('../utils/electricityPlanUpsert');
+  const defaults = [
     { providerId: 'ikeja', name: 'Ikeja Electric (IKEDC)', providerServiceId: 'ikeja-electric', order: 1 },
     { providerId: 'eko', name: 'Eko Electric (EKEDC)', providerServiceId: 'eko-electric', order: 2 },
     { providerId: 'abuja', name: 'Abuja Electric (AEDC)', providerServiceId: 'abuja-electric', order: 3 },
@@ -44,7 +42,21 @@ electricityPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
     { providerId: 'enugu', name: 'Enugu Electric (EEDC)', providerServiceId: 'enugu-electric', order: 8 },
     { providerId: 'portharcourt', name: 'Port Harcourt Electric (PHED)', providerServiceId: 'portharcourt-electric', order: 9 },
     { providerId: 'kaduna', name: 'Kaduna Electric (KAEDCO)', providerServiceId: 'kaduna-electric', order: 10 },
-  ]);
+  ];
+
+  for (const item of defaults) {
+    const existing = await this.findOne({
+      providerId: item.providerId,
+      vtuProvider: 'vtpass',
+    }).select('_id');
+    if (existing) continue;
+    await upsertElectricityPlanFromSync({
+      ...item,
+      vtpassServiceId: item.providerServiceId,
+      enabled: true,
+      vtuProvider: 'vtpass',
+    });
+  }
 };
 
 module.exports = mongoose.model('ElectricityPlan', electricityPlanSchema);

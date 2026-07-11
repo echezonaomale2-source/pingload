@@ -16,12 +16,51 @@ const dropIndexIfExists = async (collection, name) => {
   }
 };
 
+const dedupeElectricityPlans = async (collection) => {
+  const groups = await collection.aggregate([
+    {
+      $group: {
+        _id: {
+          providerId: { $toLower: '$providerId' },
+          vtuProvider: { $ifNull: ['$vtuProvider', 'vtpass'] },
+        },
+        count: { $sum: 1 },
+        docs: { $push: { _id: '$_id', updatedAt: '$updatedAt', createdAt: '$createdAt' } },
+      },
+    },
+    { $match: { count: { $gt: 1 } } },
+  ]).toArray();
+
+  let removed = 0;
+  for (const group of groups) {
+    const sorted = [...group.docs].sort((a, b) => {
+      const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return bTime - aTime;
+    });
+    const duplicateIds = sorted.slice(1).map((doc) => doc._id);
+    if (!duplicateIds.length) continue;
+    await collection.deleteMany({ _id: { $in: duplicateIds } });
+    removed += duplicateIds.length;
+  }
+  return removed;
+};
+
 const migrateElectricityPlanIndexes = async () => {
   const collection = mongoose.connection.collection('electricityplans');
   const dropped = [];
 
+  await collection.updateMany(
+    { $or: [{ vtuProvider: { $exists: false } }, { vtuProvider: null }, { vtuProvider: '' }] },
+    { $set: { vtuProvider: 'vtpass' } }
+  );
+
+  const removedDuplicates = await dedupeElectricityPlans(collection);
+  if (removedDuplicates > 0) {
+    console.log(`[ElectricityPlan] Merged duplicates — removed ${removedDuplicates} record(s)`);
+  }
+
   for (const name of LEGACY_UNIQUE_INDEX_NAMES) {
-    // Only drop if it is unique — keep non-unique providerId_1 for query speed if present.
     const indexes = await collection.indexes();
     const existing = indexes.find((idx) => idx.name === name);
     if (existing?.unique && await dropIndexIfExists(collection, name)) {
@@ -43,12 +82,24 @@ const migrateElectricityPlanIndexes = async () => {
     }
   }
 
-  await collection.createIndex(
-    { providerId: 1, vtuProvider: 1 },
-    { unique: true, name: UNIQUE_INDEX_NAME }
-  );
+  try {
+    await collection.createIndex(
+      { providerId: 1, vtuProvider: 1 },
+      { unique: true, name: UNIQUE_INDEX_NAME }
+    );
+  } catch (error) {
+    if (error.code === 11000 || error.codeName === 'DuplicateKey') {
+      await dedupeElectricityPlans(collection);
+      await collection.createIndex(
+        { providerId: 1, vtuProvider: 1 },
+        { unique: true, name: UNIQUE_INDEX_NAME }
+      );
+    } else {
+      throw error;
+    }
+  }
 
-  return { dropped };
+  return { dropped, removedDuplicates };
 };
 
 module.exports = {

@@ -29,11 +29,19 @@ const seedAdmin = async () => {
 
   await SystemSettings.getSettings();
   const VtuProviderConfig = require('../models/VtuProviderConfig');
-  await VtuProviderConfig.ensureDefaults();
-  await ServicePrice.ensureDefaults();
-  await EducationProduct.ensureDefaults();
-  await ElectricityPlan.ensureDefaults();
-  await TvPlan.ensureDefaults();
+  const seedCatalog = async (label, fn) => {
+    try {
+      await fn();
+    } catch (error) {
+      console.error(`[Seed] ${label} failed (continuing): ${error.message}`);
+    }
+  };
+
+  await seedCatalog('VtuProviderConfig', () => VtuProviderConfig.ensureDefaults());
+  await seedCatalog('ServicePrice', () => ServicePrice.ensureDefaults());
+  await seedCatalog('EducationProduct', () => EducationProduct.ensureDefaults());
+  await seedCatalog('ElectricityPlan', () => ElectricityPlan.ensureDefaults());
+  await seedCatalog('TvPlan', () => TvPlan.ensureDefaults());
 
   const faqCount = await Faq.countDocuments();
   if (faqCount === 0) {

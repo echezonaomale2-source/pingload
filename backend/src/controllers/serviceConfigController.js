@@ -508,7 +508,8 @@ const adminCreateEducationProduct = async (req, res, next) => {
       assignServiceIdForProvider(pickEducationProductFields(req.body), selectedProvider),
       selectedProvider
     );
-    const product = await EducationProduct.create(payload);
+    const { upsertEducationProduct } = require('../utils/educationProductUpsert');
+    const product = await upsertEducationProduct(payload);
     await bumpCatalogVersion();
     res.status(201).json({ success: true, data: product });
   } catch (error) {

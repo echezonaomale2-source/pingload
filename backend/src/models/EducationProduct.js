@@ -6,7 +6,6 @@ const educationProductSchema = new mongoose.Schema(
       type: String,
       enum: ['waec', 'neco', 'jamb', 'nabteb', 'other'],
       required: true,
-      index: true,
     },
     productCode: { type: String, required: true, trim: true },
     name: { type: String, required: true, trim: true },
@@ -24,13 +23,14 @@ const educationProductSchema = new mongoose.Schema(
       type: String,
       enum: ['vtpass'],
       default: 'vtpass',
-      index: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true, autoIndex: false }
 );
 
-educationProductSchema.index({ productCode: 1, vtuProvider: 1 }, { unique: true });
+educationProductSchema.index({ productCode: 1 }, { unique: true });
+educationProductSchema.index({ examType: 1 });
+educationProductSchema.index({ vtuProvider: 1 });
 
 educationProductSchema.statics.getDefaults = () => [
   {
@@ -87,19 +87,18 @@ educationProductSchema.statics.getDefaults = () => [
 ];
 
 educationProductSchema.statics.ensureDefaults = async function ensureDefaults() {
+  const { upsertEducationProduct } = require('../utils/educationProductUpsert');
   const defaults = this.getDefaults();
   for (const item of defaults) {
-    await this.findOneAndUpdate(
-      { productCode: item.productCode, vtuProvider: 'vtpass' },
-      {
-        $setOnInsert: {
-          ...item,
-          vtuProvider: 'vtpass',
-          vtpassServiceId: item.providerServiceId,
-        },
-      },
-      { upsert: true }
-    );
+    // Only fill missing rows — never overwrite synced pricing/flags on every boot.
+    const existing = await this.findOne({ productCode: item.productCode }).select('_id');
+    if (existing) continue;
+    await upsertEducationProduct({
+      ...item,
+      vtuProvider: 'vtpass',
+      vtpassServiceId: item.providerServiceId,
+      enabled: item.enabled !== false,
+    });
   }
 };
 

@@ -2,10 +2,10 @@
  * Sync education exam products from VTpass /services?identifier=education
  * and their service-variations.
  */
-const EducationProduct = require('../models/EducationProduct');
 const vtpass = require('./vtpassService');
 const routing = require('./vtuRoutingService');
 const { bumpCatalogVersion } = require('../utils/catalogInvalidation');
+const { upsertEducationProduct } = require('../utils/educationProductUpsert');
 
 const EXAM_PATTERNS = [
   { examType: 'waec', patterns: ['waec'] },
@@ -56,24 +56,19 @@ const syncEducationProductsFromVtpass = async () => {
 
     if (!variations.length) {
       const productCode = slugify(serviceId) || `edu-${order}`;
-      await EducationProduct.findOneAndUpdate(
-        { productCode, vtuProvider: 'vtpass' },
-        {
-          $set: {
-            examType: examType === 'other' ? 'waec' : examType,
-            name: service.name || serviceId,
-            description: service.name || '',
-            providerServiceId: serviceId,
-            vtpassServiceId: serviceId,
-            variationCode: '',
-            amount: parseFloat(service.minimium_amount || service.minimum_amount) || 0,
-            enabled: true,
-            order,
-            vtuProvider: 'vtpass',
-          },
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
+      await upsertEducationProduct({
+        productCode,
+        examType: examType === 'other' ? 'waec' : examType,
+        name: service.name || serviceId,
+        description: service.name || '',
+        providerServiceId: serviceId,
+        vtpassServiceId: serviceId,
+        variationCode: '',
+        amount: parseFloat(service.minimium_amount || service.minimum_amount) || 0,
+        enabled: true,
+        order,
+        vtuProvider: 'vtpass',
+      });
       synced += 1;
       discovered.push({ productCode, serviceId, examType });
       order += 1;
@@ -83,27 +78,22 @@ const syncEducationProductsFromVtpass = async () => {
     for (const variation of variations) {
       const code = variation.variation_code || '';
       const productCode = slugify(`${serviceId}-${code || variation.name || order}`) || `edu-${order}`;
-      await EducationProduct.findOneAndUpdate(
-        { productCode, vtuProvider: 'vtpass' },
-        {
-          $set: {
-            examType: examType === 'other' ? 'waec' : examType,
-            name: variation.name || service.name || productCode,
-            description: variation.name || service.name || '',
-            providerServiceId: serviceId,
-            vtpassServiceId: serviceId,
-            variationCode: code,
-            amount: parseFloat(variation.variation_amount) || 0,
-            enabled: true,
-            order,
-            vtuProvider: 'vtpass',
-            requiresBillersCode: /jamb/i.test(serviceId) || /jamb/i.test(variation.name || ''),
-            billersCodeLabel: /jamb/i.test(serviceId) ? 'JAMB Profile Code' : 'Profile Code',
-            maxQuantity: /result|checker|pin/i.test(`${variation.name} ${service.name}`) ? 5 : 1,
-          },
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
+      await upsertEducationProduct({
+        productCode,
+        examType: examType === 'other' ? 'waec' : examType,
+        name: variation.name || service.name || productCode,
+        description: variation.name || service.name || '',
+        providerServiceId: serviceId,
+        vtpassServiceId: serviceId,
+        variationCode: code,
+        amount: parseFloat(variation.variation_amount) || 0,
+        enabled: true,
+        order,
+        vtuProvider: 'vtpass',
+        requiresBillersCode: /jamb/i.test(serviceId) || /jamb/i.test(variation.name || ''),
+        billersCodeLabel: /jamb/i.test(serviceId) ? 'JAMB Profile Code' : 'Profile Code',
+        maxQuantity: /result|checker|pin/i.test(`${variation.name} ${service.name}`) ? 5 : 1,
+      });
       synced += 1;
       discovered.push({ productCode, serviceId, examType, variationCode: code });
       order += 1;

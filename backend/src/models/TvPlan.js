@@ -33,10 +33,8 @@ const tvPlanSchema = new mongoose.Schema(
 tvPlanSchema.index({ provider: 1, vtuProvider: 1, variationCode: 1 }, { unique: true });
 
 tvPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
-  const count = await this.countDocuments();
-  if (count > 0) return;
-
-  await this.insertMany([
+  const { upsertTvPlanFromSync } = require('../utils/tvPlanUpsert');
+  const defaults = [
     { provider: 'dstv', name: 'DStv Padi', variationCode: 'dstv-padi', amount: 2950, order: 1 },
     { provider: 'dstv', name: 'DStv Yanga', variationCode: 'dstv-yanga', amount: 4200, order: 2 },
     { provider: 'dstv', name: 'DStv Confam', variationCode: 'dstv-confam', amount: 7400, order: 3 },
@@ -49,7 +47,22 @@ tvPlanSchema.statics.ensureDefaults = async function ensureDefaults() {
     { provider: 'startimes', name: 'Basic', variationCode: 'basic', amount: 2500, order: 2 },
     { provider: 'startimes', name: 'Smart', variationCode: 'smart', amount: 3500, order: 3 },
     { provider: 'startimes', name: 'Classic', variationCode: 'classic', amount: 4500, order: 4 },
-  ]);
+  ];
+
+  for (const item of defaults) {
+    const existing = await this.findOne({
+      provider: item.provider,
+      vtuProvider: 'vtpass',
+      variationCode: item.variationCode,
+    }).select('_id');
+    if (existing) continue;
+    await upsertTvPlanFromSync({
+      ...item,
+      vtpassVariationCode: item.variationCode,
+      enabled: true,
+      vtuProvider: 'vtpass',
+    });
+  }
 };
 
 module.exports = mongoose.model('TvPlan', tvPlanSchema);
