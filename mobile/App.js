@@ -46,8 +46,10 @@ const PushNotificationBridge = () => {
   const { isAuthenticated, user, isBootstrapping } = useAuth();
   usePushNotifications({
     enableListeners: isAuthenticated,
-    enableTokenSync: Boolean(user) && !isBootstrapping,
-    enableFcmHandlers: Boolean(user) && !isBootstrapping,
+    // Register FCM only after PIN/biometric unlock so we never race locked APIs
+    // or persist tokens for a session that is still mid-auth.
+    enableTokenSync: isAuthenticated && Boolean(user) && !isBootstrapping,
+    enableFcmHandlers: isAuthenticated && Boolean(user) && !isBootstrapping,
   });
   return null;
 };

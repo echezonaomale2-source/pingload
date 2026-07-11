@@ -564,16 +564,30 @@ const buyEducationPin = async (req, res, next) => {
 
 const fetchEducationProducts = async (req, res, next) => {
   try {
-    await assertServiceEnabled('education');
-    await EducationProduct.ensureDefaults();
+    // Listing must remain available even if purchases are temporarily disabled.
+    try {
+      await EducationProduct.updateMany(
+        { $or: [{ vtuProvider: { $exists: false } }, { vtuProvider: null }] },
+        { $set: { vtuProvider: 'vtpass' } }
+      );
+      await EducationProduct.ensureDefaults();
+    } catch (seedError) {
+      // Non-fatal: synced catalog may already exist.
+      console.warn(`[Education] ensureDefaults skipped: ${seedError.message}`);
+    }
 
     const routedProvider = await vtuProvider.getRoutedProviderName('education');
     const allProducts = await EducationProduct.find(
-      buildProviderCatalogQuery({}, routedProvider)
+      buildProviderCatalogQuery({})
     ).sort({ order: 1, amount: 1 });
-    const enabledProducts = allProducts.filter((product) => product.enabled);
+    const enabledProducts = allProducts.filter((product) => product.enabled !== false);
 
-    const exams = ['waec', 'neco', 'jamb'].map((examType) => {
+    const examTypes = [...new Set([
+      'waec', 'neco', 'nabteb', 'jamb',
+      ...enabledProducts.map((p) => p.examType).filter(Boolean),
+    ])];
+
+    const exams = examTypes.map((examType) => {
       const examProducts = enabledProducts.filter((product) => product.examType === examType);
       const disabledProduct = allProducts.find((product) => product.examType === examType && !product.enabled);
       return {
@@ -587,7 +601,12 @@ const fetchEducationProducts = async (req, res, next) => {
       };
     });
 
-    res.json({ success: true, data: enabledProducts, exams, vtuProvider: routedProvider });
+    res.json({
+      success: true,
+      data: enabledProducts,
+      exams,
+      vtuProvider: routedProvider,
+    });
   } catch (error) {
     next(error);
   }

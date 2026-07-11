@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { authService } from '../services/authService';
 import { walletService } from '../services/walletService';
@@ -28,6 +28,7 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [needsLoginPinSetup, setNeedsLoginPinSetup] = useState(false);
   const [awaitingUnlock, setAwaitingUnlock] = useState(null);
+  const bootstrapAbortRef = useRef(null);
 
   const activateSession = useCallback(() => {
     setAwaitingUnlock(null);
@@ -37,9 +38,11 @@ export const AuthProvider = ({ children }) => {
     flushPendingNotificationNavigation().catch(() => {});
   }, []);
 
-  const resolveUnlockGate = useCallback(async (userData) => {
-    if (userData.requireLoginPinReset) {
-      await clearLoginPin();
+  const applyUnlockGate = useCallback(async (userData, { forcePinSetup = false } = {}) => {
+    if (forcePinSetup || userData.requireLoginPinReset) {
+      if (userData.requireLoginPinReset) {
+        await clearLoginPin();
+      }
       setNeedsLoginPinSetup(true);
       setAwaitingUnlock(null);
       setIsAuthenticated(false);
@@ -57,15 +60,17 @@ export const AuthProvider = ({ children }) => {
     const localBiometric = await isBiometricEnabledLocally();
     if (userData.biometricEnabled && localBiometric) {
       setAwaitingUnlock('biometric');
-      setIsAuthenticated(false);
-      return;
+    } else {
+      setAwaitingUnlock('pin');
     }
-
-    setAwaitingUnlock('pin');
     setIsAuthenticated(false);
   }, []);
 
   const loadUser = useCallback(async () => {
+    bootstrapAbortRef.current?.abort();
+    const controller = new AbortController();
+    bootstrapAbortRef.current = controller;
+
     try {
       const token = await withTimeout(
         SecureStore.getItemAsync('token'),
@@ -73,19 +78,35 @@ export const AuthProvider = ({ children }) => {
         'SecureStore read',
       );
       if (!token) return;
+      if (controller.signal.aborted) return;
+
+      const requestConfig = {
+        skipGlobalLoader: true,
+        skipAuthLogout: true,
+        signal: controller.signal,
+      };
 
       const [profileResult, balanceResult] = await Promise.allSettled([
-        withTimeout(authService.getProfile(), BOOTSTRAP_TIMEOUT_MS, 'Profile'),
-        withTimeout(walletService.getBalance(), BOOTSTRAP_TIMEOUT_MS, 'Wallet balance'),
+        withTimeout(authService.getProfile(requestConfig), BOOTSTRAP_TIMEOUT_MS, 'Profile'),
+        withTimeout(walletService.getBalance(requestConfig), BOOTSTRAP_TIMEOUT_MS, 'Wallet balance'),
       ]);
 
+      if (controller.signal.aborted) return;
+
       if (profileResult.status === 'rejected') {
-        if (__DEV__) console.warn('[Auth] Profile load failed:', profileResult.reason?.message);
-        await SecureStore.deleteItemAsync('token');
-        setUser(null);
-        setIsAuthenticated(false);
-        setAwaitingUnlock(null);
-        setNeedsLoginPinSetup(false);
+        const reason = profileResult.reason;
+        const status = reason?.response?.status;
+        if (__DEV__) console.warn('[Auth] Profile load failed:', reason?.message);
+
+        // Only wipe the stored JWT on definitive auth failure.
+        // Timeouts/network errors must not force a re-login or race a new session.
+        if (status === 401) {
+          await SecureStore.deleteItemAsync('token');
+          setUser(null);
+          setIsAuthenticated(false);
+          setAwaitingUnlock(null);
+          setNeedsLoginPinSetup(false);
+        }
         return;
       }
 
@@ -112,34 +133,40 @@ export const AuthProvider = ({ children }) => {
         setBalance(userData.walletBalance ?? 0);
       }
 
-      await resolveUnlockGate(userData);
+      await applyUnlockGate(userData);
     } catch (error) {
+      if (controller.signal.aborted) return;
       if (__DEV__) console.warn('[Auth] Bootstrap failed:', error?.message);
-      await SecureStore.deleteItemAsync('token').catch(() => {});
+      // Non-auth bootstrap errors keep the token so the next launch can retry.
       setUser(null);
       setBalance(0);
       setIsAuthenticated(false);
       setAwaitingUnlock(null);
       setNeedsLoginPinSetup(false);
     } finally {
-      setIsBootstrapping(false);
+      if (!controller.signal.aborted) {
+        setIsBootstrapping(false);
+      }
     }
-  }, [resolveUnlockGate]);
+  }, [applyUnlockGate]);
 
   useEffect(() => {
     const watchdog = setTimeout(() => setIsBootstrapping(false), BOOTSTRAP_TIMEOUT_MS + 3000);
     loadUser().finally(() => clearTimeout(watchdog));
-    return () => clearTimeout(watchdog);
+    return () => {
+      clearTimeout(watchdog);
+      bootstrapAbortRef.current?.abort();
+    };
   }, [loadUser]);
 
   useEffect(() => {
     return onAppLocked(() => {
       setIsAuthenticated(false);
       if (user) {
-        resolveUnlockGate(user);
+        applyUnlockGate(user);
       }
     });
-  }, [user, resolveUnlockGate]);
+  }, [user, applyUnlockGate]);
 
   useEffect(() => {
     return onSessionExpired(() => {
@@ -154,18 +181,34 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const completeSession = async (userData, token, initialBalance = null, { isNewAccount = false } = {}) => {
-    await SecureStore.setItemAsync('token', token);
-    setUser(userData);
-    setBalance(initialBalance ?? userData.walletBalance ?? 0);
+    // Cancel any in-flight bootstrap calls so their late responses cannot race this session.
+    bootstrapAbortRef.current?.abort();
+    bootstrapAbortRef.current = new AbortController();
 
-    if (isNewAccount || !(await hasLoginPin())) {
-      setNeedsLoginPinSetup(true);
-      setAwaitingUnlock(null);
-      setIsAuthenticated(false);
-      return;
+    await SecureStore.setItemAsync('token', token);
+
+    // Resolve unlock/PIN gates before committing user into React state so RootNavigator
+    // never briefly treats a logged-in user as fully unauthenticated.
+    let needsSetup = Boolean(isNewAccount || userData.requireLoginPinReset);
+    if (userData.requireLoginPinReset) {
+      await clearLoginPin();
+    }
+    if (!needsSetup) {
+      needsSetup = !(await hasLoginPin());
     }
 
-    await resolveUnlockGate(userData);
+    let unlockMode = null;
+    if (!needsSetup) {
+      const localBiometric = await isBiometricEnabledLocally();
+      unlockMode = (userData.biometricEnabled && localBiometric) ? 'biometric' : 'pin';
+    }
+
+    setUser(userData);
+    setBalance(initialBalance ?? userData.walletBalance ?? 0);
+    setNeedsLoginPinSetup(needsSetup);
+    setAwaitingUnlock(unlockMode);
+    setIsAuthenticated(false);
+    setIsBootstrapping(false);
   };
 
   const login = async (email, password) => {
@@ -204,6 +247,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    bootstrapAbortRef.current?.abort();
     try {
       await authService.logout();
     } catch {

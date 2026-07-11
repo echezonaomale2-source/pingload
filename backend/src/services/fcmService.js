@@ -146,6 +146,8 @@ const deactivateInvalidTokens = async (tokens = []) => {
   await DeviceToken.updateMany({ token: { $in: tokens } }, { $set: { isActive: false } });
 };
 
+const FCM_MULTICAST_LIMIT = 500;
+
 const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount, channelId } = {}) => {
   const uniqueTokens = [...new Set((tokens || []).filter(Boolean))];
   if (!uniqueTokens.length) {
@@ -161,76 +163,95 @@ const sendPushToTokens = async ({ tokens, title, body, data = {}, badgeCount, ch
   const stringData = stringifyData(data);
   const androidChannel = channelId || getPushChannelId(data.type);
 
-  // Push delivery must never throw into the caller (a VTU purchase, refund, or
-  // wallet funding must not fail because FCM is misconfigured or unreachable).
+  // Only deactivate tokens that are permanently invalid for this device.
+  // Credential / payload errors are server config bugs and must not wipe the registry.
+  const DEACTIVATE_CODES = new Set([
+    'messaging/registration-token-not-registered',
+    'messaging/invalid-registration-token',
+  ]);
+
+  const invalidTokens = [];
+  const errorSummary = {};
+  let successCount = 0;
+  let failureCount = 0;
+
   try {
-    const response = await getMessaging(app).sendEachForMulticast({
-      tokens: uniqueTokens,
-      notification: { title, body },
-      data: stringData,
-      android: {
-        priority: 'high',
-        notification: {
-          channelId: androidChannel,
-          sound: 'default',
-          notificationCount: badge,
-          visibility: 'public',
-          defaultVibrateTimings: true,
-        },
-      },
-      apns: {
-        headers: { 'apns-priority': '10' },
-        payload: {
-          aps: {
-            alert: { title, body },
+    for (let offset = 0; offset < uniqueTokens.length; offset += FCM_MULTICAST_LIMIT) {
+      const chunk = uniqueTokens.slice(offset, offset + FCM_MULTICAST_LIMIT);
+      const response = await getMessaging(app).sendEachForMulticast({
+        tokens: chunk,
+        notification: { title, body },
+        data: stringData,
+        android: {
+          priority: 'high',
+          notification: {
+            channelId: androidChannel,
             sound: 'default',
-            ...(badge !== undefined ? { badge } : {}),
-            'content-available': 1,
+            notificationCount: badge,
+            visibility: 'public',
+            defaultVibrateTimings: true,
           },
         },
-      },
-    });
+        apns: {
+          headers: { 'apns-priority': '10' },
+          payload: {
+            aps: {
+              alert: { title, body },
+              sound: 'default',
+              ...(badge !== undefined ? { badge } : {}),
+              'content-available': 1,
+            },
+          },
+        },
+      });
 
-    const invalidTokens = [];
-    const errorSummary = {};
-    const DEACTIVATE_CODES = new Set([
-      'messaging/registration-token-not-registered',
-      'messaging/invalid-registration-token',
-      'messaging/mismatched-credential',
-      'messaging/invalid-argument',
-    ]);
+      successCount += response.successCount;
+      failureCount += response.failureCount;
 
-    response.responses.forEach((item, index) => {
-      if (!item.success) {
-        const code = item.error?.code || 'unknown';
-        errorSummary[code] = (errorSummary[code] || 0) + 1;
-        if (DEACTIVATE_CODES.has(code)) {
-          invalidTokens.push(uniqueTokens[index]);
+      response.responses.forEach((item, index) => {
+        if (!item.success) {
+          const code = item.error?.code || 'unknown';
+          errorSummary[code] = (errorSummary[code] || 0) + 1;
+          if (DEACTIVATE_CODES.has(code)) {
+            invalidTokens.push(chunk[index]);
+          }
         }
-      }
-    });
+      });
+    }
 
     if (Object.keys(errorSummary).length) {
       logApiFailure('fcm:send-batch', new Error('FCM multicast partial/total failure'), {
         tokenCount: uniqueTokens.length,
-        sent: response.successCount,
-        failed: response.failureCount,
+        sent: successCount,
+        failed: failureCount,
         errorSummary,
+        projectId: process.env.FIREBASE_PROJECT_ID,
       });
     }
 
     await deactivateInvalidTokens(invalidTokens);
 
     return {
-      success: response.failureCount === 0,
-      sent: response.successCount,
-      failed: response.failureCount,
+      success: failureCount === 0,
+      sent: successCount,
+      failed: failureCount,
       invalidTokens: invalidTokens.length,
-      errorSummary,
+      errorSummary: Object.keys(errorSummary).length ? errorSummary : undefined,
     };
   } catch (error) {
-    logApiFailure('fcm:send', error, { tokenCount: uniqueTokens.length });
-    return { success: false, sent: 0, failed: uniqueTokens.length, skipped: true, reason: 'fcm_send_error' };
+    logApiFailure('fcm:send', error, {
+      tokenCount: uniqueTokens.length,
+      projectId: process.env.FIREBASE_PROJECT_ID,
+    });
+    return {
+      success: false,
+      sent: 0,
+      failed: uniqueTokens.length,
+      skipped: true,
+      reason: 'fcm_send_error',
+      error: error.message,
+      errorSummary: { [error.code || 'fcm_send_error']: uniqueTokens.length },
+    };
   }
 };
 
@@ -246,7 +267,14 @@ const sendPushToUser = async ({ userId, title, body, data = {} }) => {
   ]);
 
   if (!devices.length) {
-    return { success: true, sent: 0, failed: 0, skipped: true, reason: 'no_tokens' };
+    return {
+      success: false,
+      sent: 0,
+      failed: 0,
+      skipped: true,
+      reason: 'no_tokens',
+      message: 'No active FCM device tokens for this user.',
+    };
   }
 
   return sendPushToTokens({
@@ -262,51 +290,34 @@ const sendPushToUser = async ({ userId, title, body, data = {} }) => {
 const sendPushToUsers = async ({ userIds, title, body, data = {} }) => {
   const ids = [...new Set((userIds || []).map(String).filter(Boolean))];
   if (!ids.length) {
-    return { success: true, sent: 0, failed: 0, skipped: true, reason: 'no_users' };
+    return { success: true, sent: 0, failed: 0, skipped: true, reason: 'no_tokens', reasonDetail: 'no_users' };
   }
 
   const devices = await DeviceToken.find({
     userId: { $in: ids },
     isActive: true,
     provider: 'fcm',
-  }).select('token userId');
+  }).select('token');
+
   if (!devices.length) {
-    return { success: true, sent: 0, failed: 0, skipped: true, reason: 'no_tokens' };
+    return {
+      success: false,
+      sent: 0,
+      failed: 0,
+      skipped: true,
+      reason: 'no_tokens',
+      message: 'No active FCM device tokens. Users must open a production build and allow notifications.',
+    };
   }
 
-  const tokensByBadge = new Map();
-  await Promise.all(devices.map(async (device) => {
-    const badgeCount = await getUnreadCountForUser(device.userId);
-    const key = String(badgeCount);
-    if (!tokensByBadge.has(key)) tokensByBadge.set(key, { badgeCount, tokens: [] });
-    tokensByBadge.get(key).tokens.push(device.token);
-  }));
-
-  const results = await Promise.all(
-    [...tokensByBadge.values()].map(({ badgeCount, tokens }) => sendPushToTokens({
-      tokens,
-      title,
-      body,
-      data: { ...data, badgeCount: String(badgeCount), type: data.type || 'system' },
-      badgeCount,
-      channelId: getPushChannelId(data.type),
-    }))
-  );
-
-  const errorSummary = {};
-  results.forEach((item) => {
-    Object.entries(item.errorSummary || {}).forEach(([code, count]) => {
-      errorSummary[code] = (errorSummary[code] || 0) + count;
-    });
+  // Bulk broadcasts skip per-user badge queries (N+1) to avoid admin timeouts.
+  return sendPushToTokens({
+    tokens: devices.map((device) => device.token),
+    title,
+    body,
+    data: { ...data, type: data.type || 'system' },
+    channelId: getPushChannelId(data.type),
   });
-
-  return {
-    success: results.every((item) => item.success),
-    sent: results.reduce((sum, item) => sum + (item.sent || 0), 0),
-    failed: results.reduce((sum, item) => sum + (item.failed || 0), 0),
-    batches: results.length,
-    errorSummary: Object.keys(errorSummary).length ? errorSummary : undefined,
-  };
 };
 
 module.exports = {

@@ -75,11 +75,33 @@ app.use('/api', (req, res, next) => {
 app.use('/api', maintenanceMode);
 
 app.get('/health', (_req, res) => {
-  res.json({ success: true, message: 'Pingload API is running', timestamp: new Date().toISOString() });
+  const { verifyFirebaseConfig } = require('./src/services/fcmService');
+  const fcm = verifyFirebaseConfig();
+  res.json({
+    success: true,
+    message: 'Pingload API is running',
+    timestamp: new Date().toISOString(),
+    fcm: {
+      configured: fcm.configured,
+      ok: fcm.ok,
+      projectId: fcm.projectId || null,
+    },
+  });
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ success: true, message: 'Pingload API is running', timestamp: new Date().toISOString() });
+  const { verifyFirebaseConfig } = require('./src/services/fcmService');
+  const fcm = verifyFirebaseConfig();
+  res.json({
+    success: true,
+    message: 'Pingload API is running',
+    timestamp: new Date().toISOString(),
+    fcm: {
+      configured: fcm.configured,
+      ok: fcm.ok,
+      projectId: fcm.projectId || null,
+    },
+  });
 });
 
 app.use(legalRoutes);

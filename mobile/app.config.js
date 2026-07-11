@@ -36,7 +36,7 @@ if (!firebaseConfig.isConfigured) {
 module.exports = {
   name: 'Pingload',
   slug: 'pingload',
-  version: '1.0.11',
+  version: '1.0.12',
   orientation: 'portrait',
   icon: './src/assets/icon.png',
   userInterfaceStyle: 'automatic',
@@ -64,7 +64,7 @@ module.exports = {
   },
   android: {
     package: 'com.pingload.app',
-    versionCode: 12,
+    versionCode: 13,
     icon: './src/assets/icon.png',
     googleServicesFile: firebaseConfig.androidConfigPath,
     adaptiveIcon: {
@@ -81,7 +81,7 @@ module.exports = {
   },
   extra: {
     eas: {
-      projectId: 'caa45e57-3982-4367-ae3e-13522e6bb90b',
+      projectId: '3b18901a-c94e-4e8a-9109-06b7fe76a8e8',
     },
     apiUrl: resolveApiUrl(),
     devHost: getDevHost(),

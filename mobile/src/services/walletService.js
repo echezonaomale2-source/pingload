@@ -13,7 +13,7 @@ const withIdempotency = (config = {}) => ({
 });
 
 export const walletService = {
-  getBalance: () => api.get('/wallet/balance', { skipGlobalLoader: true }),
+  getBalance: (config = {}) => api.get('/wallet/balance', { skipGlobalLoader: true, ...config }),
   getPaymentConfig: () => api.get('/wallet/payment-config', { skipGlobalLoader: true }),
   fundWallet: (amount) => api.post('/wallet/fund', { amount }, withIdempotency()),
   transfer: (data) => api.post('/wallet/transfer', data, withIdempotency()),

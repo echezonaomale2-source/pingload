@@ -18,7 +18,7 @@ export const authService = {
   logout: () => api.post('/auth/logout', {}, { skipGlobalLoader: true }),
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
   resetPassword: (data) => api.post('/auth/reset-password', data),
-  getProfile: () => api.get('/auth/profile', { skipGlobalLoader: true }),
+  getProfile: (config = {}) => api.get('/auth/profile', { skipGlobalLoader: true, ...config }),
   updateProfile: (data) => api.put('/auth/profile', data),
   changePassword: (data) => api.put('/auth/change-password', data),
   updateSettings: (data) => api.put('/auth/settings', data),

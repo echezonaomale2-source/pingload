@@ -86,10 +86,20 @@ educationProductSchema.statics.getDefaults = () => [
   },
 ];
 
-educationProductSchema.statics.ensureDefaults = async function () {
+educationProductSchema.statics.ensureDefaults = async function ensureDefaults() {
   const defaults = this.getDefaults();
   for (const item of defaults) {
-    await this.findOneAndUpdate({ productCode: item.productCode }, { $setOnInsert: item }, { upsert: true });
+    await this.findOneAndUpdate(
+      { productCode: item.productCode, vtuProvider: 'vtpass' },
+      {
+        $setOnInsert: {
+          ...item,
+          vtuProvider: 'vtpass',
+          vtpassServiceId: item.providerServiceId,
+        },
+      },
+      { upsert: true }
+    );
   }
 };
 

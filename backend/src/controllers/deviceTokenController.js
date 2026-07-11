@@ -8,6 +8,13 @@ const registerDeviceToken = async (req, res, next) => {
     }
 
     const normalizedToken = token.trim();
+    if (/ExponentPushToken|ExpoPushToken/i.test(normalizedToken)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Expo push tokens are not supported. Install a production build with Firebase Cloud Messaging.',
+      });
+    }
+
     const normalizedProvider = String(provider || 'fcm').toLowerCase();
     if (normalizedProvider !== 'fcm') {
       return res.status(400).json({

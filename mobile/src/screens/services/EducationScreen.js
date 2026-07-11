@@ -1,10 +1,8 @@
-import React, { useMemo, useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../context/ThemeContext';
 import { EDUCATION_EXAMS } from '../../utils/constants';
 import { normalizePhone } from '../../utils/networkDetection';
@@ -25,45 +23,66 @@ const EducationScreen = ({ navigation, route }) => {
   const dialog = useDialog();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const dialogRef = useRef(dialog);
+  dialogRef.current = dialog;
 
+  const initialExam = route.params?.exam || 'waec';
   const [products, setProducts] = useState([]);
   const [exams, setExams] = useState([]);
-  const [selectedExam, setSelectedExam] = useState(route.params?.exam || 'waec');
+  const [selectedExam, setSelectedExam] = useState(initialExam);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [phone, setPhone] = useState(user?.phoneNumber || '');
   const [billersCode, setBillersCode] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [loading, setLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [showPin, setShowPin] = useState(false);
+  const productsLoadedRef = useRef(false);
+  const preselectDoneRef = useRef(false);
 
-  const loadProducts = useCallback(() => {
-    setLoadingProducts(true);
-    vtuService.getEducationProducts()
-      .then((res) => {
-        const list = res.data.data || [];
-        const examList = res.data.exams || [];
-        setProducts(list);
-        setExams(examList);
-        const preselect = route.params?.productCode
-          ? list.find((p) => p.productCode === route.params.productCode)
-          : list.find((p) => p.examType === (route.params?.exam || selectedExam));
+  const loadProducts = useCallback(async ({ force = false, showError = true } = {}) => {
+    const isInitial = !productsLoadedRef.current || force;
+    if (isInitial) setLoadingProducts(true);
+    if (force) setRefreshing(true);
+    setLoadError('');
+
+    try {
+      const res = await vtuService.getEducationProducts();
+      const list = res.data.data || [];
+      const examList = res.data.exams || [];
+      setProducts(list);
+      setExams(examList);
+      productsLoadedRef.current = true;
+
+      if (!preselectDoneRef.current) {
+        preselectDoneRef.current = true;
+        const preferredExam = route.params?.exam;
+        const preferredCode = route.params?.productCode;
+        const preselect = preferredCode
+          ? list.find((p) => p.productCode === preferredCode)
+          : list.find((p) => p.examType === (preferredExam || initialExam));
         if (preselect) {
           setSelectedProduct(preselect);
           setSelectedExam(preselect.examType);
-        } else {
-          setSelectedProduct(null);
         }
-      })
-      .catch(() => {
-        dialog.alertError('Error', 'Could not load education products.');
-      })
-      .finally(() => setLoadingProducts(false));
-  }, [dialog, route.params?.exam, route.params?.productCode, selectedExam]);
+      }
+    } catch (err) {
+      const message = err.response?.data?.message || 'Could not load education products.';
+      setLoadError(message);
+      if (showError && !productsLoadedRef.current) {
+        dialogRef.current.alertError('Error', message);
+      }
+    } finally {
+      setLoadingProducts(false);
+      setRefreshing(false);
+    }
+  }, [initialExam, route.params?.exam, route.params?.productCode]);
 
-  useFocusEffect(useCallback(() => {
-    loadProducts();
-  }, [loadProducts]));
+  useEffect(() => {
+    loadProducts({ force: false, showError: true });
+  }, [loadProducts]);
 
   const filteredProducts = useMemo(
     () => products.filter((product) => product.examType === selectedExam),
@@ -75,15 +94,23 @@ const EducationScreen = ({ navigation, route }) => {
   const amount = useMemo(() => {
     if (!selectedProduct) return 0;
     const qty = parseInt(quantity || '1', 10);
-    return selectedProduct.amount * qty;
+    return selectedProduct.amount * (Number.isFinite(qty) ? qty : 1);
   }, [selectedProduct, quantity]);
 
   const examProviders = useMemo(() => {
     const fromApi = exams.length
       ? exams
       : products.map((p) => ({ id: p.examType, name: String(p.examType || '').toUpperCase() }));
-    const ids = [...new Set(fromApi.map((e) => e.id).filter(Boolean))];
-    return ids.map((id) => {
+    const ids = [...new Set([
+      ...EDUCATION_EXAMS.map((e) => e.id),
+      ...fromApi.map((e) => e.id).filter(Boolean),
+    ])];
+    const withProducts = ids.filter((id) =>
+      products.some((p) => p.examType === id)
+      || exams.some((e) => e.id === id)
+    );
+    const sourceIds = withProducts.length ? withProducts : ids.slice(0, 4);
+    return sourceIds.map((id) => {
       const known = EDUCATION_EXAMS.find((exam) => exam.id === id);
       const api = fromApi.find((exam) => exam.id === id);
       return known || { id, name: api?.name || String(id).toUpperCase(), color: '#0F766E' };
@@ -116,11 +143,11 @@ const EducationScreen = ({ navigation, route }) => {
     setLoading(true);
     try {
       const response = await vtuService.buyEducationPin({
-        productId: selectedProduct._id,
+        productId: selectedProduct._id || selectedProduct.id,
         productCode: selectedProduct.productCode,
         quantity: parseInt(quantity || '1', 10),
         amount,
-        phone,
+        phone: normalizePhone(phone),
         billersCode: billersCode.trim() || undefined,
         pin,
       });
@@ -139,28 +166,32 @@ const EducationScreen = ({ navigation, route }) => {
     }
   };
 
-  const copyPinDetails = async (payload) => {
-    const text = payload?.details?.purchasedCode
-      || payload?.details?.pins?.map((p) => `${p.serial || ''} ${p.pin}`.trim()).join('\n');
-    if (text) {
-      await Clipboard.setStringAsync(text);
-      dialog.showSuccess({ title: 'Copied', message: 'PIN details copied to clipboard.' });
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
         <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadProducts({ force: true, showError: true })}
+          />
+        )}
+      >
         <Text style={styles.title}>Education Pins</Text>
-        <Text style={styles.subtitle}>WAEC, NECO, and JAMB ePINs</Text>
+        <Text style={styles.subtitle}>WAEC, NECO, NABTEB, and JAMB ePINs</Text>
 
-        {loadingProducts ? (
+        {loadingProducts && products.length === 0 ? (
           <View style={styles.loadingWrap}>
             <LogoLoader size={48} />
             <Text style={styles.loadingText}>Loading products...</Text>
+          </View>
+        ) : loadError && products.length === 0 ? (
+          <View style={styles.loadingWrap}>
+            <Text style={styles.emptyText}>{loadError}</Text>
+            <CustomButton title="Retry" onPress={() => loadProducts({ force: true })} style={{ marginTop: 12 }} />
           </View>
         ) : (
           <>
@@ -169,10 +200,10 @@ const EducationScreen = ({ navigation, route }) => {
               providers={examProviders}
               selected={selectedExam}
               onSelect={handleExamChange}
-              columns={3}
+              columns={examProviders.length >= 4 ? 4 : 3}
             />
 
-            {selectedExamInfo && !selectedExamInfo.available ? (
+            {selectedExamInfo && selectedExamInfo.available === false ? (
               <View style={styles.unavailableCard}>
                 <Ionicons name="information-circle-outline" size={22} color={colors.warning} />
                 <Text style={styles.unavailableText}>
@@ -193,7 +224,7 @@ const EducationScreen = ({ navigation, route }) => {
                   <Text style={styles.productPrice}>{formatCurrency(product.amount)}</Text>
                 </View>
                 {product.description ? <Text style={styles.productDesc}>{product.description}</Text> : null}
-                <Text style={styles.productMeta}>{product.examType.toUpperCase()}</Text>
+                <Text style={styles.productMeta}>{String(product.examType || '').toUpperCase()}</Text>
               </TouchableOpacity>
             ))}
 
@@ -201,7 +232,7 @@ const EducationScreen = ({ navigation, route }) => {
               <Text style={styles.emptyText}>
                 {selectedExamInfo?.available === false
                   ? `${selectedExam.toUpperCase()} products are not available yet.`
-                  : 'No education products are available right now.'}
+                  : 'No education products are available right now. Pull to refresh or sync exams in admin.'}
               </Text>
             ) : null}
 
@@ -241,19 +272,6 @@ const createStyles = (colors) => StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', color: colors.text },
   subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 8, marginBottom: 24 },
   sectionLabel: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: 12 },
-  examTabs: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  examTab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    alignItems: 'center',
-    backgroundColor: colors.card,
-  },
-  examTabActive: { borderColor: colors.primary, backgroundColor: `${colors.primary}12` },
-  examTabText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
-  examTabTextActive: { color: colors.primary },
   unavailableCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -23,6 +23,12 @@ const shouldShowGlobalLoader = (config) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const bearerFromHeader = (header) => {
+  if (!header || typeof header !== 'string') return null;
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : null;
+};
+
 api.interceptors.request.use(async (config) => {
   const online = await isOnline();
   if (!online) {
@@ -34,6 +40,8 @@ api.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else {
+    delete config.headers.Authorization;
   }
 
   if (__DEV__) {
@@ -81,16 +89,32 @@ api.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 401 && !config?.skipAuthLogout) {
-      const message = (error.response?.data?.message || '').toLowerCase();
+    const status = error.response?.status;
+    const code = error.response?.data?.code;
+    const message = (error.response?.data?.message || '').toLowerCase();
+
+    // Soft-lock is returned as 403 APP_LOCKED (not 401).
+    if (status === 403 && code === 'APP_LOCKED' && !config?.skipAuthLogout) {
+      emitAppLocked();
+      return Promise.reject(error);
+    }
+
+    if (status === 401 && !config?.skipAuthLogout) {
       const isPinError = /transaction pin|incorrect pin|current pin/.test(message);
       const isAuthFailure = /not authorized|token invalid|session expired|invalid token|user not found|user access required|unlock the app/i.test(message);
-      const isAppLocked = error.response?.data?.code === 'APP_LOCKED';
-      if (isAppLocked) {
-        emitAppLocked();
-      } else if (!isPinError && isAuthFailure) {
-        await SecureStore.deleteItemAsync('token');
-        emitSessionExpired();
+
+      if (!isPinError && isAuthFailure) {
+        const failedToken = bearerFromHeader(config?.headers?.Authorization);
+        const currentToken = await SecureStore.getItemAsync('token');
+
+        // Only clear the session if this 401 belongs to the token currently stored.
+        // Late bootstrap failures with an old Bearer must not wipe a freshly logged-in JWT.
+        if (!currentToken || !failedToken || failedToken === currentToken) {
+          if (currentToken) {
+            await SecureStore.deleteItemAsync('token');
+          }
+          emitSessionExpired();
+        }
       }
     }
 

@@ -139,11 +139,19 @@ export const savePendingDeviceToken = async (tokenPayload) => {
   await SecureStore.setItemAsync(PENDING_TOKEN_KEY, JSON.stringify(tokenPayload));
 };
 
+const isExpoPushToken = (token) => /ExponentPushToken|ExpoPushToken/i.test(String(token || ''));
+
 export const getPendingDeviceToken = async () => {
   const raw = await SecureStore.getItemAsync(PENDING_TOKEN_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    // Discard stale Expo-shaped payloads that were cached before FCM-only registration.
+    if (isExpoPushToken(parsed?.token) || parsed?.provider === 'expo') {
+      await clearPendingDeviceToken();
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -176,13 +184,21 @@ export const registerDeviceTokenWithBackend = async (tokenPayload) => {
 };
 
 export const syncDeviceTokenWithBackend = async () => {
-  let tokenPayload = await getPendingDeviceToken();
+  // Always refresh from Firebase first so a stale SecureStore payload cannot
+  // overwrite a valid FCM registration with an Expo-shaped or expired token.
+  let tokenPayload = await buildTokenPayload();
   if (!tokenPayload) {
-    tokenPayload = await buildTokenPayload();
+    tokenPayload = await getPendingDeviceToken();
   }
-  if (!tokenPayload) return null;
+  if (!tokenPayload?.token || isExpoPushToken(tokenPayload.token)) {
+    await clearPendingDeviceToken();
+    return null;
+  }
 
-  const result = await registerDeviceTokenWithBackend(tokenPayload);
+  const result = await registerDeviceTokenWithBackend({
+    ...tokenPayload,
+    provider: 'fcm',
+  });
   await clearPendingDeviceToken();
   return result;
 };
