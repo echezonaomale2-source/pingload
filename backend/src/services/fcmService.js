@@ -15,16 +15,20 @@ let firebaseInitFailed = false;
 let lastCredentialError = null;
 let resolvedCredentialMeta = null;
 
-const normalizePrivateKey = (rawKey) => {
-  let key = (rawKey || '').trim();
-  if (!key) return '';
-
+const stripWrappingQuotes = (value = '') => {
+  let text = String(value || '').trim();
   if (
-    (key.startsWith('"') && key.endsWith('"'))
-    || (key.startsWith("'") && key.endsWith("'"))
+    (text.startsWith('"') && text.endsWith('"'))
+    || (text.startsWith("'") && text.endsWith("'"))
   ) {
-    key = key.slice(1, -1).trim();
+    text = text.slice(1, -1).trim();
   }
+  return text;
+};
+
+const normalizePrivateKey = (rawKey) => {
+  let key = stripWrappingQuotes(rawKey);
+  if (!key) return '';
 
   // Double-escaped newlines from some hosts (\\\\n → \n)
   key = key.replace(/\\\\n/g, '\\n');
@@ -119,8 +123,8 @@ const resolveFirebaseCredentials = () => {
     && process.env.FIREBASE_PRIVATE_KEY
   ) {
     return {
-      projectId: process.env.FIREBASE_PROJECT_ID.trim(),
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL.trim(),
+      projectId: stripWrappingQuotes(process.env.FIREBASE_PROJECT_ID),
+      clientEmail: stripWrappingQuotes(process.env.FIREBASE_CLIENT_EMAIL),
       privateKey: normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
       source: 'FIREBASE_* env fields',
     };
