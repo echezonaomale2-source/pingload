@@ -208,7 +208,10 @@ const login = async (req, res, next) => {
     const { email, password } = req.body;
     const normalizedEmail = email.trim().toLowerCase();
 
-    const user = await User.findOne({ email: normalizedEmail }).select('+passwordHash hasTransactionPin accountStatus');
+    // tokenVersion MUST be selected — an inclusive .select() otherwise omits it and
+    // JWTs get signed as version 0 while the DB may already be >0 after prior logouts.
+    const user = await User.findOne({ email: normalizedEmail })
+      .select('+passwordHash hasTransactionPin accountStatus tokenVersion');
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
@@ -224,7 +227,8 @@ const login = async (req, res, next) => {
     user.appUnlockedUntil = null;
     await user.save();
 
-    const token = signToken({ id: user._id, tokenType: 'user', tokenVersion: user.tokenVersion ?? 0 });
+    const tokenVersion = Number.isFinite(user.tokenVersion) ? user.tokenVersion : 0;
+    const token = signToken({ id: user._id, tokenType: 'user', tokenVersion });
 
     res.json({
       success: true,
@@ -497,8 +501,10 @@ const logout = async (req, res, next) => {
     if (token) {
       try {
         const decoded = verifyToken(token);
-        await revokeToken(token, decoded);
+        // Bump version first so any in-flight requests with this JWT fail closed,
+        // then revoke the concrete token hash.
         await User.findByIdAndUpdate(decoded.id, { $inc: { tokenVersion: 1 } });
+        await revokeToken(token, decoded);
       } catch {
         // Token may already be invalid; still clear local session on client.
       }

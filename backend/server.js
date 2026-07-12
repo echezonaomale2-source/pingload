@@ -85,9 +85,15 @@ app.use('/api', (req, res, next) => {
 });
 app.use('/api', maintenanceMode);
 
-app.get('/health', (_req, res) => {
-  const { verifyFirebaseConfig } = require('./src/services/fcmService');
+app.get('/health', async (_req, res) => {
+  const { verifyFirebaseConfig, verifyFirebaseLiveAuth } = require('./src/services/fcmService');
   const fcm = verifyFirebaseConfig();
+  let live = null;
+  try {
+    live = await verifyFirebaseLiveAuth();
+  } catch (error) {
+    live = { liveOk: false, reason: error.message };
+  }
   res.json({
     success: true,
     message: 'Pingload API is running',
@@ -95,17 +101,24 @@ app.get('/health', (_req, res) => {
     fcm: {
       configured: fcm.configured,
       ok: fcm.ok,
+      liveOk: Boolean(live?.liveOk),
       projectId: fcm.projectId || null,
       expectedProjectId: fcm.expectedProjectId || 'pingload',
       source: fcm.source || null,
-      reason: fcm.ok ? null : (fcm.reason || null),
+      reason: live?.liveOk ? null : (live?.reason || fcm.reason || null),
     },
   });
 });
 
-app.get('/api/health', (_req, res) => {
-  const { verifyFirebaseConfig } = require('./src/services/fcmService');
+app.get('/api/health', async (_req, res) => {
+  const { verifyFirebaseConfig, verifyFirebaseLiveAuth } = require('./src/services/fcmService');
   const fcm = verifyFirebaseConfig();
+  let live = null;
+  try {
+    live = await verifyFirebaseLiveAuth();
+  } catch (error) {
+    live = { liveOk: false, reason: error.message };
+  }
   res.json({
     success: true,
     message: 'Pingload API is running',
@@ -113,10 +126,11 @@ app.get('/api/health', (_req, res) => {
     fcm: {
       configured: fcm.configured,
       ok: fcm.ok,
+      liveOk: Boolean(live?.liveOk),
       projectId: fcm.projectId || null,
       expectedProjectId: fcm.expectedProjectId || 'pingload',
       source: fcm.source || null,
-      reason: fcm.ok ? null : (fcm.reason || null),
+      reason: live?.liveOk ? null : (live?.reason || fcm.reason || null),
     },
   });
 });
@@ -188,13 +202,13 @@ const startServer = async () => {
     }
   }
 
-  const fcmStatus = initializeFcm();
+  const fcmStatus = await initializeFcm();
   if (!fcmStatus.configured) {
     console.warn('[FCM] Push notifications OFF — Firebase credentials not configured.');
-  } else if (fcmStatus.initialized) {
-    console.log(`[FCM] Push notifications ON — Firebase initialized for project "${fcmStatus.projectId}".`);
+  } else if (fcmStatus.liveOk) {
+    console.log(`[FCM] Push notifications ON — live Google auth OK for project "${fcmStatus.projectId}".`);
   } else {
-    console.error(`[FCM] Push notifications DISABLED — invalid Firebase credentials: ${fcmStatus.reason || 'initialization failed'}. The API will keep running; fix FIREBASE_PRIVATE_KEY to re-enable push.`);
+    console.error(`[FCM] Push notifications DISABLED — ${fcmStatus.reason || 'Firebase credential validation failed'}. The API will keep running; fix FIREBASE_SERVICE_ACCOUNT_JSON / FIREBASE_PRIVATE_KEY on Render.`);
   }
 
   const vtpassStatus = await verifyVtpassConnectivity();

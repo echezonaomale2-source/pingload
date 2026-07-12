@@ -220,24 +220,84 @@ const getFirebaseApp = () => {
   }
 };
 
-const initializeFcm = () => {
+/**
+ * Actually talk to Google to prove the service account key works.
+ * Format checks alone are not enough — Render can have a PEM that parses but is rejected.
+ */
+const verifyFirebaseLiveAuth = async () => {
   const status = verifyFirebaseConfig();
-  if (!status.configured) {
-    return { ...status, initialized: false };
-  }
   if (!status.ok) {
-    logApiFailure('fcm:startup', new Error(status.reason), {
-      hint: 'Push notifications disabled until Firebase credentials match project pingload.',
-      expectedProjectId: EXPECTED_FIREBASE_PROJECT_ID,
-    });
-    return { ...status, initialized: false };
+    return { ...status, liveOk: false, initialized: false };
   }
+
+  // Allow retry after fixing env without process restart needing a full redeploy wait.
+  firebaseInitFailed = false;
   const app = getFirebaseApp();
-  return {
-    ...status,
-    initialized: Boolean(app),
-    credentialError: lastCredentialError,
-  };
+  if (!app) {
+    return {
+      ...status,
+      liveOk: false,
+      initialized: false,
+      reason: lastCredentialError || 'Firebase Admin failed to initialize',
+    };
+  }
+
+  try {
+    const token = await app.options.credential.getAccessToken();
+    if (!token?.access_token) {
+      return {
+        ...status,
+        liveOk: false,
+        initialized: true,
+        reason: 'Firebase credential getAccessToken() returned no access token',
+      };
+    }
+    lastCredentialError = null;
+    return {
+      ...status,
+      liveOk: true,
+      initialized: true,
+      tokenExpiresAt: token.expires_in ? new Date(Date.now() + token.expires_in * 1000).toISOString() : null,
+    };
+  } catch (error) {
+    firebaseInitFailed = true;
+    lastCredentialError = error.message;
+    try {
+      if (firebaseApp) {
+        await firebaseApp.delete();
+      }
+    } catch {
+      // ignore
+    }
+    firebaseApp = null;
+    logApiFailure('fcm:live-auth', error, {
+      hint: 'Service account key was rejected by Google. Download a NEW key from Firebase Console → Project settings → Service accounts for project "pingload", then set FIREBASE_SERVICE_ACCOUNT_JSON (or FIREBASE_PRIVATE_KEY) on Render.',
+      projectId: status.projectId,
+      clientEmail: status.clientEmail,
+    });
+    return {
+      ...status,
+      liveOk: false,
+      initialized: false,
+      reason: `Google rejected Firebase credentials: ${error.message}`,
+    };
+  }
+};
+
+const initializeFcm = async () => {
+  const live = await verifyFirebaseLiveAuth();
+  if (!live.configured) {
+    return { ...live, initialized: false };
+  }
+  if (!live.ok || !live.liveOk) {
+    logApiFailure('fcm:startup', new Error(live.reason || 'FCM credential validation failed'), {
+      hint: 'Push notifications disabled until Firebase service-account credentials are fixed on Render.',
+      expectedProjectId: EXPECTED_FIREBASE_PROJECT_ID,
+      projectId: live.projectId,
+      clientEmail: live.clientEmail,
+    });
+  }
+  return live;
 };
 
 const stringifyData = (data = {}) => Object.fromEntries(
@@ -510,6 +570,7 @@ const sendPushToUsers = async ({ userIds, title, body, data = {} }) => {
 module.exports = {
   isFcmConfigured,
   verifyFirebaseConfig,
+  verifyFirebaseLiveAuth,
   initializeFcm,
   normalizePrivateKey,
   resolveFirebaseCredentials,

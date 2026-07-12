@@ -205,7 +205,11 @@ export const syncDeviceTokenWithBackend = async () => {
 
 export const unregisterDeviceTokenFromBackend = async (token) => {
   if (!token) return;
-  await api.delete('/notifications/device-token', { data: { token }, skipGlobalLoader: true });
+  await api.delete('/notifications/device-token', {
+    data: { token },
+    skipGlobalLoader: true,
+    skipAuthLogout: true,
+  });
 };
 
 export const updateAppBadgeCount = async (count) => {

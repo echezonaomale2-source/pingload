@@ -25,16 +25,17 @@ const login = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Email and password are required' });
     }
 
-    const admin = await Admin.findOne({ email: email.toLowerCase() }).select('+passwordHash');
+    const admin = await Admin.findOne({ email: email.toLowerCase() }).select('+passwordHash tokenVersion');
     if (!admin || !(await admin.comparePassword(password))) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
+    const tokenVersion = Number.isFinite(admin.tokenVersion) ? admin.tokenVersion : 0;
     const token = signToken({
       id: admin._id,
       role: admin.role,
       tokenType: 'admin',
-      tokenVersion: admin.tokenVersion ?? 0,
+      tokenVersion,
     });
     res.json({
       success: true,

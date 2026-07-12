@@ -245,12 +245,13 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     bootstrapAbortRef.current?.abort();
+    // Unregister device token BEFORE server logout revokes the JWT.
+    await unregisterPushOnLogout();
     try {
       await authService.logout();
     } catch {
       // Proceed with local cleanup even if server logout fails (offline).
     }
-    await unregisterPushOnLogout();
     await clearPendingNotificationNav().catch(() => {});
     await clearSessionToken();
     await updateAppBadgeCount(0);
