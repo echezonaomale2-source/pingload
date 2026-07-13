@@ -13,6 +13,7 @@ const SCREEN_ALIASES = {
   Settings: 'Settings',
   TransactionDetails: 'TransactionDetails',
   ChangeLoginPin: 'ChangeLoginPin',
+  ForgotLoginPin: 'ForgotLoginPin',
 };
 
 export const navigateFromNotification = (data = {}) => {

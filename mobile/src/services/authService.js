@@ -51,6 +51,11 @@ export const authService = {
   deleteAccount: (password) => api.delete('/auth/account', { data: { password } }),
   getLoginPinStatus: () => api.get('/auth/login-pin/status', { skipGlobalLoader: true }),
   setupLoginPin: (pin) => api.post('/auth/login-pin/setup', { pin }, { skipGlobalLoader: true }),
+  changeLoginPin: (currentPin, newPin) =>
+    api.put('/auth/login-pin/change', { currentPin, newPin }, { skipGlobalLoader: true }),
+  forgotLoginPin: () => api.post('/auth/login-pin/forgot', {}, { skipGlobalLoader: true }),
+  resetLoginPinWithOtp: (otp, newPin) =>
+    api.post('/auth/login-pin/reset-with-otp', { otp, newPin }, { skipGlobalLoader: true }),
   verifyLoginPin: (data) => api.post('/auth/login-pin/verify', data, { skipGlobalLoader: true }),
   confirmBiometricUnlock: (data) => api.post('/auth/login-pin/biometric-unlock', data || {}, { skipGlobalLoader: true }),
 };

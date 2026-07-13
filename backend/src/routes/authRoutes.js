@@ -27,9 +27,14 @@ const {
 const {
   getLoginPinStatus,
   setupLoginPin,
+  changeLoginPin,
+  forgotLoginPin,
+  resetLoginPinWithOtp,
   verifyLoginPin,
   confirmBiometricUnlock,
   loginPinValidation,
+  changeLoginPinValidation,
+  resetLoginPinWithOtpValidation,
 } = require('../controllers/loginPinSecurityController');
 const validate = require('../middleware/validate');
 const { protect } = require('../middleware/auth');
@@ -57,7 +62,10 @@ router.delete('/account', protect, authLimiter, deleteAccountValidation, validat
 router.get('/login-pin/status', protect, getLoginPinStatus);
 // Authenticated PIN setup must not share the public login rate limiter —
 // users often hit setup immediately after several login attempts.
-router.post('/login-pin/setup', protect, loginPinValidation, validate, setupLoginPin);
+router.post('/login-pin/setup', protect, loginPinLimiter, loginPinValidation, validate, setupLoginPin);
+router.put('/login-pin/change', protect, loginPinLimiter, changeLoginPinValidation, validate, changeLoginPin);
+router.post('/login-pin/forgot', protect, loginPinLimiter, forgotLoginPin);
+router.post('/login-pin/reset-with-otp', protect, loginPinLimiter, resetLoginPinWithOtpValidation, validate, resetLoginPinWithOtp);
 router.post('/login-pin/verify', protect, loginPinLimiter, loginPinValidation, validate, verifyLoginPin);
 router.post('/login-pin/biometric-unlock', protect, loginPinLimiter, confirmBiometricUnlock);
 

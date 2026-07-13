@@ -99,6 +99,13 @@ const sendOtp = async (req, res, next) => {
       purpose,
     });
 
+    console.log('[OTP][controller] send_otp_success', {
+      email: normalizedEmail,
+      purpose,
+      channel: result.channel,
+      expiresInSeconds: result.expiresInSeconds,
+    });
+
     res.json({
       success: true,
       message: result.message,
@@ -116,11 +123,24 @@ const sendOtp = async (req, res, next) => {
 const verifyOtp = async (req, res, next) => {
   try {
     const { email, otp, phone, purpose = OTP_PURPOSES.REGISTRATION } = req.body;
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    console.log('[OTP][controller] verify_otp_request', {
+      email: normalizedEmail,
+      phone: phone ? 'provided' : null,
+      purpose,
+      otpLength: String(otp || '').trim().length,
+    });
     const result = await verifyOTP({
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       phone,
       code: otp,
       purpose,
+    });
+    console.log('[OTP][controller] verify_otp_result', {
+      email: normalizedEmail,
+      purpose,
+      success: result.success,
+      message: result.message,
     });
 
     if (!result.success) {
@@ -143,7 +163,14 @@ const register = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Email already registered' });
     }
 
-    if (!developmentMode && !(await isEmailOtpVerified(normalizedEmail, OTP_PURPOSES.REGISTRATION))) {
+    const otpVerified = developmentMode
+      || (await isEmailOtpVerified(normalizedEmail, OTP_PURPOSES.REGISTRATION));
+    console.log('[OTP][controller] register_otp_gate', {
+      email: normalizedEmail,
+      developmentMode,
+      otpVerified,
+    });
+    if (!otpVerified) {
       return res.status(400).json({
         success: false,
         message: 'Please verify your email with OTP before registering',
@@ -163,6 +190,10 @@ const register = async (req, res, next) => {
       referralCode: generateReferralCode(fullName),
       referredBy: referrer?._id || null,
       isEmailVerified: true,
+    });
+    console.log('[OTP][controller] user_created', {
+      email: normalizedEmail,
+      userId: String(user._id),
     });
 
     await Wallet.create({ userId: user._id, balance: 0 });
@@ -195,6 +226,11 @@ const register = async (req, res, next) => {
           isEmailVerified: user.isEmailVerified,
           darkMode: user.darkMode,
           avatar: user.avatar,
+          hasLoginPin: Boolean(user.hasLoginPin),
+          loginPinLength: user.loginPinLength || null,
+          hasTransactionPin: Boolean(user.hasTransactionPin),
+          requireLoginPinReset: Boolean(user.requireLoginPinReset),
+          biometricEnabled: Boolean(user.biometricEnabled),
         },
       },
     });
@@ -211,7 +247,7 @@ const login = async (req, res, next) => {
     // tokenVersion MUST be selected — an inclusive .select() otherwise omits it and
     // JWTs get signed as version 0 while the DB may already be >0 after prior logouts.
     const user = await User.findOne({ email: normalizedEmail })
-      .select('+passwordHash hasTransactionPin accountStatus tokenVersion');
+      .select('+passwordHash hasTransactionPin hasLoginPin loginPinLength accountStatus tokenVersion requireLoginPinReset biometricEnabled');
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
@@ -248,7 +284,9 @@ const login = async (req, res, next) => {
           avatar: user.avatar,
           accountStatus: user.accountStatus,
           hasTransactionPin: user.hasTransactionPin,
-          requireLoginPinReset: user.requireLoginPinReset,
+          hasLoginPin: Boolean(user.hasLoginPin),
+          loginPinLength: user.loginPinLength || null,
+          requireLoginPinReset: Boolean(user.requireLoginPinReset),
           biometricEnabled: user.biometricEnabled,
           notificationSettings: user.notificationSettings,
         },

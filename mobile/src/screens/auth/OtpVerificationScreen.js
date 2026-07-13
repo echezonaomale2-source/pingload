@@ -12,6 +12,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useDialog } from '../../hooks/useDialog';
 import { getApiErrorMessage } from '../../utils/getApiErrorMessage';
 
+const DEFAULT_EXPIRY_SECONDS = 600;
+
 const channelLabel = (channel) => {
   if (channel === 'sms') return 'your phone number';
   if (channel === 'email') return 'your email';
@@ -30,19 +32,22 @@ const OtpVerificationScreen = ({ navigation, route }) => {
     password,
     referralCode,
     deliveryChannel = 'email',
+    expiresInSeconds = DEFAULT_EXPIRY_SECONDS,
   } = route.params;
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
   const [otpExpired, setOtpExpired] = useState(false);
+  const [expirySeconds, setExpirySeconds] = useState(expiresInSeconds || DEFAULT_EXPIRY_SECONDS);
 
   const handleVerify = async () => {
     if (otpExpired) {
       setError('Your verification code has expired. Please request a new code.');
       return;
     }
-    if (otp.length !== 6) {
+    const normalizedOtp = String(otp || '').trim();
+    if (normalizedOtp.length !== 6) {
       setError('Please enter the 6-digit OTP');
       return;
     }
@@ -50,12 +55,18 @@ const OtpVerificationScreen = ({ navigation, route }) => {
     setError('');
     try {
       await authService.verifyOtp({
-        email,
-        otp,
+        email: String(email || '').trim().toLowerCase(),
+        otp: normalizedOtp,
         phone: phoneNumber,
         purpose: OTP_PURPOSE.REGISTRATION,
       });
-      await register({ fullName, email, phoneNumber, password, referralCode: referralCode || undefined });
+      await register({
+        fullName,
+        email: String(email || '').trim().toLowerCase(),
+        phoneNumber,
+        password,
+        referralCode: referralCode || undefined,
+      });
     } catch (err) {
       dialog.alertError('Verification Failed', getApiErrorMessage(err, 'Verification failed'));
     } finally {
@@ -67,10 +78,13 @@ const OtpVerificationScreen = ({ navigation, route }) => {
     setResending(true);
     try {
       const res = await authService.sendOtp({
-        email,
+        email: String(email || '').trim().toLowerCase(),
         phone: phoneNumber,
         purpose: OTP_PURPOSE.REGISTRATION,
       });
+      setExpirySeconds(res.data.data?.expiresInSeconds || DEFAULT_EXPIRY_SECONDS);
+      setOtpExpired(false);
+      setOtp('');
       dialog.notifySuccess(
         res.data.message || 'A new verification code has been sent.',
         'Code Sent'
@@ -105,7 +119,7 @@ const OtpVerificationScreen = ({ navigation, route }) => {
         <FormInput
           label="OTP Code"
           value={otp}
-          onChangeText={setOtp}
+          onChangeText={(v) => setOtp(String(v || '').replace(/\D/g, '').slice(0, 6))}
           keyboardType="number-pad"
           maxLength={6}
           editable={!otpExpired}
@@ -118,9 +132,10 @@ const OtpVerificationScreen = ({ navigation, route }) => {
           disabled={otpExpired}
         />
         <OtpResendTimer
+          key={`otp-timer-${expirySeconds}-${otpExpired ? 'e' : 'a'}`}
           onResend={handleResend}
           resending={resending}
-          expirySeconds={90}
+          expirySeconds={expirySeconds}
           onExpired={() => setOtpExpired(true)}
         />
       </KeyboardAvoidingView>

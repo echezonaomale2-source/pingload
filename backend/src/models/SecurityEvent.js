@@ -9,6 +9,8 @@ const securityEventSchema = new mongoose.Schema(
         'login_pin_failed',
         'login_pin_locked',
         'login_pin_unlocked',
+        'login_pin_changed',
+        'login_pin_reset',
         'login_failed',
         'password_reset',
         'password_changed',

@@ -26,6 +26,7 @@ import SplashScreen from './src/screens/SplashScreen';
 import BiometricUnlockScreen from './src/screens/auth/BiometricUnlockScreen';
 import LoginPinSetupScreen from './src/screens/auth/LoginPinSetupScreen';
 import LoginPinUnlockScreen from './src/screens/auth/LoginPinUnlockScreen';
+import ForgotLoginPinScreen from './src/screens/profile/ForgotLoginPinScreen';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { transactionService, notificationService } from './src/services/transactionService';
 
@@ -79,6 +80,7 @@ const RootNavigator = () => {
     isBootstrapping,
     awaitingUnlock,
     needsLoginPinSetup,
+    showForgotLoginPin,
   } = useAuth();
   const { paperTheme, navigationTheme, isDark, colors } = useTheme();
   const [splashDone, setSplashDone] = useState(false);
@@ -91,6 +93,16 @@ const RootNavigator = () => {
       <PaperProvider theme={paperTheme}>
         <PushNotificationBridge />
         <SplashScreen onFinish={handleSplashFinish} bootstrapDone={!isBootstrapping} />
+        <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={statusBarBg} />
+      </PaperProvider>
+    );
+  }
+
+  if (showForgotLoginPin) {
+    return (
+      <PaperProvider theme={paperTheme}>
+        <PushNotificationBridge />
+        <ForgotLoginPinScreen asRootGate />
         <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={statusBarBg} />
       </PaperProvider>
     );

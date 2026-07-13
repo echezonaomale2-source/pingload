@@ -143,7 +143,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
             {otpRequired ? (
               <>
                 <FormInput label="OTP Code" value={otp} onChangeText={setOtp} keyboardType="number-pad" maxLength={6} editable={!otpExpired} />
-                <OtpResendTimer onResend={handleResend} resending={resending} expirySeconds={90} onExpired={() => setOtpExpired(true)} />
+                <OtpResendTimer onResend={handleResend} resending={resending} expirySeconds={600} onExpired={() => setOtpExpired(true)} />
               </>
             ) : null}
             <FormInput label="New Password" value={newPassword} onChangeText={setNewPassword} secureTextEntry />

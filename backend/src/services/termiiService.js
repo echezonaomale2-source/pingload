@@ -4,7 +4,11 @@ const { termii, developmentMode } = require('../config/env');
 const { logApiFailure } = require('../utils/logger');
 
 const UPSTREAM_UNAVAILABLE_MESSAGE = 'OTP service is temporarily unavailable. Please try again shortly.';
+/** Window after successful verify during which register/reset may proceed. */
 const VERIFIED_TTL_MS = 10 * 60 * 1000;
+/** Email-delivery friendly OTP lifetime (was 90s — too short for real-world email lag). */
+const OTP_EXPIRY_MS = 10 * 60 * 1000;
+const MAX_ATTEMPTS = 5;
 
 /** Normalize an upstream provider error into a user-safe message. */
 const upstreamMessage = (error, fallback) => {
@@ -17,14 +21,14 @@ const OTP_PURPOSES = {
   REGISTRATION: 'registration',
   PASSWORD_RESET: 'password_reset',
   TRANSACTION_PIN_RESET: 'transaction_pin_reset',
+  LOGIN_PIN_RESET: 'login_pin_reset',
 };
-
-const OTP_EXPIRY_MS = 90 * 1000;
-const MAX_ATTEMPTS = 5;
 
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+const normalizeOtpCode = (code) => String(code || '').trim().replace(/\s+/g, '');
 
 const normalizePhone = (phone) => {
   if (!phone) return null;
@@ -39,9 +43,16 @@ const storeKey = (email, phone, purpose) => {
   return `${purpose}:${identifier}`;
 };
 
+const logOtp = (event, payload = {}) => {
+  console.log(`[OTP] ${event}`, {
+    ...payload,
+    at: new Date().toISOString(),
+  });
+};
+
 const saveOtpChallenge = async (key, data) => {
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
-  await OtpChallenge.findOneAndUpdate(
+  const doc = await OtpChallenge.findOneAndUpdate(
     { key },
     {
       key,
@@ -56,11 +67,28 @@ const saveOtpChallenge = async (key, data) => {
     },
     { upsert: true, new: true }
   );
+  logOtp('challenge_saved', {
+    key,
+    channel: data.channel,
+    purpose: data.purpose,
+    destination: data.destination || null,
+    expiresAt: expiresAt.toISOString(),
+    hasCode: Boolean(data.code),
+    hasPinId: Boolean(data.pinId),
+    id: String(doc._id),
+  });
+  return doc;
 };
 
+/**
+ * Convert the pending OTP document into a verified marker that register/reset
+ * endpoints can read. Must NOT delete this document afterward — that was the
+ * production bug that caused "OTP expired or not found" / register failures.
+ */
 const markVerified = async (email, phone, purpose) => {
   const key = storeKey(email, phone, purpose);
-  await OtpChallenge.findOneAndUpdate(
+  const expiresAt = new Date(Date.now() + VERIFIED_TTL_MS);
+  const doc = await OtpChallenge.findOneAndUpdate(
     { key },
     {
       key,
@@ -68,25 +96,42 @@ const markVerified = async (email, phone, purpose) => {
       purpose,
       verified: true,
       attempts: 0,
-      expiresAt: new Date(Date.now() + VERIFIED_TTL_MS),
+      code: null,
+      pinId: null,
+      expiresAt,
     },
     { upsert: true, new: true }
   );
+  logOtp('mark_verified', {
+    key,
+    purpose,
+    expiresAt: expiresAt.toISOString(),
+    id: doc ? String(doc._id) : null,
+  });
+  return doc;
 };
 
 const isVerified = async (email, phone, purpose) => {
   const key = storeKey(email, phone, purpose);
+  const now = new Date();
   const doc = await OtpChallenge.findOne({
     key,
     verified: true,
-    expiresAt: { $gt: new Date() },
-  }).select('_id').lean();
+    expiresAt: { $gt: now },
+  }).select('_id expiresAt').lean();
+  logOtp('is_verified_lookup', {
+    key,
+    purpose,
+    found: Boolean(doc),
+    expiresAt: doc?.expiresAt ? new Date(doc.expiresAt).toISOString() : null,
+  });
   return Boolean(doc);
 };
 
 const clearVerification = async (email, phone, purpose) => {
   const key = storeKey(email, phone, purpose);
-  await OtpChallenge.deleteOne({ key });
+  const result = await OtpChallenge.deleteOne({ key });
+  logOtp('clear_verification', { key, purpose, deleted: result.deletedCount });
 };
 
 const assertTermiiConfigured = () => {
@@ -101,11 +146,13 @@ const assertTermiiConfigured = () => {
 const sendDevOtp = async (email, phone, purpose) => {
   const otp = generateOtp();
   const key = storeKey(email, phone, purpose);
+  logOtp('generate', { key, purpose, channel: 'dev', codeLength: otp.length });
   await saveOtpChallenge(key, {
     code: otp,
     channel: 'dev',
     attempts: 0,
     purpose,
+    destination: normalizeEmail(email) || normalizePhone(phone),
   });
   console.log(`[DEV OTP] purpose=${purpose} email=${email || '-'} phone=${phone || '-'} code=${otp}`);
   return {
@@ -118,6 +165,7 @@ const sendDevOtp = async (email, phone, purpose) => {
 
 const sendSmsOtp = async (phone, purpose) => {
   const to = normalizePhone(phone);
+  const ttlMinutes = Math.max(1, Math.ceil(OTP_EXPIRY_MS / 60000));
   const response = await axios.post(`${termii.baseUrl}/sms/otp/send`, {
     api_key: termii.apiKey,
     message_type: 'NUMERIC',
@@ -125,10 +173,10 @@ const sendSmsOtp = async (phone, purpose) => {
     from: termii.senderId,
     channel: 'generic',
     pin_attempts: 3,
-    pin_time_to_live: 2,
+    pin_time_to_live: ttlMinutes,
     pin_length: 6,
     pin_placeholder: '< >',
-    message_text: 'Your Pingload verification code is < >. Valid for 90 seconds.',
+    message_text: `Your Pingload verification code is < >. Valid for ${ttlMinutes} minute(s).`,
   });
 
   return {
@@ -141,11 +189,21 @@ const sendSmsOtp = async (phone, purpose) => {
 
 const sendEmailOtp = async (email, purpose) => {
   const otp = generateOtp();
+  const ttlMinutes = Math.max(1, Math.ceil(OTP_EXPIRY_MS / 60000));
   const messageText = purpose === OTP_PURPOSES.PASSWORD_RESET
-    ? 'Your Pingload password reset code is <CODE>. Valid for 90 seconds.'
+    ? `Your Pingload password reset code is <CODE>. Valid for ${ttlMinutes} minute(s).`
     : purpose === OTP_PURPOSES.TRANSACTION_PIN_RESET
-      ? 'Your Pingload transaction PIN reset code is <CODE>. Valid for 90 seconds.'
-      : 'Your Pingload verification code is <CODE>. Valid for 90 seconds.';
+      ? `Your Pingload transaction PIN reset code is <CODE>. Valid for ${ttlMinutes} minute(s).`
+      : purpose === OTP_PURPOSES.LOGIN_PIN_RESET
+        ? `Your Pingload login PIN reset code is <CODE>. Valid for ${ttlMinutes} minute(s).`
+        : `Your Pingload verification code is <CODE>. Valid for ${ttlMinutes} minute(s).`;
+
+  logOtp('generate', {
+    purpose,
+    channel: 'email',
+    destination: normalizeEmail(email),
+    codeLength: otp.length,
+  });
 
   if (termii.emailConfigurationId) {
     await axios.post(`${termii.baseUrl}/email/otp/send`, {
@@ -154,6 +212,7 @@ const sendEmailOtp = async (email, purpose) => {
       code: otp,
       email_configuration_id: termii.emailConfigurationId,
     });
+    logOtp('email_sent', { destination: normalizeEmail(email), purpose });
   } else {
     if (process.env.NODE_ENV === 'production') {
       const error = new Error('Email OTP is not configured. Please contact support.');
@@ -172,8 +231,7 @@ const sendEmailOtp = async (email, purpose) => {
 };
 
 /**
- * Send OTP for registration or password reset.
- * Prefers SMS when phone is available, otherwise email.
+ * Send OTP for registration, password reset, or PIN reset.
  */
 const sendOTP = async ({ email, phone, purpose = OTP_PURPOSES.REGISTRATION }) => {
   if (!Object.values(OTP_PURPOSES).includes(purpose)) {
@@ -278,6 +336,7 @@ const verifySmsOtp = async (stored, code) => {
 
 /**
  * Verify OTP code for a given purpose.
+ * On success, leaves a verified=true marker (do not delete) for register/reset.
  */
 const verifyOTP = async ({ email, phone, code, purpose = OTP_PURPOSES.REGISTRATION }) => {
   if (!Object.values(OTP_PURPOSES).includes(purpose)) {
@@ -285,29 +344,55 @@ const verifyOTP = async ({ email, phone, code, purpose = OTP_PURPOSES.REGISTRATI
   }
 
   const key = storeKey(email, phone, purpose);
+  const normalizedCode = normalizeOtpCode(code);
+  const now = new Date();
 
-  if (developmentMode) {
-    const stored = await OtpChallenge.findOne({ key, verified: false }).lean();
-    if (stored?.code && stored.code !== code) {
-      return { success: false, message: 'Invalid OTP code' };
-    }
-    await markVerified(email, phone, purpose);
-    await OtpChallenge.deleteOne({ key, verified: false });
-    return { success: true, message: 'OTP verified (development mode)' };
+  logOtp('verify_start', {
+    key,
+    purpose,
+    codeLength: normalizedCode.length,
+    developmentMode,
+  });
+
+  // Idempotent: already verified within the post-verify window (e.g. client retry).
+  const alreadyVerified = await OtpChallenge.findOne({
+    key,
+    verified: true,
+    expiresAt: { $gt: now },
+  }).select('_id expiresAt').lean();
+  if (alreadyVerified) {
+    logOtp('verify_already_verified', {
+      key,
+      id: String(alreadyVerified._id),
+      expiresAt: new Date(alreadyVerified.expiresAt).toISOString(),
+    });
+    return { success: true, message: 'OTP already verified' };
   }
 
   const stored = await OtpChallenge.findOne({ key, verified: false });
 
   if (!stored) {
+    logOtp('verify_not_found', { key, purpose });
     return { success: false, message: 'OTP expired or not found. Request a new one.' };
   }
 
-  if (stored.expiresAt <= new Date()) {
+  logOtp('verify_lookup', {
+    key,
+    id: String(stored._id),
+    channel: stored.channel,
+    attempts: stored.attempts,
+    expiresAt: stored.expiresAt ? new Date(stored.expiresAt).toISOString() : null,
+    now: now.toISOString(),
+  });
+
+  if (stored.expiresAt <= now) {
+    logOtp('verify_expired', { key, id: String(stored._id) });
     await OtpChallenge.deleteOne({ _id: stored._id });
     return { success: false, message: 'OTP has expired. Request a new one.' };
   }
 
   if (stored.attempts >= MAX_ATTEMPTS) {
+    logOtp('verify_max_attempts', { key, id: String(stored._id), attempts: stored.attempts });
     await OtpChallenge.deleteOne({ _id: stored._id });
     return { success: false, message: 'Too many attempts. Request a new OTP.' };
   }
@@ -315,24 +400,29 @@ const verifyOTP = async ({ email, phone, code, purpose = OTP_PURPOSES.REGISTRATI
   try {
     let valid = false;
 
-    if (stored.channel === 'sms' && stored.pinId) {
-      valid = await verifySmsOtp(stored, code);
+    if ((stored.channel === 'sms' || stored.channel === 'dev') && stored.pinId && !stored.code) {
+      valid = await verifySmsOtp(stored, normalizedCode);
     } else if (stored.code) {
-      valid = stored.code === code;
+      valid = stored.code === normalizedCode;
+    } else if (stored.channel === 'sms' && stored.pinId) {
+      valid = await verifySmsOtp(stored, normalizedCode);
     }
 
     if (!valid) {
       stored.attempts += 1;
       await stored.save();
+      logOtp('verify_invalid_code', { key, attempts: stored.attempts });
       return { success: false, message: 'Invalid OTP code' };
     }
 
+    // Keep the verified marker; clearing it here broke registration after a valid OTP.
     await markVerified(email, phone, purpose);
-    await OtpChallenge.deleteOne({ _id: stored._id });
+    logOtp('verify_success', { key, purpose });
     return { success: true, message: 'OTP verified successfully' };
   } catch (error) {
     stored.attempts += 1;
     await stored.save();
+    logOtp('verify_error', { key, message: error.message });
     const message = error.response?.data?.message || 'OTP verification failed';
     return { success: false, message };
   }

@@ -23,7 +23,7 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'User access required' });
     }
 
-    const user = await User.findById(decoded.id).select('-passwordHash -transactionPin');
+    const user = await User.findById(decoded.id).select('-passwordHash -transactionPin -loginPin');
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'User not found' });

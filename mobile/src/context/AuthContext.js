@@ -7,7 +7,7 @@ import {
   clearSessionToken,
 } from '../services/api';
 import { isBiometricEnabledLocally } from '../services/biometricService';
-import { hasLoginPin, setLoginPin, clearLoginPin } from '../services/loginPinService';
+import { setLoginPin, clearLoginPin, cacheLoginPinLength } from '../services/loginPinService';
 import { syncDeviceTokenWithBackend, updateAppBadgeCount } from '../services/pushNotificationService';
 import { unregisterPushOnLogout, flushPendingNotificationNavigation } from '../hooks/usePushNotifications';
 import { clearPendingNotificationNav } from '../utils/pendingNotificationNav';
@@ -32,41 +32,41 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [needsLoginPinSetup, setNeedsLoginPinSetup] = useState(false);
   const [awaitingUnlock, setAwaitingUnlock] = useState(null);
+  const [showForgotLoginPin, setShowForgotLoginPin] = useState(false);
   const bootstrapAbortRef = useRef(null);
 
   const activateSession = useCallback(() => {
     setAwaitingUnlock(null);
     setNeedsLoginPinSetup(false);
+    setShowForgotLoginPin(false);
     setIsAuthenticated(true);
     syncDeviceTokenWithBackend().catch(() => {});
     flushPendingNotificationNavigation().catch(() => {});
   }, []);
 
   const applyUnlockGate = useCallback(async (userData, { forcePinSetup = false } = {}) => {
-    if (forcePinSetup || userData.requireLoginPinReset) {
-      if (userData.requireLoginPinReset) {
-        await clearLoginPin();
-      }
+    // Account-based gate: only first-time accounts without a server Login PIN need setup.
+    // requireLoginPinReset must go through Forgot PIN (OTP), not free overwrite.
+    if (forcePinSetup || !userData?.hasLoginPin) {
       setNeedsLoginPinSetup(true);
       setAwaitingUnlock(null);
+      setShowForgotLoginPin(false);
       setIsAuthenticated(false);
       return;
     }
 
-    const pinExists = await hasLoginPin();
-    if (!pinExists) {
-      setNeedsLoginPinSetup(true);
-      setAwaitingUnlock(null);
-      setIsAuthenticated(false);
-      return;
+    if (userData.loginPinLength) {
+      await cacheLoginPinLength(userData.loginPinLength);
     }
 
     const localBiometric = await isBiometricEnabledLocally();
-    if (userData.biometricEnabled && localBiometric) {
+    if (userData.biometricEnabled && localBiometric && !userData.requireLoginPinReset) {
       setAwaitingUnlock('biometric');
     } else {
       setAwaitingUnlock('pin');
     }
+    setShowForgotLoginPin(false);
+    setNeedsLoginPinSetup(false);
     setIsAuthenticated(false);
   }, []);
 
@@ -104,6 +104,7 @@ export const AuthProvider = ({ children }) => {
           setIsAuthenticated(false);
           setAwaitingUnlock(null);
           setNeedsLoginPinSetup(false);
+          setShowForgotLoginPin(false);
         }
         return;
       }
@@ -119,6 +120,7 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(false);
         setAwaitingUnlock(null);
         setNeedsLoginPinSetup(false);
+        setShowForgotLoginPin(false);
         return;
       }
 
@@ -140,6 +142,7 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(false);
       setAwaitingUnlock(null);
       setNeedsLoginPinSetup(false);
+      setShowForgotLoginPin(false);
     } finally {
       if (!controller.signal.aborted) {
         setIsBootstrapping(false);
@@ -172,6 +175,7 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(false);
       setAwaitingUnlock(null);
       setNeedsLoginPinSetup(false);
+      setShowForgotLoginPin(false);
       updateAppBadgeCount(0).catch(() => {});
       clearPendingNotificationNav().catch(() => {});
     });
@@ -184,24 +188,26 @@ export const AuthProvider = ({ children }) => {
     // Persist + cache token BEFORE any authenticated follow-up calls.
     await setSessionToken(token);
 
-    let needsSetup = Boolean(isNewAccount || userData.requireLoginPinReset);
-    if (userData.requireLoginPinReset) {
-      await clearLoginPin();
-    }
-    if (!needsSetup) {
-      needsSetup = !(await hasLoginPin());
+    // Gate on the account Login PIN, not device-local storage.
+    const needsSetup = Boolean(isNewAccount || !userData.hasLoginPin);
+
+    if (userData.loginPinLength) {
+      await cacheLoginPinLength(userData.loginPinLength);
     }
 
     let unlockMode = null;
     if (!needsSetup) {
       const localBiometric = await isBiometricEnabledLocally();
-      unlockMode = (userData.biometricEnabled && localBiometric) ? 'biometric' : 'pin';
+      unlockMode = (userData.biometricEnabled && localBiometric && !userData.requireLoginPinReset)
+        ? 'biometric'
+        : 'pin';
     }
 
     setUser(userData);
     setBalance(initialBalance ?? userData.walletBalance ?? 0);
     setNeedsLoginPinSetup(needsSetup);
     setAwaitingUnlock(unlockMode);
+    setShowForgotLoginPin(false);
     setIsAuthenticated(false);
     setIsBootstrapping(false);
   };
@@ -228,18 +234,52 @@ export const AuthProvider = ({ children }) => {
   };
 
   const forceLoginPinSetup = async () => {
-    await clearLoginPin();
     setNeedsLoginPinSetup(true);
     setAwaitingUnlock(null);
+    setShowForgotLoginPin(false);
+    setIsAuthenticated(false);
+  };
+
+  const openForgotLoginPin = () => {
+    setShowForgotLoginPin(true);
+    setNeedsLoginPinSetup(false);
+    setAwaitingUnlock(null);
+    setIsAuthenticated(false);
+  };
+
+  const closeForgotLoginPin = () => {
+    setShowForgotLoginPin(false);
+    setAwaitingUnlock('pin');
+    setNeedsLoginPinSetup(false);
     setIsAuthenticated(false);
   };
 
   const finishLoginPinSetup = async (pin) => {
     const normalized = String(pin || '').trim();
-    await authService.setupLoginPin(normalized);
-    // Persist locally after server success so unlock works offline next launch.
+    const res = await authService.setupLoginPin(normalized);
     await setLoginPin(normalized);
+    const status = res?.data?.data;
+    setUser((prev) => (prev ? {
+      ...prev,
+      hasLoginPin: true,
+      loginPinLength: status?.loginPinLength || normalized.length,
+      requireLoginPinReset: false,
+    } : prev));
     setNeedsLoginPinSetup(false);
+    activateSession();
+  };
+
+  const finishLoginPinReset = async (status = null) => {
+    if (status?.loginPinLength) {
+      await cacheLoginPinLength(status.loginPinLength);
+    }
+    setUser((prev) => (prev ? {
+      ...prev,
+      hasLoginPin: true,
+      loginPinLength: status?.loginPinLength || prev.loginPinLength,
+      requireLoginPinReset: false,
+    } : prev));
+    setShowForgotLoginPin(false);
     activateSession();
   };
 
@@ -260,6 +300,7 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
     setAwaitingUnlock(null);
     setNeedsLoginPinSetup(false);
+    setShowForgotLoginPin(false);
   };
 
   const logoutAndClearPin = async () => {
@@ -298,6 +339,7 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated,
         needsLoginPinSetup,
         awaitingUnlock,
+        showForgotLoginPin,
         awaitingBiometric: awaitingUnlock === 'biometric',
         login,
         register,
@@ -310,6 +352,9 @@ export const AuthProvider = ({ children }) => {
         switchToPinUnlock,
         forceLoginPinSetup,
         finishLoginPinSetup,
+        finishLoginPinReset,
+        openForgotLoginPin,
+        closeForgotLoginPin,
         completeBiometricUnlock: completeUnlock,
         cancelBiometricUnlock: switchToPinUnlock,
       }}

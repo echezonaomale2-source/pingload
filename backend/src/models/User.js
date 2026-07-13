@@ -61,6 +61,15 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    /** Digit count of the account Login PIN (4 or 6) for cross-device unlock UI. */
+    loginPinLength: {
+      type: Number,
+      default: null,
+      validate: {
+        validator: (v) => v == null || v === 4 || v === 6,
+        message: 'loginPinLength must be 4 or 6',
+      },
+    },
     appUnlockedUntil: {
       type: Date,
       default: null,
@@ -114,8 +123,12 @@ userSchema.pre('save', async function (next) {
     this.hasTransactionPin = true;
   }
   if (this.isModified('loginPin') && this.loginPin) {
+    const plainLength = String(this.loginPin).length;
     this.loginPin = await bcrypt.hash(this.loginPin, 12);
     this.hasLoginPin = true;
+    if (plainLength === 4 || plainLength === 6) {
+      this.loginPinLength = plainLength;
+    }
   }
   next();
 });

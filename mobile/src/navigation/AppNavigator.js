@@ -24,6 +24,7 @@ import KycScreen from '../screens/profile/KycScreen';
 import FaqScreen from '../screens/support/FaqScreen';
 import TransferScreen from '../screens/wallet/TransferScreen';
 import ChangeLoginPinScreen from '../screens/profile/ChangeLoginPinScreen';
+import ForgotLoginPinScreen from '../screens/profile/ForgotLoginPinScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -52,6 +53,7 @@ const AppNavigator = () => (
     <Stack.Screen name="FAQ" component={FaqScreen} />
     <Stack.Screen name="Transfer" component={TransferScreen} />
     <Stack.Screen name="ChangeLoginPin" component={ChangeLoginPinScreen} />
+    <Stack.Screen name="ForgotLoginPin" component={ForgotLoginPinScreen} />
   </Stack.Navigator>
 );
 

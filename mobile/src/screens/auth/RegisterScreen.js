@@ -33,8 +33,8 @@ const RegisterScreen = ({ navigation }) => {
       setError('Please fill in all required fields');
       return false;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
       return false;
     }
     if (password !== confirmPassword) {
@@ -76,6 +76,7 @@ const RegisterScreen = ({ navigation }) => {
         navigation.navigate('OtpVerification', {
           ...payload,
           deliveryChannel: channel,
+          expiresInSeconds: otpRes.data.data?.expiresInSeconds || 600,
         });
         return;
       }
